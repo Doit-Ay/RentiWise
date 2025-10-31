@@ -11,9 +11,7 @@ class ViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        // Do any additional setup after loading the view.
-
-        // Make the back button show only the chevron on subsequent screens
+        
         if #available(iOS 14.0, *) {
             navigationItem.backButtonDisplayMode = .minimal
         } else {
