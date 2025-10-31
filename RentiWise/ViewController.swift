@@ -15,7 +15,7 @@ class ViewController: UIViewController {
         if #available(iOS 14.0, *) {
             navigationItem.backButtonDisplayMode = .minimal
         } else {
-            // For iOS 13 and earlier, use an empty-titled back button item
+            
             let backItem = UIBarButtonItem(title: "", style: .plain, target: nil, action: nil)
             navigationItem.backBarButtonItem = backItem
         }
