@@ -22,23 +22,33 @@ class SignViewController: UIViewController {
     
     
     @IBAction func signInProceed(_ sender: UIButton) {
-        // Instantiate HomeViewController from the "AppStarting" storyboard and push it.
+        // Instantiate the Tab Bar Controller (not the HomeViewController).
+        // Storyboard: "AppStarting"
+        // Tab bar controller storyboard ID: "NavigationBar"
         let storyboard = UIStoryboard(name: "AppStarting", bundle: nil)
-        // If you prefer to be explicit about the type, you can cast to HomeViewController
-        guard let homeVC = storyboard.instantiateViewController(withIdentifier: "HomeViewController") as? HomeViewController else {
-            assertionFailure("Could not instantiate HomeViewController from AppStarting storyboard. Check Storyboard ID and class.")
-            return
-        }
-        // Optional: clear title if you don’t want it shown on the next screen
-        homeVC.title = ""
+        let tabBarVC = storyboard.instantiateViewController(withIdentifier: "NavigationBar")
         
-        if let nav = navigationController {
-            nav.pushViewController(homeVC, animated: true)
+        // Preferred: present it full screen so it replaces the sign-in flow visually.
+        tabBarVC.modalPresentationStyle = .fullScreen
+        present(tabBarVC, animated: true, completion: nil)
+        
+        // If you instead want it to become the new root (cleaner app state),
+        // uncomment this block and remove the present(...) above.
+        /*
+        if let scene = view.window?.windowScene {
+            let window = UIWindow(windowScene: scene)
+            window.rootViewController = tabBarVC
+            window.makeKeyAndVisible()
+            // Assign to SceneDelegate so it’s retained
+            if let sceneDelegate = scene.delegate as? SceneDelegate {
+                sceneDelegate.window = window
+            }
         } else {
-            // Fallback if not embedded in a navigation controller: present modally
-            homeVC.modalPresentationStyle = .fullScreen
-            present(homeVC, animated: true, completion: nil)
+            // Fallback to presenting full screen if windowScene is not available
+            tabBarVC.modalPresentationStyle = .fullScreen
+            present(tabBarVC, animated: true, completion: nil)
         }
+        */
     }
     /*
     // MARK: - Navigation
