@@ -1,4 +1,8 @@
+<<<<<<< HEAD:RentiWise/ViewController.swift
 //  shorya branch created
+=======
+//  Aditya branch created
+>>>>>>> 774edfb95d06c35311e51fbb62907c930337161f:RentiWise/ViewController/ViewController.swift
 //  ViewController.swift
 //  RentiWise
 //
@@ -39,4 +43,5 @@ class ViewController: UIViewController {
         vc.title = ""
         navigationController?.pushViewController(vc, animated: true)
     }
+    
 }

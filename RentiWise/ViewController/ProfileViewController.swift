@@ -1,21 +1,19 @@
 //
-//  SignViewController.swift
+//  ProfileViewController.swift
 //  RentiWise
 //
-//  Created by admin99 on 30/10/25.
-//
+//  Created by user@48 on 07/11/25.
 
 import UIKit
 
-class SignViewController: UIViewController {
+class ProfileViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        
+        // Do any additional setup after loading the view.
     }
     
-   
     /*
     // MARK: - Navigation
 
