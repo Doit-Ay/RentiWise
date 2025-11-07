@@ -11,6 +11,8 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
 
     @IBOutlet weak var collectionView: UICollectionView!
 
+    @IBOutlet var ProfileImageTapped: UIImageView!
+    
     private struct CategoryItem {
         let title: String
         let systemImageName: String
@@ -53,6 +55,9 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
         // Apply horizontal layout to show 4 items across
         collectionView.setCollectionViewLayout(generateHorizontalFourUpLayout(), animated: false)
         
+        // Setup tap on profile image
+        setupProfileImageTap()
+        
         // Tab bar setup
         
         
@@ -78,6 +83,33 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
         super.viewSafeAreaInsetsDidChange()
         // Re-apply layout on rotation/safe area change to keep 4-up sizing correct
         collectionView.setCollectionViewLayout(generateHorizontalFourUpLayout(), animated: false)
+    }
+    
+    // MARK: - Profile tap setup
+    private func setupProfileImageTap() {
+        // Ensure the outlet is connected
+        guard let imageView = ProfileImageTapped else { return }
+        imageView.isUserInteractionEnabled = true
+        let tap = UITapGestureRecognizer(target: self, action: #selector(didTapProfileImage))
+        imageView.addGestureRecognizer(tap)
+        // Optional: accessibility
+        imageView.isAccessibilityElement = true
+        imageView.accessibilityLabel = "Profile"
+        imageView.accessibilityTraits = .button
+    }
+    
+    @objc private func didTapProfileImage() {
+        // Load from the separate storyboard named "Profile"
+        let sb = UIStoryboard(name: "Profile", bundle: nil)
+        let vc = sb.instantiateViewController(withIdentifier: "ProfileHome")
+        vc.title = "Profile"
+        if let nav = self.navigationController {
+            nav.setNavigationBarHidden(false, animated: true)
+            nav.pushViewController(vc, animated: true)
+        } else {
+            vc.modalPresentationStyle = .fullScreen
+            present(vc, animated: true)
+        }
     }
 
     // MARK: - Compositional Layout: Horizontal row, 4 items visible per page
@@ -169,4 +201,3 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
     
     
 }
-
