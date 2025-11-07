@@ -28,7 +28,26 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
         navigationController?.setNavigationBarHidden(true, animated: animated)
     }
     
-   
+    @IBAction func Additem(_ sender: UIButton) {
+        let storyboard = UIStoryboard(name: "AppStarting", bundle: nil)
+        guard let vc = storyboard.instantiateViewController(withIdentifier: "AddItemViewController") as? AddItemViewController else {
+            assertionFailure("Storyboard ID 'AddItemViewController' not found or wrong class.")
+            return
+        }
+        vc.title = "Add item"
+
+        guard let nav = navigationController else {
+            assertionFailure("DashboardViewController is not embedded in a UINavigationController. Embed it to enable push navigation.")
+            return
+        }
+
+        // If you hide the navigation bar on this screen, you may want it visible on the next screen
+        nav.setNavigationBarHidden(false, animated: false)
+
+        // Instant navigation (no animation)
+        nav.pushViewController(vc, animated: false)
+    }
+    
 
     /*
     // MARK: - Navigation

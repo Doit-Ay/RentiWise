@@ -16,8 +16,18 @@ class SignViewController: UIViewController {
     }
     
     @IBAction func forgotPassword(_ sender: UIButton) {
-        let vc = UIStoryboard(name: "Sign", bundle: nil).instantiateViewController(withIdentifier: "forgotPassword")
-        navigationController?.pushViewController(vc, animated: true)
+        // Safely instantiate Forgot Password screen from the "Sign" storyboard
+        let storyboard = UIStoryboard(name: "Main", bundle: nil)
+        let identifier = "forgotPassword"
+        let vc = storyboard.instantiateViewController(withIdentifier: identifier)
+
+        // Prefer pushing if we're inside a navigation controller; otherwise present modally
+        if let nav = navigationController {
+            nav.pushViewController(vc, animated: true)
+        } else {
+            vc.modalPresentationStyle = .fullScreen
+            present(vc, animated: true)
+        }
     }
     
     
@@ -32,24 +42,24 @@ class SignViewController: UIViewController {
         tabBarVC.modalPresentationStyle = .fullScreen
         present(tabBarVC, animated: true, completion: nil)
         
-        // If you instead want it to become the new root (cleaner app state),
-        // uncomment this block and remove the present(...) above.
-        /*
-        if let scene = view.window?.windowScene {
-            let window = UIWindow(windowScene: scene)
-            window.rootViewController = tabBarVC
-            window.makeKeyAndVisible()
-            // Assign to SceneDelegate so it’s retained
-            if let sceneDelegate = scene.delegate as? SceneDelegate {
-                sceneDelegate.window = window
-            }
-        } else {
-            // Fallback to presenting full screen if windowScene is not available
-            tabBarVC.modalPresentationStyle = .fullScreen
-            present(tabBarVC, animated: true, completion: nil)
-        }
-        */
     }
+    
+    
+    @IBAction func forgetContinue(_ sender: UIButton) {
+        let storyboard = UIStoryboard(name: "Main", bundle: nil)
+        let identifier = "SignViewController"
+        let vc = storyboard.instantiateViewController(withIdentifier: identifier)
+
+        // Prefer pushing if we're inside a navigation controller; otherwise present modally
+        if let nav = navigationController {
+            nav.pushViewController(vc, animated: true)
+        } else {
+            vc.modalPresentationStyle = .fullScreen
+            present(vc, animated: true)
+        }
+
+    }
+    
     /*
     // MARK: - Navigation
 
