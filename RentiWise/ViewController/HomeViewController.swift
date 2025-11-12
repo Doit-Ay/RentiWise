@@ -99,9 +99,8 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
     }
     
     @objc private func didTapProfileImage() {
-        // Load from the separate storyboard named "Profile"
-        let sb = UIStoryboard(name: "Profile", bundle: nil)
-        let vc = sb.instantiateViewController(withIdentifier: "ProfileHome")
+        // Instantiate from XIB named "ProfileMainViewController.xib"
+        let vc = ProfileMainViewController(nibName: "ProfileMainViewController", bundle: nil)
         vc.title = "Profile"
         if let nav = self.navigationController {
             nav.setNavigationBarHidden(false, animated: true)

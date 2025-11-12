@@ -329,7 +329,7 @@ private final class PhotoCell: UICollectionViewCell {
         imageView.clipsToBounds = true
         imageView.translatesAutoresizingMaskIntoConstraints = false
 
-        var symbolConfig = UIImage.SymbolConfiguration(pointSize: 12, weight: .bold)
+        let symbolConfig = UIImage.SymbolConfiguration(pointSize: 12, weight: .bold)
         let xImage = UIImage(systemName: "xmark", withConfiguration: symbolConfig)
 
         deleteButton.setImage(xImage, for: .normal)
