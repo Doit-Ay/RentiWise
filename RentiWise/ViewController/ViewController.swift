@@ -1,11 +1,3 @@
-<<<<<<< HEAD
-<<<<<<< HEAD:RentiWise/ViewController.swift
-//  Vidisha Branch Created
-=======
-//  Aditya branch created
->>>>>>> 78ae066f2bd333a97dc2ae2a8ec8424a33f21812:RentiWise/ViewController/ViewController.swift
-=======
->>>>>>> b0abcb4b8d8884714591808e5a7b01632defc625
 //  ViewController.swift
 //  RentiWise
 //
