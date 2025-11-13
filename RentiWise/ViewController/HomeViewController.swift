@@ -11,6 +11,7 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
 
     @IBOutlet weak var collectionView: UICollectionView!
 
+    @IBOutlet var productclicked: UIView!
     @IBOutlet var ProfileImageTapped: UIImageView!
     
     private struct CategoryItem {
@@ -58,6 +59,9 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
         // Setup tap on profile image
         setupProfileImageTap()
         
+        // Setup tap on product card/view to open ProductViewController
+        setupProductTap()
+        
         // Tab bar setup
         
         
@@ -98,6 +102,18 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
         imageView.accessibilityTraits = .button
     }
     
+    // MARK: - Product tap setup
+    private func setupProductTap() {
+        guard let productView = productclicked else { return }
+        productView.isUserInteractionEnabled = true
+        let tap = UITapGestureRecognizer(target: self, action: #selector(didTapProductView))
+        productView.addGestureRecognizer(tap)
+        // Optional accessibility
+        productView.isAccessibilityElement = true
+        productView.accessibilityLabel = "Product details"
+        productView.accessibilityTraits = .button
+    }
+    
     @objc private func didTapProfileImage() {
         // Instantiate from XIB named "ProfileMainViewController.xib"
         let vc = ProfileMainViewController(nibName: "ProfileMainViewController", bundle: nil)
@@ -108,6 +124,25 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
         } else {
             vc.modalPresentationStyle = .fullScreen
             present(vc, animated: true)
+        }
+    }
+    
+    @objc private func didTapProductView() {
+        // Instantiate ProductViewController from XIB if available, else fallback to code
+        let nibName = "ProductViewController"
+        let productVC: ProductViewController
+        if Bundle.main.path(forResource: nibName, ofType: "nib") != nil || Bundle.main.path(forResource: nibName, ofType: "xib") != nil {
+            productVC = ProductViewController(nibName: nibName, bundle: nil)
+        } else {
+            productVC = ProductViewController()
+        }
+        productVC.title = "Product Detail"
+        if let nav = self.navigationController {
+            nav.setNavigationBarHidden(false, animated: true)
+            nav.pushViewController(productVC, animated: true)
+        } else {
+            productVC.modalPresentationStyle = .fullScreen
+            present(productVC, animated: true)
         }
     }
 
