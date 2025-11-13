@@ -27,8 +27,8 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
         // Add more if you want to scroll
         .init(title: "Hobbies",      systemImageName: "guitars"),
         .init(title: "Outdoor",       systemImageName: "tent"),
-        .init(title: "Books",       systemImageName: "book"),
-        .init(title: "Cameras",     systemImageName: "camera")
+//        .init(title: "Books",       systemImageName: "book"),
+//        .init(title: "Cameras",     systemImageName: "camera")
     ]
 
     // Desired tint color (#70A7B4)
@@ -99,9 +99,8 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
     }
     
     @objc private func didTapProfileImage() {
-        // Load from the separate storyboard named "Profile"
-        let sb = UIStoryboard(name: "Profile", bundle: nil)
-        let vc = sb.instantiateViewController(withIdentifier: "ProfileHome")
+        // Instantiate from XIB named "ProfileMainViewController.xib"
+        let vc = ProfileMainViewController(nibName: "ProfileMainViewController", bundle: nil)
         vc.title = "Profile"
         if let nav = self.navigationController {
             nav.setNavigationBarHidden(false, animated: true)
