@@ -4,6 +4,10 @@ class PriceAnalyzerScreenOneViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        
+        if title?.isEmpty ?? true {
+            title = "Price Analyzer"
+        }
     }
 
     @IBAction func analyzePrice(_ sender: UIButton) {
