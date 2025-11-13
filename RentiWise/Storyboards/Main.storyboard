@@ -11,7 +11,7 @@
         <!--Welcome-->
         <scene sceneID="75W-xt-sRY">
             <objects>
-                <viewController title="Welcome" id="CVf-EX-eWU" customClass="ViewController" customModule="RentiWise" customModuleProvider="target" sceneMemberID="viewController">
+                <viewController storyboardIdentifier="Welcome" title="Welcome" id="CVf-EX-eWU" customClass="ViewController" customModule="RentiWise" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" contentMode="scaleToFill" id="vro-dn-aqi">
                         <rect key="frame" x="0.0" y="0.0" width="440" height="956"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
@@ -147,7 +147,7 @@
                                 </subviews>
                             </stackView>
                             <stackView opaque="NO" contentMode="scaleToFill" distribution="fillEqually" translatesAutoresizingMaskIntoConstraints="NO" id="ZNu-yg-NfD">
-                                <rect key="frame" x="146" y="695" width="148" height="64"/>
+                                <rect key="frame" x="146" y="665" width="148" height="64"/>
                                 <subviews>
                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="6n7-I4-LEx">
                                         <rect key="frame" x="0.0" y="0.0" width="74" height="64"/>
@@ -162,7 +162,7 @@
                                 </subviews>
                             </stackView>
                             <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="NEJ-wS-Tqo">
-                                <rect key="frame" x="70" y="627" width="300" height="48"/>
+                                <rect key="frame" x="70" y="597" width="300" height="48"/>
                                 <constraints>
                                     <constraint firstAttribute="height" constant="48" id="U7q-mt-ewB"/>
                                     <constraint firstAttribute="width" constant="300" id="vW4-91-4qQ"/>
@@ -176,20 +176,23 @@
                                 </connections>
                             </button>
                             <stackView opaque="NO" contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="kZl-ga-MUc">
-                                <rect key="frame" x="113" y="842.66666666666663" width="214" height="25.333333333333371"/>
+                                <rect key="frame" x="96.000000000000014" y="840.66666666666663" width="248.33333333333337" height="27.333333333333371"/>
                                 <subviews>
                                     <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Don't Have An Account ?" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="N5r-Ec-q0n">
-                                        <rect key="frame" x="0.0" y="0.0" width="120" height="25.333333333333332"/>
-                                        <fontDescription key="fontDescription" type="system" pointSize="10"/>
+                                        <rect key="frame" x="0.0" y="0.0" width="140.66666666666666" height="27.333333333333332"/>
+                                        <fontDescription key="fontDescription" type="system" pointSize="12"/>
                                         <nil key="textColor"/>
                                         <nil key="highlightedColor"/>
                                     </label>
-                                    <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="leading" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="Tss-vW-sjv">
-                                        <rect key="frame" x="120" y="0.0" width="94" height="25.333333333333332"/>
+                                    <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="leading" contentVerticalAlignment="center" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="Tss-vW-sjv">
+                                        <rect key="frame" x="140.66666666666666" y="0.0" width="107.66666666666666" height="27.333333333333332"/>
                                         <state key="normal" title="Button"/>
                                         <buttonConfiguration key="configuration" style="plain" title="Sign Up For Free" titleAlignment="leading">
-                                            <fontDescription key="titleFontDescription" name=".SFNS-Regular" family=".SF NS" pointSize="10"/>
+                                            <fontDescription key="titleFontDescription" name=".SFNS-Regular" family=".SF NS" pointSize="12"/>
                                         </buttonConfiguration>
+                                        <connections>
+                                            <action selector="signupSwitch:" destination="Zbs-Ip-RCA" eventType="touchUpInside" id="NRq-vi-cRU"/>
+                                        </connections>
                                     </button>
                                 </subviews>
                             </stackView>
@@ -204,7 +207,7 @@
                             <constraint firstItem="lb0-V6-yDh" firstAttribute="top" secondItem="cWa-hP-jG2" secondAttribute="top" constant="80" id="P6O-w1-cNt"/>
                             <constraint firstItem="1Bm-Po-6ng" firstAttribute="top" secondItem="lb0-V6-yDh" secondAttribute="bottom" constant="30" id="T6C-IX-2if"/>
                             <constraint firstItem="UDe-pd-dET" firstAttribute="leading" secondItem="eSU-eX-RQL" secondAttribute="leading" constant="40" id="caW-GE-bVR"/>
-                            <constraint firstItem="NEJ-wS-Tqo" firstAttribute="top" secondItem="UDe-pd-dET" secondAttribute="bottom" constant="100" id="gQm-l0-c2X"/>
+                            <constraint firstItem="NEJ-wS-Tqo" firstAttribute="top" secondItem="UDe-pd-dET" secondAttribute="bottom" constant="70" id="gQm-l0-c2X"/>
                             <constraint firstItem="NEJ-wS-Tqo" firstAttribute="centerX" secondItem="eSU-eX-RQL" secondAttribute="centerX" id="iJC-TC-DjR"/>
                             <constraint firstItem="UDe-pd-dET" firstAttribute="top" secondItem="1Bm-Po-6ng" secondAttribute="bottom" constant="100" id="mar-bj-oVT"/>
                             <constraint firstItem="ZNu-yg-NfD" firstAttribute="centerX" secondItem="eSU-eX-RQL" secondAttribute="centerX" id="ro8-IY-uPP"/>
@@ -310,6 +313,9 @@
                                 <buttonConfiguration key="configuration" style="filled" title="Sign Up">
                                     <color key="baseBackgroundColor" red="0.4372558594" green="0.6552734375" blue="0.7060546875" alpha="1" colorSpace="custom" customColorSpace="displayP3"/>
                                 </buttonConfiguration>
+                                <connections>
+                                    <action selector="signUpTapped:" destination="XdE-AT-aw8" eventType="touchUpInside" id="9hi-AR-gK1"/>
+                                </connections>
                             </button>
                             <stackView opaque="NO" contentMode="scaleToFill" distribution="fillEqually" translatesAutoresizingMaskIntoConstraints="NO" id="StW-Nl-6Ln">
                                 <rect key="frame" x="146" y="691.33333333333337" width="148" height="64"/>
@@ -327,20 +333,23 @@
                                 </subviews>
                             </stackView>
                             <stackView opaque="NO" contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="zQz-FM-xBf">
-                                <rect key="frame" x="128.33333333333337" y="842.66666666666663" width="183.66666666666663" height="25.333333333333371"/>
+                                <rect key="frame" x="114" y="840.66666666666663" width="212" height="27.333333333333371"/>
                                 <subviews>
                                     <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Already Have An Account ?" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="vxy-cZ-RW1">
-                                        <rect key="frame" x="0.0" y="0.0" width="130.33333333333334" height="25.333333333333332"/>
-                                        <fontDescription key="fontDescription" type="system" pointSize="10"/>
+                                        <rect key="frame" x="0.0" y="0.0" width="152.66666666666666" height="27.333333333333332"/>
+                                        <fontDescription key="fontDescription" type="system" pointSize="12"/>
                                         <nil key="textColor"/>
                                         <nil key="highlightedColor"/>
                                     </label>
                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="tG9-kg-kl6">
-                                        <rect key="frame" x="130.33333333333334" y="0.0" width="53.333333333333343" height="25.333333333333332"/>
+                                        <rect key="frame" x="152.66666666666669" y="0.0" width="59.333333333333343" height="27.333333333333332"/>
                                         <state key="normal" title="Button"/>
                                         <buttonConfiguration key="configuration" style="plain" title="Sign In">
-                                            <fontDescription key="titleFontDescription" name=".SFNS-Regular" family=".SF NS" pointSize="10"/>
+                                            <fontDescription key="titleFontDescription" name=".SFNS-Regular" family=".SF NS" pointSize="12"/>
                                         </buttonConfiguration>
+                                        <connections>
+                                            <action selector="signinSwitch:" destination="XdE-AT-aw8" eventType="touchUpInside" id="Dbm-BL-kJg"/>
+                                        </connections>
                                     </button>
                                 </subviews>
                             </stackView>
@@ -370,10 +379,10 @@
             </objects>
             <point key="canvasLocation" x="4952.727272727273" y="418.61924686192469"/>
         </scene>
-        <!--View Controller-->
+        <!--Sign View Controller-->
         <scene sceneID="0Gf-en-WNr">
             <objects>
-                <viewController storyboardIdentifier="forgotPassword" id="z09-fA-phP" sceneMemberID="viewController">
+                <viewController storyboardIdentifier="forgotPassword" id="z09-fA-phP" customClass="SignViewController" customModule="RentiWise" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" contentMode="scaleToFill" id="yLU-da-vFu">
                         <rect key="frame" x="0.0" y="0.0" width="440" height="956"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
@@ -414,6 +423,9 @@
                                 <color key="tintColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                 <state key="normal" title="Button"/>
                                 <buttonConfiguration key="configuration" style="plain" title="Continue"/>
+                                <connections>
+                                    <action selector="forgetContinue:" destination="z09-fA-phP" eventType="touchUpInside" id="ZTn-s0-ddb"/>
+                                </connections>
                             </button>
                         </subviews>
                         <viewLayoutGuide key="safeArea" id="5az-Yg-DPe"/>
