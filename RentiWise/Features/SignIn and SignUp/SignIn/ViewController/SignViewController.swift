@@ -60,14 +60,19 @@ class SignViewController: UIViewController {
 
     }
     
-    /*
-    // MARK: - Navigation
-
-    // In a storyboard-based application, you will often want to do a little preparation before navigation
-    override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
-        // Get the new view controller using segue.destination.
-        // Pass the selected object to the new view controller.
+    
+    @IBAction func signupSwitch(_ sender: UIButton) {
+        let storyboard = UIStoryboard(name: "Main", bundle: nil)
+        let identifier = "SignUpViewController"
+        let vc = storyboard.instantiateViewController(withIdentifier: identifier)
+        
+        // Prefer pushing if we're inside a navigation controller; otherwise present modally
+        if let nav = navigationController {
+            nav.pushViewController(vc, animated: true)
+        } else {
+            vc.modalPresentationStyle = .fullScreen
+            present(vc, animated: true)
+        }
     }
-    */
-
+    
 }

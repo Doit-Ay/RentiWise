@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.XIB" version="3.0" toolsVersion="24128" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES">
+    <device id="retina6_12" orientation="portrait" appearance="light"/>
+    <dependencies>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="24063"/>
+        <capability name="Safe area layout guides" minToolsVersion="9.0"/>
+        <capability name="System colors in document resources" minToolsVersion="11.0"/>
+        <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
+    </dependencies>
+    <objects>
+        <placeholder placeholderIdentifier="IBFilesOwner" id="-1" userLabel="File's Owner" customClass="PriceAnalyzerScreenTwoViewController" customModule="RentiWise" customModuleProvider="target">
+            <connections>
+                <outlet property="view" destination="vJr-sU-E77" id="JHD-Iz-Hku"/>
+            </connections>
+        </placeholder>
+        <placeholder placeholderIdentifier="IBFirstResponder" id="-2" customClass="UIResponder"/>
+        <view clearsContextBeforeDrawing="NO" contentMode="scaleToFill" id="vJr-sU-E77">
+            <rect key="frame" x="0.0" y="0.0" width="393" height="852"/>
+            <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
+            <subviews>
+                <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="OJz-DO-ReT" userLabel="blueCard">
+                    <rect key="frame" x="20" y="128" width="353" height="180"/>
+                    <subviews>
+                        <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Price Analysis Complete" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="brv-Nc-lev">
+                            <rect key="frame" x="8" y="14.999999999999998" width="192.33333333333334" height="20.333333333333329"/>
+                            <fontDescription key="fontDescription" type="system" weight="semibold" pointSize="17"/>
+                            <color key="textColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                            <nil key="highlightedColor"/>
+                        </label>
+                        <stackView opaque="NO" contentMode="scaleToFill" distribution="fillEqually" spacing="10" translatesAutoresizingMaskIntoConstraints="NO" id="hJB-uV-cyw">
+                            <rect key="frame" x="20" y="51.33333333333335" width="313" height="118.66666666666669"/>
+                            <subviews>
+                                <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="uh5-sC-OMI" userLabel="leftCard">
+                                    <rect key="frame" x="0.0" y="0.0" width="151.66666666666666" height="118.66666666666667"/>
+                                    <subviews>
+                                        <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" fixedFrame="YES" text="₹250" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="bQc-fW-NEk">
+                                            <rect key="frame" x="8" y="75" width="68" height="33"/>
+                                            <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+                                            <fontDescription key="fontDescription" type="system" weight="semibold" pointSize="27"/>
+                                            <nil key="textColor"/>
+                                            <nil key="highlightedColor"/>
+                                        </label>
+                                        <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" fixedFrame="YES" text="Recommended Rental" lineBreakMode="tailTruncation" numberOfLines="0" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="ruV-E6-YJu">
+                                            <rect key="frame" x="8" y="-4" width="123" height="71"/>
+                                            <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+                                            <fontDescription key="fontDescription" type="system" pointSize="17"/>
+                                            <nil key="textColor"/>
+                                            <nil key="highlightedColor"/>
+                                        </label>
+                                    </subviews>
+                                    <color key="backgroundColor" systemColor="systemBackgroundColor"/>
+                                </view>
+                                <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="7Ok-sL-gJm" userLabel="rightCard">
+                                    <rect key="frame" x="161.66666666666663" y="0.0" width="151.33333333333337" height="118.66666666666667"/>
+                                    <subviews>
+                                        <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" fixedFrame="YES" text="Estimated Resale" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="FsP-d0-4eI">
+                                            <rect key="frame" x="8" y="18" width="131" height="21"/>
+                                            <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+                                            <fontDescription key="fontDescription" type="system" pointSize="17"/>
+                                            <nil key="textColor"/>
+                                            <nil key="highlightedColor"/>
+                                        </label>
+                                        <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" fixedFrame="YES" text="₹850" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="Tyb-k8-LkS">
+                                            <rect key="frame" x="8" y="77" width="70" height="33"/>
+                                            <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+                                            <fontDescription key="fontDescription" type="system" weight="semibold" pointSize="27"/>
+                                            <nil key="textColor"/>
+                                            <nil key="highlightedColor"/>
+                                        </label>
+                                    </subviews>
+                                    <color key="backgroundColor" systemColor="systemBackgroundColor"/>
+                                </view>
+                            </subviews>
+                        </stackView>
+                    </subviews>
+                    <color key="backgroundColor" red="0.37254901959999998" green="0.71372549019999998" blue="0.72549019609999998" alpha="1" colorSpace="calibratedRGB"/>
+                    <constraints>
+                        <constraint firstAttribute="bottom" secondItem="hJB-uV-cyw" secondAttribute="bottom" constant="10" id="70K-TQ-yRn"/>
+                        <constraint firstAttribute="trailing" secondItem="hJB-uV-cyw" secondAttribute="trailing" constant="20" id="Ou9-kZ-0hq"/>
+                        <constraint firstAttribute="height" relation="greaterThanOrEqual" constant="180" id="XJt-vx-8zV"/>
+                        <constraint firstItem="brv-Nc-lev" firstAttribute="top" secondItem="OJz-DO-ReT" secondAttribute="top" constant="15" id="aFZ-A8-d60"/>
+                        <constraint firstAttribute="height" relation="lessThanOrEqual" constant="180" id="dwx-vi-pQa"/>
+                        <constraint firstItem="hJB-uV-cyw" firstAttribute="top" secondItem="brv-Nc-lev" secondAttribute="bottom" constant="16" id="gW8-XA-8iG"/>
+                        <constraint firstItem="hJB-uV-cyw" firstAttribute="leading" secondItem="OJz-DO-ReT" secondAttribute="leading" constant="20" id="kwO-YO-XPx"/>
+                        <constraint firstAttribute="height" constant="180" id="nSm-tX-OZ6"/>
+                        <constraint firstItem="brv-Nc-lev" firstAttribute="leading" secondItem="OJz-DO-ReT" secondAttribute="leading" constant="8" id="v1M-eG-USM"/>
+                    </constraints>
+                    <userDefinedRuntimeAttributes>
+                        <userDefinedRuntimeAttribute type="number" keyPath="layer.cornerRadius">
+                            <integer key="value" value="20"/>
+                        </userDefinedRuntimeAttribute>
+                        <userDefinedRuntimeAttribute type="number" keyPath="layer.borderWidth">
+                            <integer key="value" value="0"/>
+                        </userDefinedRuntimeAttribute>
+                        <userDefinedRuntimeAttribute type="color" keyPath="layer.shadowColor">
+                            <color key="value" red="0.0" green="0.0" blue="0.0039215686269999999" alpha="1" colorSpace="calibratedRGB"/>
+                        </userDefinedRuntimeAttribute>
+                        <userDefinedRuntimeAttribute type="number" keyPath="layer.shadowOpacity">
+                            <real key="value" value="0.12"/>
+                        </userDefinedRuntimeAttribute>
+                        <userDefinedRuntimeAttribute type="number" keyPath="layer.shadowOffset.width">
+                            <integer key="value" value="0"/>
+                        </userDefinedRuntimeAttribute>
+                        <userDefinedRuntimeAttribute type="number" keyPath="layer.shadowOffset.height">
+                            <integer key="value" value="6"/>
+                        </userDefinedRuntimeAttribute>
+                        <userDefinedRuntimeAttribute type="number" keyPath="layer.shadowRadius">
+                            <integer key="value" value="8"/>
+                        </userDefinedRuntimeAttribute>
+                    </userDefinedRuntimeAttributes>
+                </view>
+                <segmentedControl opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="left" contentVerticalAlignment="top" segmentControlStyle="plain" selectedSegmentIndex="0" translatesAutoresizingMaskIntoConstraints="NO" id="7jV-Nq-H2d">
+                    <rect key="frame" x="21.666666666666657" y="338" width="350" height="41"/>
+                    <constraints>
+                        <constraint firstAttribute="width" constant="350" id="WwR-J5-80R"/>
+                        <constraint firstAttribute="height" constant="40" id="x62-oV-aNw"/>
+                    </constraints>
+                    <segments>
+                        <segment title="Price Factors"/>
+                        <segment title="Comparables"/>
+                        <segment title="What-If"/>
+                    </segments>
+                </segmentedControl>
+            </subviews>
+            <viewLayoutGuide key="safeArea" id="Sgr-6r-53d"/>
+            <color key="backgroundColor" systemColor="systemBackgroundColor"/>
+            <constraints>
+                <constraint firstItem="OJz-DO-ReT" firstAttribute="top" secondItem="Sgr-6r-53d" secondAttribute="top" constant="10" id="33S-aj-Jd0"/>
+                <constraint firstItem="Sgr-6r-53d" firstAttribute="trailing" secondItem="OJz-DO-ReT" secondAttribute="trailing" constant="20" id="HfY-Ce-LIS"/>
+                <constraint firstItem="OJz-DO-ReT" firstAttribute="leading" secondItem="Sgr-6r-53d" secondAttribute="leading" constant="20" id="KR1-y1-Ust"/>
+                <constraint firstItem="OJz-DO-ReT" firstAttribute="leading" secondItem="Sgr-6r-53d" secondAttribute="leading" constant="20" id="OwY-qI-Vch"/>
+                <constraint firstItem="7jV-Nq-H2d" firstAttribute="centerX" secondItem="Sgr-6r-53d" secondAttribute="centerX" id="cAZ-Sx-SVq"/>
+                <constraint firstItem="7jV-Nq-H2d" firstAttribute="top" secondItem="OJz-DO-ReT" secondAttribute="bottom" constant="30" id="rYT-sa-rQS"/>
+                <constraint firstItem="Sgr-6r-53d" firstAttribute="trailing" secondItem="OJz-DO-ReT" secondAttribute="trailing" constant="20" id="v4X-uY-2nj"/>
+            </constraints>
+            <point key="canvasLocation" x="-89.312977099236633" y="50.70422535211268"/>
+        </view>
+    </objects>
+    <resources>
+        <systemColor name="systemBackgroundColor">
+            <color white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+        </systemColor>
+    </resources>
+</document>

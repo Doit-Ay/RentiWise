@@ -1,19 +1,21 @@
 //
-//  ProfileViewController.swift
+//  ProfileMainViewController.swift
 //  RentiWise
 //
-//  Created by user@48 on 07/11/25.
+//  Created by admin99 on 13/11/25.
+//
 
 import UIKit
 
-class ProfileViewController: UIViewController {
+class ProfileMainViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
 
         // Do any additional setup after loading the view.
     }
-    
+
+
     /*
     // MARK: - Navigation
 
