@@ -149,7 +149,7 @@ extension DashboardViewController: LenderViewDelegate {
             present(vc, animated: true)
         }
     }
-<<<<<<< HEAD
+
     
 
     /*
@@ -158,6 +158,4 @@ extension DashboardViewController: LenderViewDelegate {
     
     */
 
-=======
->>>>>>> 5528b7a2071306b248319ee74774a83267ce2ddd
 }
