@@ -11,8 +11,8 @@
         <placeholder placeholderIdentifier="IBFilesOwner" id="-1" userLabel="File's Owner" customClass="LenderView" customModule="RentiWise" customModuleProvider="target">
             <connections>
                 <outlet property="earningLabel" destination="Ztz-GR-Mpy" id="FYG-bG-gej"/>
-                <outlet property="innerSegmentChangesApplied" destination="DSH-52-LVX" id="cXk-KW-e9n"/>
                 <outlet property="innerSegmented" destination="e9J-8y-Dm7" id="Dry-Hk-Qgo"/>
+                <outlet property="tableView" destination="YI8-Ds-Ntm" id="nmO-Tl-BUq"/>
                 <outlet property="view" destination="iN0-l3-epB" id="8Xr-TF-2aT"/>
             </connections>
         </placeholder>
@@ -95,27 +95,27 @@
                         <action selector="Additem:" destination="-1" eventType="touchUpInside" id="fuy-Vz-EhO"/>
                     </connections>
                 </button>
-                <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="DSH-52-LVX">
-                    <rect key="frame" x="20" y="388" width="353" height="464"/>
+                <tableView clipsSubviews="YES" contentMode="scaleToFill" alwaysBounceVertical="YES" style="plain" separatorStyle="default" rowHeight="-1" estimatedRowHeight="-1" sectionHeaderHeight="-1" estimatedSectionHeaderHeight="-1" sectionFooterHeight="-1" estimatedSectionFooterHeight="-1" translatesAutoresizingMaskIntoConstraints="NO" id="YI8-Ds-Ntm">
+                    <rect key="frame" x="20" y="378" width="353" height="474"/>
                     <color key="backgroundColor" systemColor="systemBackgroundColor"/>
-                </view>
+                </tableView>
             </subviews>
             <viewLayoutGuide key="safeArea" id="vUN-kp-3ea"/>
             <color key="backgroundColor" systemColor="systemBackgroundColor"/>
             <constraints>
                 <constraint firstItem="wBg-HL-lfP" firstAttribute="top" secondItem="e9J-8y-Dm7" secondAttribute="bottom" constant="20" id="6W4-Ep-qix"/>
-                <constraint firstAttribute="bottom" secondItem="DSH-52-LVX" secondAttribute="bottom" id="EDb-Ra-hUi"/>
+                <constraint firstItem="YI8-Ds-Ntm" firstAttribute="leading" secondItem="vUN-kp-3ea" secondAttribute="leading" constant="20" id="Axg-G5-L6c"/>
                 <constraint firstItem="vUN-kp-3ea" firstAttribute="trailing" secondItem="fc5-DI-duT" secondAttribute="trailing" constant="20" id="FjH-SZ-cqM"/>
+                <constraint firstAttribute="bottom" secondItem="YI8-Ds-Ntm" secondAttribute="bottom" id="RXN-mf-4GE"/>
                 <constraint firstItem="vUN-kp-3ea" firstAttribute="trailing" secondItem="e9J-8y-Dm7" secondAttribute="trailing" constant="20" id="XQk-SF-4dQ"/>
-                <constraint firstItem="DSH-52-LVX" firstAttribute="top" secondItem="wBg-HL-lfP" secondAttribute="bottom" constant="20" id="ZPh-LZ-8ue"/>
+                <constraint firstItem="YI8-Ds-Ntm" firstAttribute="top" secondItem="wBg-HL-lfP" secondAttribute="bottom" constant="10" id="aPT-XP-i0U"/>
                 <constraint firstItem="fc5-DI-duT" firstAttribute="leading" secondItem="vUN-kp-3ea" secondAttribute="leading" constant="20" id="co9-da-aiF"/>
+                <constraint firstItem="vUN-kp-3ea" firstAttribute="trailing" secondItem="YI8-Ds-Ntm" secondAttribute="trailing" constant="20" id="fcr-og-CcA"/>
                 <constraint firstItem="e9J-8y-Dm7" firstAttribute="top" secondItem="fc5-DI-duT" secondAttribute="bottom" constant="20" id="gO1-LV-ECr"/>
                 <constraint firstItem="fc5-DI-duT" firstAttribute="top" secondItem="vUN-kp-3ea" secondAttribute="top" id="hk0-Vu-iQX"/>
                 <constraint firstItem="hgz-VL-GpX" firstAttribute="top" secondItem="e9J-8y-Dm7" secondAttribute="bottom" constant="20" id="kF5-k8-sgy"/>
                 <constraint firstItem="wBg-HL-lfP" firstAttribute="leading" secondItem="vUN-kp-3ea" secondAttribute="leading" constant="20" id="ldi-ih-j4E"/>
                 <constraint firstItem="vUN-kp-3ea" firstAttribute="trailing" secondItem="hgz-VL-GpX" secondAttribute="trailing" constant="20" id="nCD-eO-CvB"/>
-                <constraint firstItem="DSH-52-LVX" firstAttribute="leading" secondItem="vUN-kp-3ea" secondAttribute="leading" constant="20" id="pfh-nu-8VX"/>
-                <constraint firstItem="vUN-kp-3ea" firstAttribute="trailing" secondItem="DSH-52-LVX" secondAttribute="trailing" constant="20" id="xap-w2-lhZ"/>
                 <constraint firstItem="e9J-8y-Dm7" firstAttribute="leading" secondItem="vUN-kp-3ea" secondAttribute="leading" constant="20" id="z0h-1U-t23"/>
             </constraints>
             <point key="canvasLocation" x="-25.190839694656489" y="90.845070422535215"/>

@@ -10,6 +10,7 @@
     <objects>
         <placeholder placeholderIdentifier="IBFilesOwner" id="-1" userLabel="File's Owner" customClass="PriceAnalyzerScreenTwoViewController" customModule="RentiWise" customModuleProvider="target">
             <connections>
+                <outlet property="ViewchangePrice" destination="Koq-r3-ACx" id="6qW-8X-kI7"/>
                 <outlet property="view" destination="vJr-sU-E77" id="JHD-Iz-Hku"/>
             </connections>
         </placeholder>
@@ -117,19 +118,30 @@
                     </constraints>
                     <segments>
                         <segment title="Price Factors"/>
-                        <segment title="Comparables"/>
+                        <segment title="Compare"/>
                         <segment title="What-If"/>
                     </segments>
+                    <connections>
+                        <action selector="innersegmentPrice:" destination="-1" eventType="valueChanged" id="vwk-MN-m6x"/>
+                    </connections>
                 </segmentedControl>
+                <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="Koq-r3-ACx">
+                    <rect key="frame" x="20" y="388" width="353" height="464"/>
+                    <color key="backgroundColor" systemColor="systemBackgroundColor"/>
+                </view>
             </subviews>
             <viewLayoutGuide key="safeArea" id="Sgr-6r-53d"/>
             <color key="backgroundColor" systemColor="systemBackgroundColor"/>
             <constraints>
                 <constraint firstItem="OJz-DO-ReT" firstAttribute="top" secondItem="Sgr-6r-53d" secondAttribute="top" constant="10" id="33S-aj-Jd0"/>
+                <constraint firstItem="Sgr-6r-53d" firstAttribute="trailing" secondItem="Koq-r3-ACx" secondAttribute="trailing" constant="20" id="7rI-dE-RNd"/>
+                <constraint firstItem="Koq-r3-ACx" firstAttribute="top" secondItem="7jV-Nq-H2d" secondAttribute="bottom" constant="10" id="Bt2-EH-MSI"/>
                 <constraint firstItem="Sgr-6r-53d" firstAttribute="trailing" secondItem="OJz-DO-ReT" secondAttribute="trailing" constant="20" id="HfY-Ce-LIS"/>
                 <constraint firstItem="OJz-DO-ReT" firstAttribute="leading" secondItem="Sgr-6r-53d" secondAttribute="leading" constant="20" id="KR1-y1-Ust"/>
                 <constraint firstItem="OJz-DO-ReT" firstAttribute="leading" secondItem="Sgr-6r-53d" secondAttribute="leading" constant="20" id="OwY-qI-Vch"/>
+                <constraint firstItem="Koq-r3-ACx" firstAttribute="leading" secondItem="Sgr-6r-53d" secondAttribute="leading" constant="20" id="TI5-s2-RKu"/>
                 <constraint firstItem="7jV-Nq-H2d" firstAttribute="centerX" secondItem="Sgr-6r-53d" secondAttribute="centerX" id="cAZ-Sx-SVq"/>
+                <constraint firstAttribute="bottom" secondItem="Koq-r3-ACx" secondAttribute="bottom" id="j99-GK-cRk"/>
                 <constraint firstItem="7jV-Nq-H2d" firstAttribute="top" secondItem="OJz-DO-ReT" secondAttribute="bottom" constant="30" id="rYT-sa-rQS"/>
                 <constraint firstItem="Sgr-6r-53d" firstAttribute="trailing" secondItem="OJz-DO-ReT" secondAttribute="trailing" constant="20" id="v4X-uY-2nj"/>
             </constraints>

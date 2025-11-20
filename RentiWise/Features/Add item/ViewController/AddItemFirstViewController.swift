@@ -27,26 +27,29 @@ class AddItemFirstViewController: UIViewController,
 
     private var collectionView: UICollectionView!
 
+    // Draft to carry data through the flow
+    private var draft = AddItemDraft()
+
     override func viewDidLoad() {
         super.viewDidLoad()
         if title?.isEmpty ?? true { title = "Add item" }
         hidesBottomBarWhenPushed = true
         setupCollectionView()
         updateContinueState()
-        // Ensure the button is wired even if IB connection is missing
         continueButton.addTarget(self, action: #selector(continueTapped(_:)), for: .touchUpInside)
     }
 
     // MARK: - Continue
     @IBAction func continueTapped(_ sender: UIButton) {
-        print("continueTapped fired, images.count =", images.count, "isEnabled =", continueButton.isEnabled)
         guard !images.isEmpty else { return }
+
+        // Convert UIImages to JPEG data for upload later
+        draft.images = images.compactMap { $0.jpegData(compressionQuality: 0.8) }
 
         let vc = AddItemDetailViewController(nibName: "AddItemDetailViewController", bundle: nil)
         vc.title = "Add item"
-        print("Created AddItemDetailViewController from XIB")
+        vc.draft = draft
 
-        // Always push on existing navigation stack
         guard let nav = navigationController else {
             assertionFailure("AddItemFirstViewController must be pushed inside a UINavigationController within the tab bar.")
             return
@@ -105,7 +108,6 @@ class AddItemFirstViewController: UIViewController,
         let enabled = !images.isEmpty
         continueButton?.isEnabled = enabled
         continueButton?.alpha = enabled ? 1.0 : 0.5
-        print("updateContinueState -> enabled:", enabled, "images:", images.count)
     }
 
     // MARK: - UICollectionViewDataSource
@@ -403,4 +405,3 @@ private final class AddCell: UICollectionViewCell {
         // Reserved for future styling if needed.
     }
 }
-

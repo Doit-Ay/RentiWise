@@ -14,6 +14,7 @@ class PriceAnalyzerScreenOneViewController: UIViewController {
         // Instantiate from XIB; ensure a XIB named "PriceAnalyzerScreenTwoViewController.xib" exists
         let vc = PriceAnalyzerScreenTwoViewController(nibName: "PriceAnalyzerScreenTwoViewController", bundle: nil)
         vc.title = "Analyze Result"
+        vc.hidesBottomBarWhenPushed = true
 
         if let nav = self.navigationController {
             // If we're already in a navigation stack, push and ensure the bar is visible
