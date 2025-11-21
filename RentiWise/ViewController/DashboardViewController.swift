@@ -79,6 +79,7 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
             replaceContent(with: cached)
         } else {
             let borrower = BorrowerView()
+            borrower.delegate = self
             borrowerInstance = borrower
             replaceContent(with: borrower)
         }
@@ -150,6 +151,42 @@ extension DashboardViewController: LenderViewDelegate {
         }
     }
 
+    func lenderViewDidTapEarnings(_ lenderView: LenderView) {
+        // Prevent duplicate presentations
+        guard presentedViewController == nil else { return }
+        guard navigationController?.topViewController is DashboardViewController else { return }
+
+        let vc = EarningsOverviewViewController(nibName: "EarningsOverviewViewController", bundle: nil)
+        vc.title = "Earnings Overview"
+        vc.hidesBottomBarWhenPushed = true
+
+        if let nav = navigationController {
+            nav.setNavigationBarHidden(false, animated: false)
+            nav.pushViewController(vc, animated: true)
+        } else {
+            vc.modalPresentationStyle = .fullScreen
+            present(vc, animated: true)
+        }
+    }
+
+    func lenderView(_ lenderView: LenderView, didSelectRequestAt index: Int) {
+        // Prevent duplicate presentations
+        guard presentedViewController == nil else { return }
+        guard navigationController?.topViewController is DashboardViewController else { return }
+
+        let vc = DashboardLenderRequestViewController(nibName: "DashboardLenderRequestViewController", bundle: nil)
+        vc.title = "Details"
+        vc.hidesBottomBarWhenPushed = true
+
+        if let nav = navigationController {
+            nav.setNavigationBarHidden(false, animated: false)
+            nav.pushViewController(vc, animated: true)
+        } else {
+            vc.modalPresentationStyle = .fullScreen
+            present(vc, animated: true)
+        }
+    }
+
     
 
     /*
@@ -158,4 +195,23 @@ extension DashboardViewController: LenderViewDelegate {
     
     */
 
+}
+
+extension DashboardViewController: BorrowerViewDelegate {
+    func borrowerViewDidTapViewBlue(_ borrowerView: BorrowerView) {
+        guard presentedViewController == nil else { return }
+        guard navigationController?.topViewController is DashboardViewController else { return }
+
+        let vc = BookingApprovalViewController(nibName: "BookingApprovalViewController", bundle: nil)
+        vc.title = "Booking Approval"
+        vc.hidesBottomBarWhenPushed = true
+
+        if let nav = navigationController {
+            nav.setNavigationBarHidden(false, animated: false)
+            nav.pushViewController(vc, animated: true)
+        } else {
+            vc.modalPresentationStyle = .fullScreen
+            present(vc, animated: true)
+        }
+    }
 }
