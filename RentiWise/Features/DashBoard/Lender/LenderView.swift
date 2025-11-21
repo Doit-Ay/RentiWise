@@ -1,4 +1,6 @@
+// LenderView
 import UIKit
+import Supabase
 
 protocol LenderViewDelegate: AnyObject {
     // Called when the inner segmented control changes
@@ -7,18 +9,43 @@ protocol LenderViewDelegate: AnyObject {
     func lenderViewDidTapAddButton(_ lenderView: LenderView)
 }
 
-class LenderView: UIView {
+final class LenderView: UIView {
 
     // Connect this to the top-level view in LenderView.xib (File’s Owner -> view)
     @IBOutlet private(set) var view: UIView!
     @IBOutlet private weak var innerSegmented: UISegmentedControl!
     @IBOutlet private weak var earningLabel: UILabel!
-    @IBOutlet weak var innerSegmentChangesApplied: UIView!
+
+    // You replaced the container with a table view
+    @IBOutlet weak var tableView: UITableView!
 
     weak var delegate: LenderViewDelegate?
 
-    // Keep a reference to the currently embedded child view
-    private weak var currentEmbeddedView: UIView?
+    // MARK: - Data/state
+    private var selectedInnerIndex: Int = 0 {
+        didSet {
+            reloadForSelectedSegment()
+            delegate?.lenderView(self, didSelectInnerIndex: selectedInnerIndex)
+        }
+    }
+
+    // Listing data (segment 0)
+    private var myItems: [Item] = []
+
+    // Request data (segment 1) – placeholder model for now
+    private var myRequests: [RequestRow] = []
+
+    // History data (segment 2) – placeholder model for now
+    private var myHistory: [HistoryRow] = []
+
+    // Format like in CategoriesViewController
+    private let currencyFormatter: NumberFormatter = {
+        let f = NumberFormatter()
+        f.numberStyle = .currency
+        f.minimumFractionDigits = 2
+        f.maximumFractionDigits = 2
+        return f
+    }()
 
     // MARK: - Init
     override init(frame: CGRect) {
@@ -50,74 +77,210 @@ class LenderView: UIView {
         content.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         addSubview(content)
 
-        // Optional: initial state for segmented control
+        // Segmented default
         if innerSegmented.numberOfSegments > 0 {
             if innerSegmented.selectedSegmentIndex == UISegmentedControl.noSegment {
-                innerSegmented.selectedSegmentIndex = 0 // Default to first segment
+                innerSegmented.selectedSegmentIndex = 0
             }
         }
+        selectedInnerIndex = innerSegmented.selectedSegmentIndex
 
-        // Optional: Accessibility polish
+        // Accessibility
         innerSegmented?.accessibilityLabel = "Lender Sections"
         earningLabel?.accessibilityLabel = "Earnings"
 
-        // Show initial section
-        applyInnerSegment(index: innerSegmented.selectedSegmentIndex)
+        // Table setup
+        setupTable()
 
-        // Notify delegate once on load so it can sync UI if needed
-        delegate?.lenderView(self, didSelectInnerIndex: innerSegmented.selectedSegmentIndex)
+        // Initial load for the current segment
+        reloadForSelectedSegment()
+    }
+
+    // MARK: - Table setup
+    private func setupTable() {
+        tableView.dataSource = self
+        tableView.delegate = self
+
+        // Visuals and row height
+        tableView.rowHeight = 140
+        tableView.estimatedRowHeight = 140
+        tableView.separatorStyle = .none
+        tableView.backgroundColor = .systemGroupedBackground
+        tableView.contentInsetAdjustmentBehavior = .always
+
+        // Register your cell nibs
+        tableView.register(UINib(nibName: "LenderListingTableViewCell", bundle: nil), forCellReuseIdentifier: "Listing")
+        tableView.register(UINib(nibName: "LenderRequestTableViewCell", bundle: nil), forCellReuseIdentifier: "Request")
+        tableView.register(UINib(nibName: "LenderHistoryTableViewCell", bundle: nil), forCellReuseIdentifier: "History")
     }
 
     // MARK: - Actions wired in the XIB
-    // If you rename this to lowerCamelCase, reconnect in Interface Builder
     @IBAction func Additem(_ sender: UIButton) {
-        // Optional haptic feedback
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         delegate?.lenderViewDidTapAddButton(self)
     }
 
     @IBAction func innerSegmentChanged(_ sender: UISegmentedControl) {
-        // Optional haptic feedback
         UISelectionFeedbackGenerator().selectionChanged()
-        applyInnerSegment(index: sender.selectedSegmentIndex)
-        delegate?.lenderView(self, didSelectInnerIndex: sender.selectedSegmentIndex)
+        selectedInnerIndex = sender.selectedSegmentIndex
     }
 
-    // MARK: - Embedding logic
-    // Segment order assumed: 0 = Listing, 1 = Request, 2 = History
-    private func applyInnerSegment(index: Int) {
-        // Remove previous
-        if let current = currentEmbeddedView {
-            current.removeFromSuperview()
-        }
-        currentEmbeddedView = nil
-
-        // Create the new view for the selected segment
-        let newView: UIView?
-        switch index {
+    // MARK: - Segment handling
+    private func reloadForSelectedSegment() {
+        switch selectedInnerIndex {
         case 0:
-            newView = LenderListingView()
+            Task { await loadMyItems() }
         case 1:
-            newView = LenderRequestView()
+            // For now we don’t have a backend; clear and show empty state
+            myRequests = []
+            tableView.reloadData()
+            updateEmptyStateIfNeeded()
         case 2:
-            newView = LenderHistoryView()
+            // For now we don’t have a backend; clear and show empty state
+            myHistory = []
+            tableView.reloadData()
+            updateEmptyStateIfNeeded()
         default:
-            newView = nil
+            break
         }
-
-        guard let container = innerSegmentChangesApplied, let child = newView else { return }
-
-        // Embed and pin to edges
-        child.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(child)
-        NSLayoutConstraint.activate([
-            child.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            child.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            child.topAnchor.constraint(equalTo: container.topAnchor),
-            child.bottomAnchor.constraint(equalTo: container.bottomAnchor)
-        ])
-
-        currentEmbeddedView = child
     }
 
+    private func updateEmptyStateIfNeeded() {
+        let label = UILabel()
+        label.textAlignment = .center
+        label.textColor = .secondaryLabel
+        label.numberOfLines = 0
+        label.font = .systemFont(ofSize: 16, weight: .medium)
+
+        var show = false
+        switch selectedInnerIndex {
+        case 0:
+            show = myItems.isEmpty
+            label.text = "Add item"
+        case 1:
+            show = myRequests.isEmpty
+            label.text = "No Request till Now"
+        case 2:
+            show = myHistory.isEmpty
+            label.text = "No History"
+        default:
+            show = false
+        }
+
+        tableView.backgroundView = show ? label : nil
+    }
+
+    // MARK: - Data loading (Listing)
+    private func loadMyItems() async {
+        // Get current user
+        guard let userId = await SupabaseManager.shared.currentUserId() else {
+            await MainActor.run {
+                self.myItems = []
+                self.tableView.reloadData()
+                self.updateEmptyStateIfNeeded()
+            }
+            return
+        }
+
+        do {
+            // Fetch only this owner's items; newest first
+            let response = try await SupabaseManager.shared.client
+                .from("items")
+                .select()
+                .eq("owner_id", value: userId)
+                .order("created_at", ascending: false)
+                .execute()
+
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            let items = try decoder.decode([Item].self, from: response.data)
+
+            await MainActor.run {
+                self.myItems = items
+                self.tableView.reloadData()
+                self.updateEmptyStateIfNeeded()
+            }
+        } catch {
+            await MainActor.run {
+                self.myItems = []
+                self.tableView.reloadData()
+                self.updateEmptyStateIfNeeded()
+            }
+        }
+    }
+}
+
+// Temporary placeholder models for Request and History until DB exists
+private struct RequestRow {
+    let id: String = UUID().uuidString
+}
+private struct HistoryRow {
+    let id: String = UUID().uuidString
+}
+
+// MARK: - UITableViewDataSource
+extension LenderView: UITableViewDataSource {
+    func numberOfSections(in tableView: UITableView) -> Int {
+        switch selectedInnerIndex {
+        case 0: return myItems.count
+        case 1: return myRequests.count
+        case 2: return myHistory.count
+        default: return 0
+        }
+    }
+
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        // One card per section so we can add inter-card spacing via footers
+        return 1
+    }
+
+    func tableView(_ tableView: UITableView,
+                   cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        switch selectedInnerIndex {
+        case 0:
+            guard let cell = tableView.dequeueReusableCell(withIdentifier: "Listing", for: indexPath) as? LenderListingTableViewCell else {
+                return UITableViewCell()
+            }
+            let item = myItems[indexPath.section]
+            cell.configure(with: item, currencyFormatter: currencyFormatter)
+            return cell
+
+        case 1:
+            // Configure your request cell here when you have a model
+            let cell = tableView.dequeueReusableCell(withIdentifier: "Request", for: indexPath) as! LenderRequestTableViewCell
+            // TODO: cell.configure(with: myRequests[indexPath.section])
+            return cell
+
+        case 2:
+            let cell = tableView.dequeueReusableCell(withIdentifier: "History", for: indexPath) as! LenderHistoryTableViewCell
+            // TODO: cell.configure(with: myHistory[indexPath.section])
+            return cell
+
+        default:
+            return UITableViewCell()
+        }
+    }
+}
+
+// MARK: - UITableViewDelegate
+extension LenderView: UITableViewDelegate {
+    // Spacing between cards using section footers
+    func tableView(_ tableView: UITableView, heightForFooterInSection section: Int) -> CGFloat {
+        switch selectedInnerIndex {
+        case 0, 1, 2:
+            return 10
+        default:
+            return 0.001
+        }
+    }
+
+    func tableView(_ tableView: UITableView, viewForFooterInSection section: Int) -> UIView? {
+        let v = UIView()
+        v.backgroundColor = .clear
+        return v
+    }
+
+    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: true)
+    }
 }

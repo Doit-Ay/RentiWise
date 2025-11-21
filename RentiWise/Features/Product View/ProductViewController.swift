@@ -63,11 +63,13 @@ final class ProductViewController: UIViewController {
     @IBAction func didTapWriteReview(_ sender: UIButton) {
         let nibName = "WriteReviewViewController"
         let writeVC: WriteReviewViewController
+        
         if Bundle.main.path(forResource: nibName, ofType: "nib") != nil || Bundle.main.path(forResource: nibName, ofType: "xib") != nil {
             writeVC = WriteReviewViewController(nibName: nibName, bundle: nil)
         } else {
             writeVC = WriteReviewViewController()
         }
+        writeVC.hidesBottomBarWhenPushed = true
 
         if let nav = self.navigationController {
             nav.pushViewController(writeVC, animated: true)
@@ -83,6 +85,26 @@ final class ProductViewController: UIViewController {
 
     @IBAction func didTapRentNow(_ sender: UIButton) {
         // Hook to push/present RentNow screen later
+        let nibName = "RequestViewController"
+        let requestVC: RequestViewController
+        if Bundle.main.path(forResource: nibName, ofType: "nib") != nil || Bundle.main.path(forResource: nibName, ofType: "xib") != nil {
+            requestVC = RequestViewController(nibName: nibName, bundle: nil)
+        } else {
+            requestVC = RequestViewController()
+        }
+        requestVC.title = "Request"
+        requestVC.hidesBottomBarWhenPushed = true
+
+        if let nav = self.navigationController {
+            nav.pushViewController(requestVC, animated: true)
+        } else {
+            if let popover = requestVC.popoverPresentationController {
+                popover.sourceView = sender
+                popover.sourceRect = sender.bounds
+            }
+            requestVC.modalPresentationStyle = traitCollection.userInterfaceIdiom == .pad ? .formSheet : .pageSheet
+            self.present(requestVC, animated: true)
+        }
     }
     override func viewDidLoad() {
         super.viewDidLoad()

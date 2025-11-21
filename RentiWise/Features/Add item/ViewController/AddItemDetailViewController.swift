@@ -3,15 +3,20 @@
 //  RentiWise
 //
 //  Created by admin99 on 10/11/25.
-//
 
 import UIKit
 
 class AddItemDetailViewController: UIViewController {
 
+    // Carry the draft from the first screen
+    var draft: AddItemDraft = AddItemDraft()
+
     // MARK: - Outlets / Actions from IB
 
-    @IBAction func itemTitleTextField(_ sender: UITextField) {}
+    @IBAction func itemTitleTextField(_ sender: UITextField) {
+        // Keep draft.title in sync if you wire this action from the title text field
+        draft.title = sender.text ?? ""
+    }
 
     @IBOutlet weak var categorySelection: UIStackView!
     @IBOutlet weak var selectACategory: UILabel!
@@ -33,9 +38,15 @@ class AddItemDetailViewController: UIViewController {
 
     // Continue button → push AddItemPricingViewController from its XIB
     @IBAction func ContinueTapped(_ sender: UIButton) {
+        // Update draft with chosen values
+        draft.category = (selectACategory.text == "Select a category") ? "" : (selectACategory.text ?? "")
+        draft.condition = (selectCondition.text == "Select condition") ? "" : (selectCondition.text ?? "")
+        draft.description = descriptionTextView.text ?? ""
+
         let vc = AddItemPricingViewController(nibName: "AddItemPricingViewController", bundle: nil)
         vc.title = "Add item"
         vc.hidesBottomBarWhenPushed = true
+        vc.draft = draft
 
         guard let nav = navigationController else {
             assertionFailure("AddItemDetailViewController must be pushed inside a UINavigationController within the tab bar.")
@@ -337,4 +348,3 @@ private final class InlineDropdownController: NSObject, UITableViewDataSource, U
         return true
     }
 }
-

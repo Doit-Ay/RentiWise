@@ -10,6 +10,10 @@
     <objects>
         <placeholder placeholderIdentifier="IBFilesOwner" id="-1" userLabel="File's Owner" customClass="ProfileMainViewController" customModule="RentiWise" customModuleProvider="target">
             <connections>
+                <outlet property="userEmail" destination="DTG-Av-BtA" id="0uv-zn-XR8"/>
+                <outlet property="userInfoEmail" destination="z3e-tT-toG" id="3EU-8f-wgg"/>
+                <outlet property="userName" destination="9Ks-LN-ePO" id="EwW-1k-Vm2"/>
+                <outlet property="userNumber" destination="Bzd-Cb-E9z" id="cyq-IR-toZ"/>
                 <outlet property="view" destination="i5M-Pr-FkT" id="sfx-zR-JGt"/>
             </connections>
         </placeholder>
@@ -237,7 +241,7 @@
                                                     <nil key="textColor"/>
                                                     <nil key="highlightedColor"/>
                                                 </label>
-                                                <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="SRMIST" textAlignment="right" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="6L5-ED-5ZO">
+                                                <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="---" textAlignment="right" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="6L5-ED-5ZO">
                                                     <rect key="frame" x="0.0" y="64" width="154.33333333333334" height="32"/>
                                                     <fontDescription key="fontDescription" type="system" pointSize="15"/>
                                                     <nil key="textColor"/>
@@ -281,14 +285,30 @@
                         <userDefinedRuntimeAttribute type="boolean" keyPath="layer.masksToBounds" value="YES"/>
                     </userDefinedRuntimeAttributes>
                 </view>
+                <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="dLe-Rk-h8d">
+                    <rect key="frame" x="46.666666666666657" y="716" width="300" height="48"/>
+                    <color key="backgroundColor" red="0.43921568630000002" green="0.65490196079999996" blue="0.70588235290000001" alpha="1" colorSpace="custom" customColorSpace="displayP3"/>
+                    <constraints>
+                        <constraint firstAttribute="width" constant="300" id="DOV-ZB-2QB"/>
+                        <constraint firstAttribute="height" constant="48" id="KRB-jf-47e"/>
+                    </constraints>
+                    <color key="tintColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                    <state key="normal" title="Button"/>
+                    <buttonConfiguration key="configuration" style="plain" title="Sign Out"/>
+                    <connections>
+                        <action selector="signOut:" destination="-1" eventType="touchUpInside" id="fDy-Rf-9Oz"/>
+                    </connections>
+                </button>
             </subviews>
             <viewLayoutGuide key="safeArea" id="fnl-2z-Ty3"/>
             <color key="backgroundColor" systemColor="systemBackgroundColor"/>
             <constraints>
                 <constraint firstItem="zqn-GS-uXB" firstAttribute="top" secondItem="fnl-2z-Ty3" secondAttribute="top" constant="2" id="9nx-Mb-pJU"/>
                 <constraint firstItem="fnl-2z-Ty3" firstAttribute="trailing" secondItem="2nC-5F-GPN" secondAttribute="trailing" constant="20" id="awp-rG-v0A"/>
+                <constraint firstItem="dLe-Rk-h8d" firstAttribute="centerX" secondItem="fnl-2z-Ty3" secondAttribute="centerX" id="gpB-wP-ANS"/>
                 <constraint firstItem="fnl-2z-Ty3" firstAttribute="trailing" secondItem="zqn-GS-uXB" secondAttribute="trailing" constant="20" id="hBg-in-PyJ"/>
                 <constraint firstItem="2nC-5F-GPN" firstAttribute="leading" secondItem="fnl-2z-Ty3" secondAttribute="leading" constant="20" id="ktg-PF-d0G"/>
+                <constraint firstItem="fnl-2z-Ty3" firstAttribute="bottom" secondItem="dLe-Rk-h8d" secondAttribute="bottom" constant="20" id="rCo-cG-lR8"/>
                 <constraint firstItem="2nC-5F-GPN" firstAttribute="top" secondItem="zqn-GS-uXB" secondAttribute="bottom" constant="20" id="tSK-zV-eFv"/>
                 <constraint firstItem="zqn-GS-uXB" firstAttribute="leading" secondItem="fnl-2z-Ty3" secondAttribute="leading" constant="20" id="wdh-41-dVK"/>
             </constraints>
@@ -301,7 +321,7 @@
             <color white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
         </systemColor>
         <systemColor name="systemGray2Color">
-            <color red="0.68235294120000001" green="0.68235294120000001" blue="0.69803921570000005" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+            <color red="0.68235294117647061" green="0.68235294117647061" blue="0.69803921568627447" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
         </systemColor>
     </resources>
 </document>
