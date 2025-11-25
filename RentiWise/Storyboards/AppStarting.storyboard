@@ -587,6 +587,9 @@
                                                                     </label>
                                                                     <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Find what you need nearby" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="0LN-FW-Sir">
                                                                         <rect key="frame" x="0.0" y="40" width="217" height="20"/>
+                                                                        <constraints>
+                                                                            <constraint firstAttribute="width" constant="217" id="4hV-Hy-KAy"/>
+                                                                        </constraints>
                                                                         <fontDescription key="fontDescription" type="system" pointSize="17"/>
                                                                         <nil key="textColor"/>
                                                                         <nil key="highlightedColor"/>
@@ -707,7 +710,7 @@
                                                             <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="UXu-Gq-ptb">
                                                                 <rect key="frame" x="10" y="4" width="339" height="152"/>
                                                                 <subviews>
-                                                                    <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="Image 1" translatesAutoresizingMaskIntoConstraints="NO" id="B8f-Z0-KBP">
+                                                                    <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" translatesAutoresizingMaskIntoConstraints="NO" id="B8f-Z0-KBP">
                                                                         <rect key="frame" x="20" y="20" width="120" height="90"/>
                                                                         <constraints>
                                                                             <constraint firstAttribute="width" constant="120" id="Psw-lh-Lwv"/>
@@ -802,7 +805,7 @@
                                                             <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="CSq-fF-mRY">
                                                                 <rect key="frame" x="10" y="4" width="339" height="152"/>
                                                                 <subviews>
-                                                                    <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="Image 7" translatesAutoresizingMaskIntoConstraints="NO" id="5lU-MB-IYp">
+                                                                    <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" translatesAutoresizingMaskIntoConstraints="NO" id="5lU-MB-IYp">
                                                                         <rect key="frame" x="20" y="20" width="120" height="90"/>
                                                                         <constraints>
                                                                             <constraint firstAttribute="width" constant="120" id="Bns-0B-6Gu"/>
@@ -1225,7 +1228,6 @@
         <image name="Home1image" width="786" height="466"/>
         <image name="Image 1" width="240" height="180"/>
         <image name="Image 2" width="96" height="89"/>
-        <image name="Image 7" width="240" height="180"/>
         <image name="Image 8" width="240" height="180"/>
         <image name="chevron.down" catalog="system" width="128" height="70"/>
         <image name="house" catalog="system" width="128" height="104"/>
