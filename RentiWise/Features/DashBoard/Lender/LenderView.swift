@@ -7,6 +7,8 @@ protocol LenderViewDelegate: AnyObject {
     func lenderView(_ lenderView: LenderView, didSelectInnerIndex index: Int)
     // Called when the Add button is tapped
     func lenderViewDidTapAddButton(_ lenderView: LenderView)
+    func lenderViewDidTapEarnings(_ lenderView: LenderView)
+    func lenderView(_ lenderView: LenderView, didSelectRequestAt index: Int)
 }
 
 final class LenderView: UIView {
@@ -16,6 +18,7 @@ final class LenderView: UIView {
     @IBOutlet private weak var innerSegmented: UISegmentedControl!
     @IBOutlet private weak var earningLabel: UILabel!
 
+    @IBOutlet weak var earningsView: UIView!
     // You replaced the container with a table view
     @IBOutlet weak var tableView: UITableView!
 
@@ -92,6 +95,14 @@ final class LenderView: UIView {
         // Table setup
         setupTable()
 
+        // Earnings tap
+        let earningsTap = UITapGestureRecognizer(target: self, action: #selector(didTapEarnings))
+        earningsView?.isUserInteractionEnabled = true
+        earningsView?.addGestureRecognizer(earningsTap)
+        earningsView?.accessibilityTraits = .button
+        earningsView?.isAccessibilityElement = true
+        earningsView?.accessibilityLabel = "Earnings overview"
+
         // Initial load for the current segment
         reloadForSelectedSegment()
     }
@@ -123,6 +134,11 @@ final class LenderView: UIView {
     @IBAction func innerSegmentChanged(_ sender: UISegmentedControl) {
         UISelectionFeedbackGenerator().selectionChanged()
         selectedInnerIndex = sender.selectedSegmentIndex
+    }
+
+    @objc private func didTapEarnings() {
+        UISelectionFeedbackGenerator().selectionChanged()
+        delegate?.lenderViewDidTapEarnings(self)
     }
 
     // MARK: - Segment handling
@@ -282,5 +298,12 @@ extension LenderView: UITableViewDelegate {
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
+        switch selectedInnerIndex {
+        case 1:
+            // Request section selection
+            delegate?.lenderView(self, didSelectRequestAt: indexPath.section)
+        default:
+            break
+        }
     }
 }

@@ -7,8 +7,14 @@
 
 import UIKit
 
+protocol BorrowerViewDelegate: AnyObject {
+    func borrowerViewDidTapViewBlue(_ borrowerView: BorrowerView)
+}
+
 class BorrowerView: UIView {
 
+    @IBOutlet weak var viewblue: UIView!
+    weak var delegate: BorrowerViewDelegate?
     override init(frame: CGRect) {
             super.init(frame: frame)
             commonInit()
@@ -25,6 +31,18 @@ class BorrowerView: UIView {
             view.frame = bounds
             view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
             addSubview(view)
+            
+            viewblue?.isUserInteractionEnabled = true
+            let tap = UITapGestureRecognizer(target: self, action: #selector(didTapViewBlue))
+            viewblue?.addGestureRecognizer(tap)
+            viewblue?.isAccessibilityElement = true
+            viewblue?.accessibilityTraits = .button
+            viewblue?.accessibilityLabel = "Booking approval"
         }
+    
+    @objc private func didTapViewBlue() {
+        UISelectionFeedbackGenerator().selectionChanged()
+        delegate?.borrowerViewDidTapViewBlue(self)
+    }
 
 }
