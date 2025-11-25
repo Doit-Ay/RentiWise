@@ -23,6 +23,7 @@
                 <outlet property="ownerCard" destination="2ME-Ss-xuz" id="EtM-DS-DQJ"/>
                 <outlet property="ownerNameLabel" destination="j4T-0G-1jd" id="FfJ-Tj-yhu"/>
                 <outlet property="priceLabel" destination="8j9-OS-B7I" id="mRD-xM-OvC"/>
+                <outlet property="productNameLabel" destination="h6f-Zu-B6F" id="YxM-pO-Uty"/>
                 <outlet property="r1AvatarImageView" destination="yvE-1u-5OH" id="U53-jP-0TC"/>
                 <outlet property="r1CommentLabel" destination="Lks-wq-de0" id="GQO-Gs-Y2H"/>
                 <outlet property="r1NameLabel" destination="TJU-2s-Klj" id="Nvc-k9-sAc"/>

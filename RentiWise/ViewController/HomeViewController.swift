@@ -52,6 +52,9 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
     // We’ll trigger the first image after layout to ensure bounds are valid
     private var didSetInitialHomeImageAfterLayout = false
 
+    // Hold onto loaded featured items so we can open details on tap
+    private var featuredItems: [Item] = []
+
     override func viewDidLoad() {
         super.viewDidLoad()
 
@@ -72,6 +75,7 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
 
         setupProfileImageTap()
         setupProductTap()
+        setupFeaturedItemTaps()
 
         Task { await loadFeaturedItems() }
 
@@ -135,6 +139,52 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
         productView.accessibilityTraits = .button
     }
 
+    private func setupFeaturedItemTaps() {
+        let tap1 = UITapGestureRecognizer(target: self, action: #selector(didTapFeatured1))
+        item1Image?.isUserInteractionEnabled = true
+        item1Image?.addGestureRecognizer(tap1)
+
+        let tap2 = UITapGestureRecognizer(target: self, action: #selector(didTapFeatured2))
+        item2Image?.isUserInteractionEnabled = true
+        item2Image?.addGestureRecognizer(tap2)
+
+        let tap3 = UITapGestureRecognizer(target: self, action: #selector(didTapFeatured3))
+        item3Image?.isUserInteractionEnabled = true
+        item3Image?.addGestureRecognizer(tap3)
+
+        let tap4 = UITapGestureRecognizer(target: self, action: #selector(didTapFeatured4))
+        item4Image?.isUserInteractionEnabled = true
+        item4Image?.addGestureRecognizer(tap4)
+    }
+
+    @objc private func didTapFeatured1() { openFeatured(at: 0) }
+    @objc private func didTapFeatured2() { openFeatured(at: 1) }
+    @objc private func didTapFeatured3() { openFeatured(at: 2) }
+    @objc private func didTapFeatured4() { openFeatured(at: 3) }
+
+    private func openFeatured(at index: Int) {
+        guard index < featuredItems.count else { return }
+        let item = featuredItems[index]
+        // Instantiate ProductViewController
+        let nibName = "ProductViewController"
+        let productVC: ProductViewController
+        if Bundle.main.path(forResource: nibName, ofType: "nib") != nil || Bundle.main.path(forResource: nibName, ofType: "xib") != nil {
+            productVC = ProductViewController(nibName: nibName, bundle: nil)
+        } else {
+            productVC = ProductViewController()
+        }
+        productVC.configure(with: item)
+        productVC.title = "Product Detail"
+        productVC.hidesBottomBarWhenPushed = true
+        if let nav = self.navigationController {
+            nav.setNavigationBarHidden(false, animated: true)
+            nav.pushViewController(productVC, animated: true)
+        } else {
+            productVC.modalPresentationStyle = .fullScreen
+            present(productVC, animated: true)
+        }
+    }
+
     @objc private func didTapProfileImage() {
         // Check Supabase auth session to decide where to route
         Task { [weak self] in
@@ -190,6 +240,7 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
         } else {
             productVC = ProductViewController()
         }
+        if let first = featuredItems.first { productVC.configure(with: first) }
         productVC.title = "Product Detail"
         productVC.hidesBottomBarWhenPushed = true
         if let nav = self.navigationController {
@@ -454,6 +505,7 @@ private extension HomeViewController {
                 clearFeaturedSlot(slot)
             }
         }
+        self.featuredItems = items
     }
 
     func configureFeaturedSlot(_ slot: (UIImageView?, UILabel?, UILabel?, UILabel?, UILabel?), with item: Item) {
@@ -519,3 +571,4 @@ private final class FeaturedImageCache {
     func image(forKey key: String) -> UIImage? { cache.object(forKey: key as NSString) }
     func setImage(_ img: UIImage, forKey key: String) { cache.setObject(img, forKey: key as NSString) }
 }
+

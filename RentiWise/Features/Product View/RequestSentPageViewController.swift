@@ -9,6 +9,17 @@ import UIKit
 
 class RequestSentPageViewController: UIViewController {
     
+    var item: Item?
+    
+    // State for pricing mode and booking
+    private enum RentalUnit { case perHour, perDay }
+    private var rentalUnit: RentalUnit = .perDay { didSet { updatePriceLabels() } }
+
+    // Inputs for booking summary (set these from previous screen)
+    var bookingStartDate: Date?
+    var bookingEndDate: Date?
+    var pickupTime: Date?
+    
     @IBOutlet weak var CircleView: UIView!
     @IBOutlet weak var checkmark: UIImageView!
     @IBOutlet weak var rentalItemCardView: UIView!
@@ -39,6 +50,9 @@ class RequestSentPageViewController: UIViewController {
     @IBOutlet weak var totalTitleLabel: UILabel!
     @IBOutlet weak var totalAmountLabel: UILabel!
     
+    @IBOutlet weak var perHourButton: UIButton?
+    @IBOutlet weak var perDayButton: UIButton?
+    
     private lazy var dateFormatter: DateFormatter = {
         let df = DateFormatter()
         df.dateFormat = "d MMM yyyy"
@@ -58,6 +72,11 @@ class RequestSentPageViewController: UIViewController {
         static let dashboardListingID = "DashboardListing"
     }
     
+    func configure(with item: Item) {
+        self.item = item
+        if isViewLoaded { updateUI() }
+    }
+    
     override func viewDidLoad() {
         super.viewDidLoad()
         
@@ -69,6 +88,121 @@ class RequestSentPageViewController: UIViewController {
         
         CircleView.layer.cornerRadius = CircleView.bounds.height / 2
         CircleView.layer.masksToBounds = true
+        
+        // Initialize toggle visual state
+        updateToggleUI()
+        
+        updateUI()
+    }
+    
+    @IBAction func didTapPerHour(_ sender: UIButton) {
+        rentalUnit = .perHour
+        updateToggleUI()
+    }
+
+    @IBAction func didTapPerDay(_ sender: UIButton) {
+        rentalUnit = .perDay
+        updateToggleUI()
+    }
+    
+    private func updateUI() {
+        guard let item = item else { return }
+
+        // Title
+        productTitleLabel?.text = item.title
+
+        // Category (fallback to empty string if nil/empty)
+        productCategoryLabel?.text = (item.category?.isEmpty == false) ? item.category : ""
+
+        // Image
+        if let firstImage = item.images.first,
+           let url = StorageURLBuilder.publicFileURL(for: firstImage) {
+            UIImageView.rw_loadImage(from: url) { [weak self] img in
+                DispatchQueue.main.async {
+                    self?.productThumbImageView?.image = img
+                }
+            }
+        } else {
+            productThumbImageView?.image = nil
+        }
+
+        // Rental unit label
+        rentalLabel?.text = "Per day"
+
+        // Update pricing labels based on selected unit
+        updatePriceLabels()
+
+        // Booking summary
+        if let start = bookingStartDate {
+            bookingdateLabel?.text = dateFormatter.string(from: start)
+            bookingPickupTimeLabel?.text = timeFormatter.string(from: start)
+        } else {
+            bookingdateLabel?.text = "—"
+            bookingPickupTimeLabel?.text = "—"
+        }
+        if let end = bookingEndDate {
+            // show end time as return time
+            pickuptimeLabel?.text = timeFormatter.string(from: end)
+        } else {
+            pickuptimeLabel?.text = "—"
+        }
+        if let start = bookingStartDate, let end = bookingEndDate {
+            let duration = end.timeIntervalSince(start)
+            let hours = max(0, Int(duration / 3600))
+            let days = max(0, Int(ceil(duration / 86400)))
+            bookingDurationLabel?.text = rentalUnit == .perHour ? "\(hours)h" : "\(days)d"
+            bookingDateRangeLabel?.text = "\(dateFormatter.string(from: start)) — \(dateFormatter.string(from: end))"
+        } else {
+            bookingDurationLabel?.text = "—"
+            bookingDateRangeLabel?.text = "—"
+        }
+
+        // Owner fallbacks (populate when you have real owner data)
+        ownerNameLabel?.text = ownerNameLabel?.text?.isEmpty == false ? ownerNameLabel?.text : "Owner Name"
+        ownerstarRating?.text = ownerstarRating?.text?.isEmpty == false ? ownerstarRating?.text : "Rating"
+        ownerDistanceLabel?.text = ownerDistanceLabel?.text?.isEmpty == false ? ownerDistanceLabel?.text : "Distance"
+    }
+    
+    private func updatePriceLabels() {
+        guard let item = item else { return }
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+
+        // Compute unit price
+        let perDay = item.price_per_day
+        let perHour = perDay / 24.0
+        let unitPrice = (rentalUnit == .perHour) ? perHour : perDay
+
+        // Total/rental fee based on duration if both dates exist; else show unit price
+        var total = unitPrice
+        if let start = bookingStartDate, let end = bookingEndDate, end > start {
+            let duration = end.timeIntervalSince(start)
+            if rentalUnit == .perHour {
+                let hours = duration / 3600.0
+                total = perHour * max(1.0, ceil(hours))
+            } else {
+                let days = duration / 86400.0
+                total = perDay * max(1.0, ceil(days))
+            }
+        }
+
+        let unitText = formatter.string(from: NSNumber(value: unitPrice)) ?? String(format: "%.2f", unitPrice)
+        let totalText = formatter.string(from: NSNumber(value: total)) ?? String(format: "%.2f", total)
+        rentalLabel?.text = (rentalUnit == .perHour) ? "Per hour" : "Per day"
+        rentalFeeAmountLabel?.text = unitText
+        totalAmountLabel?.text = totalText
+
+        // Security deposit
+        let depositText = formatter.string(from: NSNumber(value: item.deposit_amount)) ?? String(format: "%.2f", item.deposit_amount)
+        securityDepositAmountLabel?.text = depositText
+    }
+
+    private func updateToggleUI() {
+        // Basic visual feedback; wire to your design as needed
+        perHourButton?.isSelected = (rentalUnit == .perHour)
+        perDayButton?.isSelected = (rentalUnit == .perDay)
+        perHourButton?.alpha = perHourButton?.isSelected == true ? 1.0 : 0.6
+        perDayButton?.alpha = perDayButton?.isSelected == true ? 1.0 : 0.6
     }
     
     private func instantiateDashboardListing() -> UIViewController {
@@ -155,3 +289,4 @@ class RequestSentPageViewController: UIViewController {
         }
     }
 }
+

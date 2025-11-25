@@ -38,6 +38,8 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
         // Default selection: show Lender on load
         roleSegmented.selectedSegmentIndex = 0
         showLenderView()
+
+        NotificationCenter.default.addObserver(self, selector: #selector(handleRentalRequestCreated(_:)), name: Notification.Name("rentalRequestCreated"), object: nil)
     }
     
     override func viewWillAppear(_ animated: Bool) {
@@ -108,6 +110,14 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
         }
 
         currentChildView = newView
+    }
+
+    @objc private func handleRentalRequestCreated(_ note: Notification) {
+        // Ensure Lender tab is visible and Requests segment is selected
+        roleSegmented.selectedSegmentIndex = 0
+        showLenderView()
+        // Ask LenderView to switch to the Requests segment if available
+        lenderInstance?.selectRequestsSegment()
     }
 }
 
@@ -212,6 +222,15 @@ extension DashboardViewController: BorrowerViewDelegate {
         } else {
             vc.modalPresentationStyle = .fullScreen
             present(vc, animated: true)
+        }
+    }
+}
+
+private extension LenderView {
+    func selectRequestsSegment() {
+        if let segmented = self.value(forKey: "innerSegmented") as? UISegmentedControl {
+            segmented.selectedSegmentIndex = 1
+            segmented.sendActions(for: .valueChanged)
         }
     }
 }
