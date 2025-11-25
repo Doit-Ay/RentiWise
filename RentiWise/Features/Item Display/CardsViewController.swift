@@ -6,6 +6,9 @@ final class CardsViewController: UIViewController {
     private let stack = UIStackView()
     private let storage = StorageService()
 
+    private var selectedRealItem: Item?
+    private var itemMap: [String: Item] = [:]
+
     // Demo data – replace with your ItemsService fetch results
     private struct DemoItem {
         let title: String
@@ -71,6 +74,53 @@ final class CardsViewController: UIViewController {
             // Adjust outer spacing if you want bigger gaps
             card.contentInsets = NSDirectionalEdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16)
 
+            // Add Rent Now button as accessory or subview
+            let rentButton = UIButton(type: .system)
+            rentButton.setTitle("Rent Now", for: .normal)
+            rentButton.addTarget(self, action: #selector(handleRentNow(_:)), for: .touchUpInside)
+            if card.responds(to: Selector(("addArrangedAccessory:"))) {
+                // Using addArrangedAccessory if available
+                (card.perform(Selector(("addArrangedAccessory:")), with: rentButton))
+            } else {
+                // fallback: add as subview to card.contentView
+                if let contentView = card.value(forKey: "contentView") as? UIView {
+                    rentButton.translatesAutoresizingMaskIntoConstraints = false
+                    contentView.addSubview(rentButton)
+                    NSLayoutConstraint.activate([
+                        rentButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+                        rentButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -16)
+                    ])
+                } else {
+                    // fallback: add to card itself
+                    rentButton.translatesAutoresizingMaskIntoConstraints = false
+                    card.addSubview(rentButton)
+                    NSLayoutConstraint.activate([
+                        rentButton.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -16),
+                        rentButton.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -16)
+                    ])
+                }
+            }
+
+            // Construct a real Item from DemoItem
+            let demo = item
+            let now = Date()
+            let constructed = Item(
+                id: UUID().uuidString,
+                owner_id: "demo-owner",
+                title: demo.title,
+                description: "",
+                category: "Demo",
+                condition: "Good",
+                price_per_day: demo.pricePerDay,
+                deposit_amount: 0,
+                images: [demo.imagePath],
+                is_active: true,
+                created_at: now,
+                updated_at: now
+            )
+            itemMap[constructed.id] = constructed
+            rentButton.accessibilityValue = constructed.id
+
             stack.addArrangedSubview(card)
 
             // Load image (choose ONE: public or private)
@@ -91,4 +141,19 @@ final class CardsViewController: UIViewController {
             }
         }
     }
+
+    @objc private func handleRentNow(_ sender: UIButton) {
+        guard let id = sender.accessibilityValue, let selected = itemMap[id] else { return }
+        let vc = RequestViewController(nibName: "RequestViewController", bundle: nil)
+        vc.hidesBottomBarWhenPushed = true
+        vc.configure(with: selected)
+        if let nav = navigationController {
+            nav.pushViewController(vc, animated: true)
+        } else {
+            let nav = UINavigationController(rootViewController: vc)
+            nav.modalPresentationStyle = .fullScreen
+            present(nav, animated: true)
+        }
+    }
 }
+

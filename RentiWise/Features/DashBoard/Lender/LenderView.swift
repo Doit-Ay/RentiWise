@@ -35,8 +35,8 @@ final class LenderView: UIView {
     // Listing data (segment 0)
     private var myItems: [Item] = []
 
-    // Request data (segment 1) – placeholder model for now
-    private var myRequests: [RequestRow] = []
+    // Request data (segment 1)
+    private var myRequests: [RentalRequest] = []
 
     // History data (segment 2) – placeholder model for now
     private var myHistory: [HistoryRow] = []
@@ -147,10 +147,7 @@ final class LenderView: UIView {
         case 0:
             Task { await loadMyItems() }
         case 1:
-            // For now we don’t have a backend; clear and show empty state
-            myRequests = []
-            tableView.reloadData()
-            updateEmptyStateIfNeeded()
+            Task { await loadMyRequests() }
         case 2:
             // For now we don’t have a backend; clear and show empty state
             myHistory = []
@@ -224,12 +221,60 @@ final class LenderView: UIView {
             }
         }
     }
+
+    // MARK: - Data loading (Requests)
+    private func loadMyRequests() async {
+        guard let userId = await SupabaseManager.shared.currentUserId() else {
+            await MainActor.run {
+                self.myRequests = []
+                self.tableView.reloadData()
+                self.updateEmptyStateIfNeeded()
+            }
+            return
+        }
+        do {
+            let response = try await SupabaseManager.shared.client
+                .from("rental_requests")
+                .select()
+                .eq("owner_id", value: userId)
+                .order("created_at", ascending: false)
+                .execute()
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            let items = try decoder.decode([RentalRequest].self, from: response.data)
+            await MainActor.run {
+                self.myRequests = items
+                self.tableView.reloadData()
+                self.updateEmptyStateIfNeeded()
+            }
+        } catch {
+            await MainActor.run {
+                self.myRequests = []
+                self.tableView.reloadData()
+                self.updateEmptyStateIfNeeded()
+            }
+        }
+    }
 }
 
-// Temporary placeholder models for Request and History until DB exists
-private struct RequestRow {
-    let id: String = UUID().uuidString
+// Real RentalRequest model
+private struct RentalRequest: Decodable {
+    let id: String
+    let item_id: String
+    let owner_id: String
+    let borrower_id: String
+    let rental_unit: String
+    let start_at: Date
+    let end_at: Date
+    let rental_fee: Double
+    let service_fee: Double
+    let security_deposit: Double
+    let total: Double
+    let status: String
+    let created_at: Date?
 }
+
+// Temporary placeholder model for History until DB exists
 private struct HistoryRow {
     let id: String = UUID().uuidString
 }
@@ -262,9 +307,11 @@ extension LenderView: UITableViewDataSource {
             return cell
 
         case 1:
-            // Configure your request cell here when you have a model
             let cell = tableView.dequeueReusableCell(withIdentifier: "Request", for: indexPath) as! LenderRequestTableViewCell
-            // TODO: cell.configure(with: myRequests[indexPath.section])
+            let request = myRequests[indexPath.section]
+            cell.itemNameRequest.text = request.item_id
+            cell.itemRateRequest.text = String(format: "₹%.2f", request.total)
+            cell.itemBorrowerRequest.text = request.status.capitalized
             return cell
 
         case 2:
@@ -307,3 +354,4 @@ extension LenderView: UITableViewDelegate {
         }
     }
 }
+

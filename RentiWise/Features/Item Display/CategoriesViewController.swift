@@ -151,7 +151,11 @@ extension CategoriesViewController: UITableViewDelegate {
         } else {
             productVC = ProductViewController()
         }
+
+        // Pass the selected item so the detail binds correctly
+        productVC.configure(with: selectedItem)
         productVC.hidesBottomBarWhenPushed = true
+        productVC.title = "Product Detail"
 
         if let nav = navigationController {
             nav.pushViewController(productVC, animated: true)
@@ -170,3 +174,4 @@ private extension UIImageView {
         }
     }
 }
+

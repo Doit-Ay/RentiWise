@@ -6,9 +6,23 @@
 //
 
 import UIKit
+import Foundation
 
 final class ProductViewController: UIViewController {
+    // The selected item to display. Set this before presenting/pushing.
+    var selectedItem: Item?
+
+    // Currency formatter for rates and deposits
+    private let currencyFormatter: NumberFormatter = {
+        let f = NumberFormatter()
+        f.numberStyle = .currency
+        f.minimumFractionDigits = 2
+        f.maximumFractionDigits = 2
+        return f
+    }()
+
     @IBOutlet weak var heroImageView: UIImageView!
+    @IBOutlet weak var productNameLabel: UILabel?
 
     @IBOutlet weak var priceLabel: UILabel?
     @IBOutlet weak var distanceLabel: UILabel?
@@ -58,6 +72,92 @@ final class ProductViewController: UIViewController {
     @IBOutlet weak var r2NameLabel: UILabel?
     @IBOutlet weak var r2CommentLabel: UILabel?
 
+    // MARK: - Public API
+    /// Call this to inject the item before navigation
+    func configure(with item: Item) {
+        self.selectedItem = item
+    }
+
+    // MARK: - Binding
+    private func bindItemToUI() {
+        guard let item = selectedItem else { return }
+
+        // Title
+        self.title = item.title
+        productNameLabel?.text = item.title
+
+        // Hero image: first image path from Supabase storage
+        if let firstPath = item.images.first, let url = StorageURLBuilder.publicFileURL(for: firstPath) {
+            UIImageView.loadImage(from: url) { [weak self] image in
+                guard let self = self else { return }
+                self.heroImageView.image = image
+                self.heroImageView.contentMode = .scaleAspectFill
+                self.heroImageView.clipsToBounds = true
+            }
+        } else {
+            heroImageView.image = UIImage(systemName: "photo")
+            heroImageView.tintColor = .secondaryLabel
+            heroImageView.contentMode = .scaleAspectFit
+        }
+
+        // Price per day
+        let amount = NSNumber(value: item.price_per_day)
+        let priceText = (currencyFormatter.string(from: amount) ?? "\(item.price_per_day)") + " / day"
+        priceLabel?.text = priceText
+
+        // Rating & reviews (placeholders until ratings schema available)
+        ratingValueLabel?.text = "4.5"
+        ratingReviewsLabel?.text = "(23 reviews)"
+
+        // Distance (placeholder unless you later compute from user/location)
+        distanceLabel?.text = "2.3 km"
+        distanceRightLabel.text = "2.3 km"
+
+        // Description card: show first 1–2 words from description if present
+        descriptionTitleLabel.text = "Description"
+        if let desc = item.description, !desc.isEmpty {
+            let words = desc.split(separator: " ")
+            let short: String
+            if words.count <= 2 {
+                short = desc
+            } else {
+                short = words.prefix(2).joined(separator: " ") + "…"
+            }
+            descriptionBodyLabel.text = short
+        } else {
+            descriptionBodyLabel.text = ""
+        }
+
+        // Deposit card (refundable deposit)
+        depositTitleLabel.text = "Refundable Deposit"
+        let deposit = NSNumber(value: item.deposit_amount)
+        depositBodyLabel.text = currencyFormatter.string(from: deposit) ?? "\(item.deposit_amount)"
+
+        // Owner detailsa (basic — uses owner_id; you can extend to fetch profile later)
+        ownerNameLabel.text = "Owner"
+        ownerAvatarImageView.image = UIImage(systemName: "person.circle")
+        ownerAvatarImageView.tintColor = .tertiaryLabel
+
+        // Reviews section title
+        reviewsTitleLabel?.text = "Reviews"
+
+        // Example static reviews placeholders until wired to backend reviews
+        r1NameLabel?.text = "Alex K."
+        r1CommentLabel?.text = "Great quality and easy pickup."
+        // r1DateLabel is not defined in outlets; skip setting the date label
+        for (idx, iv) in [r1star1, r1star2, r1star3, r1star4, r1star5].enumerated() {
+            iv?.image = UIImage(systemName: idx < 4 ? "star.fill" : "star")
+            iv?.tintColor = .systemYellow
+        }
+
+        r2NameLabel?.text = "Emily R."
+        r2CommentLabel?.text = "Worked as expected. Would rent again."
+        // r2DateLabel is not defined in outlets; skip setting the date label
+        for (idx, iv) in [r2star1, r2star2, r2star3, r2star4, r2star5].enumerated() {
+            iv?.image = UIImage(systemName: idx < 5 ? "star.fill" : "star")
+            iv?.tintColor = .systemYellow
+        }
+    }
 
     // optional actions (hook later when screens exist)
     @IBAction func didTapWriteReview(_ sender: UIButton) {
@@ -110,5 +210,6 @@ final class ProductViewController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
         title = "Product Detail"
+        bindItemToUI()
     }
 }
