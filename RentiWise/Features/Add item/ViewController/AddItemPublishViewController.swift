@@ -22,6 +22,8 @@ class AddItemPublishViewController: UIViewController {
     // Simple loader UI
     private var loader: UIAlertController?
 
+    @IBOutlet weak var publishButton: UIButton?
+
     override func viewDidLoad() {
         super.viewDidLoad()
 
@@ -32,7 +34,14 @@ class AddItemPublishViewController: UIViewController {
             navigationItem.backBarButtonItem = UIBarButtonItem(title: "", style: .plain, target: nil, action: nil)
         }
 
-        // Optionally show a preview using draft
+        // CTA label depending on mode
+        if draft.isEditing {
+            publishButton?.setTitle("Update", for: .normal)
+        } else {
+            publishButton?.setTitle("Publish", for: .normal)
+        }
+
+        // Preview using draft
         productName?.text = draft.title
         productRate?.text = draft.pricePerDay > 0 ? String(format: "₹%.2f/day", draft.pricePerDay) : ""
         productDescription?.text = draft.description
@@ -42,7 +51,13 @@ class AddItemPublishViewController: UIViewController {
     }
 
     @IBAction func PublishTapped(_ sender: UIButton) {
-        Task { await publish() }
+        Task {
+            if draft.isEditing {
+                await update()
+            } else {
+                await publish()
+            }
+        }
     }
 
     private func publish() async {
@@ -62,6 +77,29 @@ class AddItemPublishViewController: UIViewController {
             await MainActor.run {
                 self.hideLoader()
                 let a = UIAlertController(title: "Publish Failed", message: error.localizedDescription, preferredStyle: .alert)
+                a.addAction(UIAlertAction(title: "OK", style: .default))
+                self.present(a, animated: true)
+            }
+        }
+    }
+
+    private func update() async {
+        await MainActor.run { showLoader(with: "Updating…") }
+        defer { Task { await MainActor.run { self.hideLoader() } } }
+
+        do {
+            let updated = try await service.updateItem(draft: draft, status: { [weak self] message in
+                Task { await MainActor.run { self?.updateLoader(message) } }
+            })
+            _ = updated
+            await MainActor.run {
+                self.hideLoader()
+                self.routeToDashboard()
+            }
+        } catch {
+            await MainActor.run {
+                self.hideLoader()
+                let a = UIAlertController(title: "Update Failed", message: error.localizedDescription, preferredStyle: .alert)
                 a.addAction(UIAlertAction(title: "OK", style: .default))
                 self.present(a, animated: true)
             }
@@ -136,3 +174,4 @@ class AddItemPublishViewController: UIViewController {
         }
     }
 }
+

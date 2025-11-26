@@ -14,6 +14,7 @@ import MobileCoreServices
 
 protocol AddItemServicing {
     func insertItem(draft: AddItemDraft, status: ((String) -> Void)?) async throws -> ItemRow
+    func updateItem(draft: AddItemDraft, status: ((String) -> Void)?) async throws -> ItemRow
 }
 
 final class AddItemService: AddItemServicing {
@@ -40,14 +41,10 @@ final class AddItemService: AddItemServicing {
     func insertItem(draft: AddItemDraft, status: ((String) -> Void)? = nil) async throws -> ItemRow {
         // 1) Ensure user is logged in
         status?("Checking session…")
-        print("[AddItem] Step 1: Fetching auth session...")
         let session: Session
         do {
             session = try await client.auth.session
-            print("[AddItem] Auth OK. user.id=\(session.user.id.uuidString)")
-            print("[AddItem] Access token length: \((try? await client.auth.session).map { $0.accessToken.count } ?? 0)")
         } catch {
-            print("[AddItem][Auth][Error] \(error)")
             throw wrap(error, category: "Auth", hint: "Not signed in or session invalid.")
         }
         let ownerId = session.user.id.uuidString
@@ -59,18 +56,14 @@ final class AddItemService: AddItemServicing {
         } else {
             status?("No images to upload.")
         }
-        print("[AddItem] Step 2: Upload images count=\(imageCount)")
         let imagePaths: [String]
         do {
             if skipUploadsForTesting {
-                print("[AddItem] Test mode: skipping image uploads. Inserting with images=[].")
                 imagePaths = []
             } else {
                 imagePaths = try await uploadImagesResilient(ownerId: ownerId, imagesData: draft.images, status: status)
-                print("[AddItem] Uploads finished. paths=\(imagePaths)")
             }
         } catch {
-            print("[AddItem][Storage][Error] \(error)")
             throw wrap(error, category: "Storage", hint: "Image upload failed (network/bucket/policy).")
         }
 
@@ -89,7 +82,6 @@ final class AddItemService: AddItemServicing {
 
         // 4) Insert into public.items and return the created row
         status?("Saving item…")
-        print("[AddItem] Step 3: Inserting row into items...")
         do {
             let response = try await client
                 .from("items")
@@ -98,42 +90,93 @@ final class AddItemService: AddItemServicing {
                 .single()
                 .execute()
 
-            let statusCode = response.response.statusCode
-            print("[AddItem] Insert response status=\(statusCode)")
-
-            if let bodyStr = String(data: response.data, encoding: .utf8) {
-                print("[AddItem] Insert response body: \(bodyStr)")
-            } else {
-                print("[AddItem] Insert response body: <non-utf8>")
-            }
-
             let decoder = JSONDecoder()
             let item = try decoder.decode(ItemRow.self, from: response.data)
-            print("[AddItem] Step 4: Decode OK. item.id=\(item.id)")
             status?("Done")
             return item
         } catch {
-            print("[AddItem][DB][InsertError] \(error)")
-            dump(error)
             throw wrap(error, category: "DB", hint: "Insert failed (RLS/policy/constraint).")
+        }
+    }
+
+    // MARK: - Update existing item
+    func updateItem(draft: AddItemDraft, status: ((String) -> Void)? = nil) async throws -> ItemRow {
+        guard let itemId = draft.existingItemId else {
+            throw wrap(NSError(domain: "AddItem.Update", code: -1, userInfo: [NSLocalizedDescriptionKey: "Missing item id for update."]), category: "Input", hint: "Draft.existingItemId is nil.")
+        }
+
+        status?("Preparing update…")
+
+        // Optional: if user provided new images (draft.images contains data), upload and decide how to merge.
+        // Strategy: if draft.images is empty, keep existingImagePaths. If not empty, upload new and REPLACE images with new uploads.
+        var finalImagePaths = draft.existingImagePaths
+        if !draft.images.isEmpty {
+            status?("Uploading new images…")
+            let ownerId: String
+            do {
+                let session = try await client.auth.session
+                ownerId = session.user.id.uuidString
+            } catch {
+                throw wrap(error, category: "Auth", hint: "Not signed in or session invalid.")
+            }
+
+            do {
+                let uploaded = try await uploadImagesResilient(ownerId: ownerId, imagesData: draft.images, status: status)
+                finalImagePaths = uploaded
+            } catch {
+                throw wrap(error, category: "Storage", hint: "Image upload failed (network/bucket/policy).")
+            }
+        }
+
+        struct ItemUpdatePayload: Encodable {
+            let title: String
+            let description: String?
+            let category: String?
+            let condition: String?
+            let price_per_day: Double
+            let deposit_amount: Double
+            let images: [String]
+            let is_active: Bool
+        }
+
+        let payload = ItemUpdatePayload(
+            title: draft.title,
+            description: draft.description.isEmpty ? nil : draft.description,
+            category: draft.category.isEmpty ? nil : draft.category,
+            condition: draft.condition.isEmpty ? nil : draft.condition,
+            price_per_day: draft.pricePerDay,
+            deposit_amount: draft.depositAmount,
+            images: finalImagePaths,
+            is_active: draft.isActive
+        )
+
+        status?("Updating item…")
+        do {
+            let response = try await client
+                .from("items")
+                .update(payload)
+                .eq("id", value: itemId)
+                .select()
+                .single()
+                .execute()
+
+            let decoder = JSONDecoder()
+            let updated = try decoder.decode(ItemRow.self, from: response.data)
+            status?("Updated")
+            return updated
+        } catch {
+            throw wrap(error, category: "DB", hint: "Update failed (RLS/policy/constraint).")
         }
     }
 
     // MARK: - Resilient upload orchestration
     private func uploadImagesResilient(ownerId: String, imagesData: [Data], status: ((String) -> Void)?) async throws -> [String] {
-        guard !imagesData.isEmpty else {
-            print("[AddItem][Storage] No images to upload. Skipping.")
-            return []
-        }
-
-        // Strategy A: normal upload (with retries)
+        guard !imagesData.isEmpty else { return [] }
         do {
             status?("Uploading images…")
             return try await uploadImagesIfNeeded(ownerId: ownerId, imagesData: imagesData)
         } catch {
-            // If it’s 403 from Storage, try Strategy B
             if isStorageRLS403(error) {
-                print("[AddItem][Storage] Strategy A failed with 403. Trying signed upload (strategy B)…")
                 status?("Retrying with signed uploads…")
                 let paths = try await signedUploadImages(ownerId: ownerId, imagesData: imagesData, status: status)
                 return paths
@@ -145,31 +188,23 @@ final class AddItemService: AddItemServicing {
 
     // MARK: - Strategy A: direct upload via SDK (primary path)
     private func uploadImagesIfNeeded(ownerId: String, imagesData: [Data]) async throws -> [String] {
-        print("[AddItem][Storage] Project URL=\(SupabaseManager.shared.projectURL.absoluteString)")
-        print("[AddItem][Storage] Starting uploads to bucket=\(storageBucket)")
         var paths: [String] = []
         for (index, originalData) in imagesData.enumerated() {
             let preparedData = await prepareImageDataForUpload(originalData)
             let filename = "item_\(Int(Date().timeIntervalSince1970))_\(index).jpg"
             let folder = ownerId
             let path = "\(folder)/\(filename)"
-            print("[AddItem][Storage] (\(index+1)/\(imagesData.count)) Upload start: path=\(path) size=\(preparedData.count) bytes")
-            print("[AddItem][Storage] auth.uid (ownerId)=\(ownerId) firstFolder=\(path.split(separator: "/").first ?? Substring(""))")
 
             do {
                 try await uploadWithRetry(path: path, data: preparedData)
-                print("[AddItem][Storage] (\(index+1)/\(imagesData.count)) Upload finished: path=\(path)")
                 paths.append(path)
             } catch {
-                print("[AddItem][Storage][PerFileError] path=\(path) error=\(error)")
                 throw error
             }
         }
-        print("[AddItem][Storage] All uploads completed.")
         return paths
     }
 
-    // Retry wrapper for transient network errors (-1001 timeout, -1005 connection lost, -1017 cannot parse response)
     private func uploadWithRetry(path: String, data: Data) async throws {
         var attempt = 0
         var delay = uploadInitialBackoff
@@ -187,23 +222,14 @@ final class AddItemService: AddItemServicing {
                     )
                 return
             } catch {
-                // If it’s a Storage 403, bubble up immediately so Strategy B can engage
-                if isStorageRLS403(error) {
-                    throw error
-                }
-
+                if isStorageRLS403(error) { throw error }
                 let nsError = error as NSError
-                let code = nsError.code
-                // NSURLErrorTimedOut = -1001, NSURLErrorNetworkConnectionLost = -1005, NSURLErrorCannotParseResponse = -1017
-                let isTransient = (nsError.domain == NSURLErrorDomain) && (code == -1001 || code == -1005 || code == -1017)
+                let isTransient = (nsError.domain == NSURLErrorDomain) && (nsError.code == -1001 || nsError.code == -1005 || nsError.code == -1017)
                 if attempt < uploadMaxRetries && isTransient {
-                    let delayString = String(format: "%.1f", delay)
-                    print("[AddItem][Storage][Retry] attempt \(attempt) failed with \(nsError.localizedDescription). Retrying in \(delayString)s...")
                     try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                     delay *= 2
                     continue
                 } else {
-                    print("[AddItem][Storage][Retry] giving up after \(attempt) attempts. error=\(nsError)")
                     throw error
                 }
             }
@@ -228,20 +254,15 @@ final class AddItemService: AddItemServicing {
             let filename = "item_\(Int(Date().timeIntervalSince1970))_\(index).jpg"
             let path = "\(folder)/\(filename)"
 
-            print("[AddItem][SignedUpload] Creating signed upload URL for \(path)")
             let signedURL = try await createSignedUploadURL(bucketId: storageBucket, objectPath: path, expiresIn: 120)
-
-            print("[AddItem][SignedUpload] PUT data to signed URL: \(signedURL.absoluteString)")
             try await putData(to: signedURL, data: preparedData, contentType: "image/jpeg")
 
             paths.append(path)
-            print("[AddItem][SignedUpload] Done \(index+1)/\(imagesData.count)")
         }
         return paths
     }
 
     private func createSignedUploadURL(bucketId: String, objectPath: String, expiresIn: Int) async throws -> URL {
-        // POST /storage/v1/object/upload/sign/{bucketId}
         let projectURL = SupabaseManager.shared.projectURL
         var components = URLComponents(url: projectURL, resolvingAgainstBaseURL: false)!
         components.path = "/storage/v1/object/upload/sign/\(bucketId)"
@@ -249,8 +270,6 @@ final class AddItemService: AddItemServicing {
         guard let url = components.url else {
             throw wrap(NSError(domain: "SignedUploadURL", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid signed upload URL path"]), category: "Storage", hint: "Bad path.")
         }
-
-        print("[AddItem][SignedUploadURL] Project URL=\(projectURL.absoluteString) bucketId=\(bucketId) requestURL=\(url.absoluteString)")
 
         struct Body: Encodable {
             let objectName: String
@@ -262,27 +281,18 @@ final class AddItemService: AddItemServicing {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
-        // Auth headers
         request.setValue(SupabaseManager.shared.publicAnonKey, forHTTPHeaderField: "apikey")
         let token = try await client.auth.session.accessToken
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-
         request.httpBody = bodyData
 
         let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse else {
-            throw wrap(NSError(domain: "SignedUploadURL", code: -1, userInfo: [NSLocalizedDescriptionKey: "No HTTP response"]), category: "Storage", hint: "Network.")
-        }
-        guard (200..<300).contains(http.statusCode) else {
-            let bodyStr = String(data: data, encoding: .utf8) ?? "<non-utf8>"
-            print("[AddItem][SignedUploadURL] Error status=\(http.statusCode) body=\(bodyStr)")
-            throw wrap(NSError(domain: "SignedUploadURL", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: "Failed to create signed upload URL (\(http.statusCode))"]), category: "Storage", hint: "Check bucket id, RLS and token.")
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw wrap(NSError(domain: "SignedUploadURL", code: (response as? HTTPURLResponse)?.statusCode ?? -1, userInfo: [NSLocalizedDescriptionKey: "Failed to create signed upload URL"]), category: "Storage", hint: "Check bucket id, RLS and token.")
         }
 
         struct Resp: Decodable { let signedUrl: String }
         let resp = try JSONDecoder().decode(Resp.self, from: data)
-
         guard let finalURL = URL(string: resp.signedUrl, relativeTo: projectURL) else {
             throw wrap(NSError(domain: "SignedUploadURL", code: -1, userInfo: [NSLocalizedDescriptionKey: "Bad signed upload URL in response"]), category: "Storage", hint: "Response format.")
         }
@@ -295,14 +305,9 @@ final class AddItemService: AddItemServicing {
         request.setValue(contentType, forHTTPHeaderField: "Content-Type")
         request.httpBody = data
 
-        let (respData, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse else {
-            throw wrap(NSError(domain: "SignedUploadPUT", code: -1, userInfo: [NSLocalizedDescriptionKey: "No HTTP response"]), category: "Storage", hint: "Network.")
-        }
-        if !(200..<300).contains(http.statusCode) {
-            let body = String(data: respData, encoding: .utf8) ?? "<non-utf8>"
-            print("[AddItem][SignedUpload][PUT] Error status=\(http.statusCode) body=\(body)")
-            throw wrap(NSError(domain: "SignedUploadPUT", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: "PUT failed (\(http.statusCode))"]), category: "Storage", hint: "Signed URL expired or invalid.")
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw wrap(NSError(domain: "SignedUploadPUT", code: (response as? HTTPURLResponse)?.statusCode ?? -1, userInfo: [NSLocalizedDescriptionKey: "PUT failed"]), category: "Storage", hint: "Signed URL expired or invalid.")
         }
     }
 
@@ -346,3 +351,4 @@ final class AddItemService: AddItemServicing {
         ])
     }
 }
+

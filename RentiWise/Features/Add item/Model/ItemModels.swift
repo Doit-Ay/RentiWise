@@ -46,4 +46,11 @@ struct AddItemDraft {
     var pricePerDay: Double = 0
     var depositAmount: Double = 0
     var isActive: Bool = true
+
+    // Editing support
+    var isEditing: Bool = false
+    var existingItemId: String? = nil
+    // The image paths already stored in DB for this item
+    var existingImagePaths: [String] = []
 }
+

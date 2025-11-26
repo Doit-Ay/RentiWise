@@ -28,15 +28,25 @@ class AddItemFirstViewController: UIViewController,
     private var collectionView: UICollectionView!
 
     // Draft to carry data through the flow
-    private var draft = AddItemDraft()
+    var draft = AddItemDraft() // made internal so ProductViewController can set
 
     override func viewDidLoad() {
         super.viewDidLoad()
         if title?.isEmpty ?? true { title = "Add item" }
         hidesBottomBarWhenPushed = true
         setupCollectionView()
+        prefillIfEditing()
         updateContinueState()
         continueButton.addTarget(self, action: #selector(continueTapped(_:)), for: .touchUpInside)
+    }
+
+    private func prefillIfEditing() {
+        guard draft.isEditing else { return }
+        // If draft.images already contains Data (downloaded in ProductViewController), convert to UIImage for display
+        if !draft.images.isEmpty {
+            images = draft.images.compactMap { UIImage(data: $0) }
+            collectionView?.reloadData()
+        }
     }
 
     // MARK: - Continue
@@ -125,9 +135,10 @@ class AddItemFirstViewController: UIViewController,
             let cell = collectionView.dequeueReusableCell(withReuseIdentifier: reuseImageCell, for: indexPath) as! PhotoCell
             let image = images[indexPath.item]
             cell.configure(with: image)
-            cell.onDeleteTapped = { [weak self] in
-                guard let self = self else { return }
-                self.removeImage(at: indexPath)
+            cell.onDeleteTapped = { [weak self] cell in
+                guard let self = self,
+                      let currentIndexPath = collectionView.indexPath(for: cell) else { return }
+                self.removeImage(atCellIndexPath: currentIndexPath)
             }
             return cell
         }
@@ -207,7 +218,9 @@ class AddItemFirstViewController: UIViewController,
     private func presentPhotoLibrary() {
         var config = PHPickerConfiguration()
         config.filter = .images
-        config.selectionLimit = 1
+        // Allow selecting up to remaining slots (max total 4)
+        let remaining = max(0, maxImages - images.count)
+        config.selectionLimit = remaining == 0 ? 0 : remaining
         let picker = PHPickerViewController(configuration: config)
         picker.delegate = self
         present(picker, animated: true)
@@ -215,15 +228,37 @@ class AddItemFirstViewController: UIViewController,
 
     func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
         picker.dismiss(animated: true)
-        guard images.count < maxImages else { return }
 
-        guard let provider = results.first?.itemProvider,
-              provider.canLoadObject(ofClass: UIImage.self) else { return }
+        guard !results.isEmpty, images.count < maxImages else { return }
 
-        provider.loadObject(ofClass: UIImage.self) { [weak self] object, _ in
-            guard let self = self, let image = object as? UIImage else { return }
-            DispatchQueue.main.async {
-                self.appendImage(image)
+        // Load multiple images; enforce the cap while loading.
+        let remainingCapacity = max(0, maxImages - images.count)
+        if remainingCapacity == 0 { return }
+
+        // We’ll collect images then update UI once.
+        var newImages: [UIImage] = []
+        let group = DispatchGroup()
+
+        // Only process up to remainingCapacity results
+        for provider in results.prefix(remainingCapacity).map({ $0.itemProvider }) {
+            guard provider.canLoadObject(ofClass: UIImage.self) else { continue }
+            group.enter()
+            provider.loadObject(ofClass: UIImage.self) { object, _ in
+                if let image = object as? UIImage {
+                    newImages.append(image)
+                }
+                group.leave()
+            }
+        }
+
+        group.notify(queue: .main) { [weak self] in
+            guard let self = self, !newImages.isEmpty else { return }
+            // Ensure we don't exceed maxImages even if providers returned more than expected
+            let allowed = max(0, self.maxImages - self.images.count)
+            if allowed > 0 {
+                self.images.append(contentsOf: newImages.prefix(allowed))
+                self.collectionView.reloadData()
+                self.updateContinueState()
             }
         }
     }
@@ -264,18 +299,35 @@ class AddItemFirstViewController: UIViewController,
     // MARK: - State updates
     private func appendImage(_ image: UIImage) {
         guard images.count < maxImages else { return }
+        let wasFull = images.count == maxImages // false here due to guard, but keep pattern if logic changes
         images.append(image)
-        collectionView.reloadData()
+        if wasFull {
+            collectionView.reloadData()
+        } else {
+            collectionView.reloadData()
+        }
         updateContinueState()
     }
 
-    private func removeImage(at indexPath: IndexPath) {
+    // New deletion method that is resilient when the Add tile appears
+    private func removeImage(atCellIndexPath indexPath: IndexPath) {
         guard indexPath.item < images.count else { return }
+
+        // Determine if we are transitioning from 4 images (no add tile) to 3 images (add tile appears).
+        let willShowAddTile = (images.count == maxImages)
+
+        // Update data source first
         images.remove(at: indexPath.item)
+
+        // Compute the index path for the Add tile if it's going to appear
+        let addTileIndexPath = IndexPath(item: images.count, section: indexPath.section)
+
         collectionView.performBatchUpdates {
             collectionView.deleteItems(at: [indexPath])
+            if willShowAddTile {
+                collectionView.insertItems(at: [addTileIndexPath])
+            }
         } completion: { _ in
-            self.collectionView.reloadData()
             self.updateContinueState()
         }
     }
@@ -294,7 +346,8 @@ private final class PhotoCell: UICollectionViewCell {
     private let imageView = UIImageView()
     private let deleteButton = UIButton(type: .system)
 
-    var onDeleteTapped: (() -> Void)?
+    // Pass the cell so the controller can resolve its current indexPath safely
+    var onDeleteTapped: ((PhotoCell) -> Void)?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -348,7 +401,7 @@ private final class PhotoCell: UICollectionViewCell {
     }
 
     @objc private func handleDelete() {
-        onDeleteTapped?()
+        onDeleteTapped?(self)
     }
 }
 
@@ -368,9 +421,10 @@ private final class AddCell: UICollectionViewCell {
     }
 
     private func commonInit() {
-        contentView.backgroundColor = .systemGray6
+        // Apply requested color EBFCFE
+        contentView.backgroundColor = UIColor(hex: "EBFCFE")
         contentView.layer.cornerRadius = 12
-        contentView.layer.borderColor = UIColor.systemGray4.cgColor
+        contentView.layer.borderColor = UIColor(hex: "CFEFF3").cgColor // subtle border to match tone
         contentView.layer.borderWidth = 1
         contentView.layer.masksToBounds = true
 
@@ -381,13 +435,13 @@ private final class AddCell: UICollectionViewCell {
         stack.translatesAutoresizingMaskIntoConstraints = false
 
         plusView.image = UIImage(systemName: "plus")
-        plusView.tintColor = .secondaryLabel
+        plusView.tintColor = UIColor(hex: "5DA9B6") // complementary teal for visibility
         plusView.contentMode = .scaleAspectFit
         plusView.setContentHuggingPriority(.required, for: .vertical)
 
         titleLabel.text = "Add Photo"
         titleLabel.font = .systemFont(ofSize: 14, weight: .medium)
-        titleLabel.textColor = .secondaryLabel
+        titleLabel.textColor = UIColor(hex: "5DA9B6")
         titleLabel.textAlignment = .center
         titleLabel.setContentHuggingPriority(.required, for: .vertical)
 
@@ -405,3 +459,4 @@ private final class AddCell: UICollectionViewCell {
         // Reserved for future styling if needed.
     }
 }
+

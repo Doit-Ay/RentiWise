@@ -188,6 +188,11 @@ extension DashboardViewController: LenderViewDelegate {
         vc.title = "Details"
         vc.hidesBottomBarWhenPushed = true
 
+        // Inject the selected request so the details screen can display it
+        if let selected = lenderView.request(at: index) {
+            vc.request = selected
+        }
+
         if let nav = navigationController {
             nav.setNavigationBarHidden(false, animated: false)
             nav.pushViewController(vc, animated: true)
@@ -197,14 +202,31 @@ extension DashboardViewController: LenderViewDelegate {
         }
     }
 
-    
+    // New: open ProductViewController in own-item mode
+    func lenderView(_ lenderView: LenderView, didSelectItem item: Item) {
+        guard presentedViewController == nil else { return }
+        guard navigationController?.topViewController is DashboardViewController else { return }
 
-    /*
-    // MARK: - Navigation
+        let nibName = "ProductViewController"
+        let productVC: ProductViewController
+        if Bundle.main.path(forResource: nibName, ofType: "nib") != nil || Bundle.main.path(forResource: nibName, ofType: "xib") != nil {
+            productVC = ProductViewController(nibName: nibName, bundle: nil)
+        } else {
+            productVC = ProductViewController()
+        }
+        productVC.configure(with: item)
+        productVC.displayMode = .ownItem
+        productVC.title = "Product Detail"
+        productVC.hidesBottomBarWhenPushed = true
 
-    
-    */
-
+        if let nav = navigationController {
+            nav.setNavigationBarHidden(false, animated: false)
+            nav.pushViewController(productVC, animated: true)
+        } else {
+            productVC.modalPresentationStyle = .fullScreen
+            present(productVC, animated: true)
+        }
+    }
 }
 
 extension DashboardViewController: BorrowerViewDelegate {

@@ -9,6 +9,8 @@ protocol LenderViewDelegate: AnyObject {
     func lenderViewDidTapAddButton(_ lenderView: LenderView)
     func lenderViewDidTapEarnings(_ lenderView: LenderView)
     func lenderView(_ lenderView: LenderView, didSelectRequestAt index: Int)
+    // New: called when a Listing item (segment 0) is tapped
+    func lenderView(_ lenderView: LenderView, didSelectItem item: Item)
 }
 
 final class LenderView: UIView {
@@ -35,8 +37,9 @@ final class LenderView: UIView {
     // Listing data (segment 0)
     private var myItems: [Item] = []
 
-    // Request data (segment 1)
-    private var myRequests: [RentalRequest] = []
+    // Request data (segment 1) – Variant 1 with items join only
+    // IMPORTANT: RequestWithItem and ItemLite are defined ONCE in DashboardLenderRequestViewController.swift
+    private var myRequests: [RequestWithItem] = []
 
     // History data (segment 2) – placeholder model for now
     private var myHistory: [HistoryRow] = []
@@ -103,8 +106,15 @@ final class LenderView: UIView {
         earningsView?.isAccessibilityElement = true
         earningsView?.accessibilityLabel = "Earnings overview"
 
+        // Listen for refresh notifications after Accept/Deny
+        NotificationCenter.default.addObserver(self, selector: #selector(handleRequestsShouldRefresh), name: Notification.Name("requestsShouldRefresh"), object: nil)
+
         // Initial load for the current segment
         reloadForSelectedSegment()
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
 
     // MARK: - Table setup
@@ -116,7 +126,7 @@ final class LenderView: UIView {
         tableView.rowHeight = 140
         tableView.estimatedRowHeight = 140
         tableView.separatorStyle = .none
-        tableView.backgroundColor = .systemGroupedBackground
+        tableView.backgroundColor = .white
         tableView.contentInsetAdjustmentBehavior = .always
 
         // Register your cell nibs
@@ -222,7 +232,7 @@ final class LenderView: UIView {
         }
     }
 
-    // MARK: - Data loading (Requests)
+    // MARK: - Data loading (Requests + items only)
     private func loadMyRequests() async {
         guard let userId = await SupabaseManager.shared.currentUserId() else {
             await MainActor.run {
@@ -232,46 +242,97 @@ final class LenderView: UIView {
             }
             return
         }
+
+        // Base fields + items(...) via FK requests_item_id_fkey
+        let select =
+        """
+        id,item_id,owner_id,borrower_id,start_date,end_date,pickup_time,status,created_at,
+        items(id,title,images,price_per_day)
+        """
+
         do {
             let response = try await SupabaseManager.shared.client
-                .from("rental_requests")
-                .select()
+                .from("requests")
+                .select(select)
                 .eq("owner_id", value: userId)
                 .order("created_at", ascending: false)
                 .execute()
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .iso8601
-            let items = try decoder.decode([RentalRequest].self, from: response.data)
+
+            let rows = try JSONDecoder().decode([RequestWithItem].self, from: response.data)
+
             await MainActor.run {
-                self.myRequests = items
+                self.myRequests = rows
                 self.tableView.reloadData()
                 self.updateEmptyStateIfNeeded()
             }
         } catch {
-            await MainActor.run {
-                self.myRequests = []
-                self.tableView.reloadData()
-                self.updateEmptyStateIfNeeded()
+            // If join fails due to RLS or missing FK inference, fall back to base select so the list still shows.
+            do {
+                let response = try await SupabaseManager.shared.client
+                    .from("requests")
+                    .select("id,item_id,owner_id,borrower_id,start_date,end_date,pickup_time,status,created_at")
+                    .eq("owner_id", value: userId)
+                    .order("created_at", ascending: false)
+                    .execute()
+
+                // Decode base without items
+                let baseRows = try JSONDecoder().decode([RequestBase].self, from: response.data)
+                await MainActor.run {
+                    // Map base → RequestWithItem (items: nil)
+                    self.myRequests = baseRows.map { base in
+                        RequestWithItem(
+                            id: base.id,
+                            item_id: base.item_id,
+                            owner_id: base.owner_id,
+                            borrower_id: base.borrower_id,
+                            start_date: base.start_date,
+                            end_date: base.end_date,
+                            pickup_time: base.pickup_time,
+                            status: base.status,
+                            created_at: base.created_at,
+                            items: nil
+                        )
+                    }
+                    self.tableView.reloadData()
+                    self.updateEmptyStateIfNeeded()
+                }
+            } catch {
+                await MainActor.run {
+                    self.myRequests = []
+                    self.tableView.reloadData()
+                    self.updateEmptyStateIfNeeded()
+                }
             }
         }
     }
+
+    // MARK: - Public helpers used by DashboardViewController
+    func request(at index: Int) -> RequestWithItem? {
+        guard index >= 0 && index < myRequests.count else { return nil }
+        return myRequests[index]
+    }
+
+    func refreshRequests() {
+        selectedInnerIndex = 1
+        Task { await loadMyRequests() }
+    }
+
+    @objc private func handleRequestsShouldRefresh() {
+        refreshRequests()
+    }
 }
 
-// Real RentalRequest model
-private struct RentalRequest: Decodable {
+// MARK: - Models for Variant 1 (only RequestBase lives here for fallback)
+private struct RequestBase: Decodable {
     let id: String
     let item_id: String
     let owner_id: String
     let borrower_id: String
-    let rental_unit: String
-    let start_at: Date
-    let end_at: Date
-    let rental_fee: Double
-    let service_fee: Double
-    let security_deposit: Double
-    let total: Double
+    let start_date: String
+    let end_date: String
+    let pickup_time: String?
     let status: String
-    let created_at: Date?
+    let created_at: String?
 }
 
 // Temporary placeholder model for History until DB exists
@@ -304,19 +365,64 @@ extension LenderView: UITableViewDataSource {
             }
             let item = myItems[indexPath.section]
             cell.configure(with: item, currencyFormatter: currencyFormatter)
+            // Ensure white background consistency
+            cell.backgroundColor = .white
+            cell.contentView.backgroundColor = .white
             return cell
 
         case 1:
             let cell = tableView.dequeueReusableCell(withIdentifier: "Request", for: indexPath) as! LenderRequestTableViewCell
-            let request = myRequests[indexPath.section]
-            cell.itemNameRequest.text = request.item_id
-            cell.itemRateRequest.text = String(format: "₹%.2f", request.total)
-            cell.itemBorrowerRequest.text = request.status.capitalized
+            let req = myRequests[indexPath.section]
+
+            // Name: prefer item title, fallback to item_id
+            let title = req.items?.title ?? req.item_id
+            cell.itemNameRequest.text = title
+            cell.itemNameRequest.numberOfLines = 1
+            cell.itemNameRequest.lineBreakMode = .byTruncatingTail
+
+            // Rate: from items.price_per_day if available; else show date range
+            if let p = req.items?.price_per_day {
+                let text = (currencyFormatter.string(from: NSNumber(value: p)) ?? "\(p)") + " / day"
+                cell.itemRateRequest.text = text
+            } else {
+                let sql = DateFormatter()
+                sql.calendar = Calendar(identifier: .gregorian)
+                sql.timeZone = TimeZone(secondsFromGMT: 0)
+                sql.dateFormat = "yyyy-MM-dd"
+                let display = DateFormatter()
+                display.calendar = Calendar(identifier: .gregorian)
+                display.timeZone = .current
+                display.dateFormat = "d MMM yyyy"
+                if let s = sql.date(from: req.start_date),
+                   let e = sql.date(from: req.end_date) {
+                    cell.itemRateRequest.text = "\(display.string(from: s)) — \(display.string(from: e))"
+                } else {
+                    cell.itemRateRequest.text = "—"
+                }
+            }
+
+            // Borrower label: keep status for now (you can change to "From: ..." later)
+            cell.itemBorrowerRequest.text = req.status.capitalized
+
+            // Image: first item image if any
+            if let path = req.items?.images.first,
+               let url = StorageURLBuilder.publicFileURL(for: path) {
+                cell.setImage(from: url)
+            } else {
+                cell.itemImageRequest.image = UIImage(systemName: "photo")
+                cell.itemImageRequest.tintColor = .secondaryLabel
+                cell.itemImageRequest.contentMode = .scaleAspectFit
+            }
+
+            cell.backgroundColor = .white
+            cell.contentView.backgroundColor = .white
             return cell
 
         case 2:
             let cell = tableView.dequeueReusableCell(withIdentifier: "History", for: indexPath) as! LenderHistoryTableViewCell
             // TODO: cell.configure(with: myHistory[indexPath.section])
+            cell.backgroundColor = .white
+            cell.contentView.backgroundColor = .white
             return cell
 
         default:
@@ -346,6 +452,10 @@ extension LenderView: UITableViewDelegate {
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         switch selectedInnerIndex {
+        case 0:
+            // Listing: open product view in own-item mode via delegate
+            let item = myItems[indexPath.section]
+            delegate?.lenderView(self, didSelectItem: item)
         case 1:
             // Request section selection
             delegate?.lenderView(self, didSelectRequestAt: indexPath.section)
@@ -354,4 +464,3 @@ extension LenderView: UITableViewDelegate {
         }
     }
 }
-

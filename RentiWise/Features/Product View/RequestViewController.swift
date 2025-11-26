@@ -63,7 +63,6 @@ class RequestViewController: UIViewController {
 
     public func configure(withItemId id: String) {
         self.itemId = id
-        // If you have a loader to fetch the item by id, trigger it here; otherwise, update what you can.
         loadItemIfNeeded()
     }
     
@@ -85,7 +84,6 @@ class RequestViewController: UIViewController {
     private var securityDeposit: Double = 0
     private let serviceFeeRate: Double = 0.10
     
-    // Date formatters for summary labels
     private let dateFormatter: DateFormatter = {
         let df = DateFormatter()
         df.dateFormat = "d MMM yyyy"
@@ -98,10 +96,6 @@ class RequestViewController: UIViewController {
         return df
     }()
     
-    // MARK: - Public API
-    
-    // Existing public func configure(with item: Item) is replaced with the above version
-    
     // MARK: - Lifecycle
     
     override func viewDidLoad() {
@@ -109,30 +103,21 @@ class RequestViewController: UIViewController {
         title = "Request"
         navigationController?.setNavigationBarHidden(false, animated: false)
         view.backgroundColor = .systemBackground
-        
-        // Style cards
         [productCardView, rentalTypeCard, selectdateandtimeCard, bookingsummaryCard, ownerCard, priceBreakdownCard].forEach {
             $0?.layer.cornerRadius = 12
             $0?.layer.masksToBounds = true
         }
-        
-        // Configure date pickers
         dateLabel.datePickerMode = .date
         pickuptimeLabel.datePickerMode = .time
         returntimeLabel.datePickerMode = .time
-        
         dateLabel.addTarget(self, action: #selector(datePickerChanged), for: .valueChanged)
         pickuptimeLabel.addTarget(self, action: #selector(datePickerChanged), for: .valueChanged)
         returntimeLabel.addTarget(self, action: #selector(datePickerChanged), for: .valueChanged)
-        
-        // Default rental unit
         rentalUnit = .day
         updateRentalButtons()
-        
-        // Initial booking container hidden only if no selection
         boookingcontainer?.isHidden = false
-        
-        // Clear placeholders so we never show static defaults
+
+        // clear placeholders
         productTitleLabel?.text = nil
         productRateLabel?.text = nil
         productRatingLabel?.text = nil
@@ -186,17 +171,11 @@ class RequestViewController: UIViewController {
                 self.item = fetched
                 await populateUI()
             } else {
-                #if DEBUG
-                print("RequestViewController.fetchItemIfNeeded: no data returned to decode")
-                #endif
                 await MainActor.run { [weak self] in
                     self?.presentMissingItemAlert()
                 }
             }
         } catch {
-            #if DEBUG
-            print("RequestViewController.fetchItemIfNeeded error:", error)
-            #endif
             await MainActor.run { [weak self] in
                 self?.presentMissingItemAlert()
             }
@@ -208,7 +187,6 @@ class RequestViewController: UIViewController {
     private func populateUI() async {
         guard let item = item else { return }
         applyItemToUI()
-        // Owner and pricing details
         await fetchAndDisplayOwnerProfile(for: item.owner_id)
         securityDeposit = item.deposit_amount
         recalculatePricing()
@@ -231,15 +209,12 @@ class RequestViewController: UIViewController {
                 .single()
                 .execute()
             
-            let data = response.data
-            
-            guard let data = data as? Data else {
+            guard let data = response.data as? Data else {
                 setDefaultOwnerInfo()
                 return
             }
             
             let dto = try JSONDecoder().decode(ProfileDTO.self, from: data)
-            
             let fullName = dto.full_name ?? "Owner"
             let rating = dto.rating ?? 4.7
             let distanceKm = dto.distance_km ?? 2.3
@@ -249,7 +224,6 @@ class RequestViewController: UIViewController {
                 self?.ownerName.text = fullName
                 self?.ownerRating.text = String(format: "%.1f", rating)
                 self?.ownerDist.text = String(format: "%.1f km", distanceKm)
-                
                 self?.productRatingLabel?.text = String(format: "★ %.1f", rating)
                 self?.productDistance?.text = String(format: "%.1f km", distanceKm)
             }
@@ -314,7 +288,6 @@ class RequestViewController: UIViewController {
     private func selectUnit(_ unit: RentalUnit) {
         rentalUnit = unit
         updateRentalButtons()
-        // Adjust date picker modes accordingly
         switch unit {
         case .hour:
             dateLabel.datePickerMode = .date
@@ -334,18 +307,13 @@ class RequestViewController: UIViewController {
             pickuptimeLabel.accessibilityLabel = "Pickup Time"
             dateLabel.accessibilityLabel = "Pickup Date"
             returntimeLabel.accessibilityLabel = "Return Date"
-            
-            // Enforce minimum return date ≥ pickup date
             let startOfPickup = Calendar.current.startOfDay(for: dateLabel.date)
             if returntimeLabel.date < startOfPickup {
                 returntimeLabel.date = startOfPickup
             }
             returntimeLabel.minimumDate = startOfPickup
         }
-        
-        // Show booking container
         boookingcontainer?.isHidden = false
-        
         Task { await populateUI() }
         recalculatePricing()
     }
@@ -383,21 +351,13 @@ class RequestViewController: UIViewController {
     }
     
     @IBAction func requestRentalclicked(_ sender: UIButton) {
-        // Navigate back or present RequestSentPageViewController
-        if let nav = navigationController {
-            nav.popViewController(animated: true)
-        } else {
-            dismiss(animated: true, completion: nil)
-        }
+        // Treat this as the "Request" action and use the existing flow.
+        Task { await sendRequest() }
     }
-    
-    // MARK: - DatePicker Changed
     
     @objc private func datePickerChanged() {
         recalculatePricing()
         boookingcontainer?.isHidden = false
-        
-        // Force UI refresh for summary labels
         applyItemToUI()
     }
     
@@ -405,269 +365,192 @@ class RequestViewController: UIViewController {
     
     private func recalculatePricing() {
         guard let item = item else { return }
-        
         let pricePerDay = item.price_per_day
         let pricePerHour = (pricePerDay / 8).rounded(toPlaces: 2)
-        
-        // Combine date and time for start and end
         let calendar = Calendar.current
-        
-        // Base date from dateLabel (pickup date)
         let baseDate = dateLabel.date
-        
-        // Compose start datetime: combine baseDate's YMD with pickuptimeLabel's HMS
         var startComponents = calendar.dateComponents([.year, .month, .day], from: baseDate)
         let pickupTimeComponents = calendar.dateComponents([.hour, .minute, .second], from: pickuptimeLabel.date)
         startComponents.hour = pickupTimeComponents.hour
         startComponents.minute = pickupTimeComponents.minute
         startComponents.second = pickupTimeComponents.second
         guard let startDateTime = calendar.date(from: startComponents) else { return }
-        
-        // Compose end datetime:
         let endDateTime: Date
-        
         switch rentalUnit {
         case .hour:
-            // end time is date + time from returntimeLabel
             var endComponents = calendar.dateComponents([.year, .month, .day], from: baseDate)
             let returnTimeComponents = calendar.dateComponents([.hour, .minute, .second], from: returntimeLabel.date)
             endComponents.hour = returnTimeComponents.hour
             endComponents.minute = returnTimeComponents.minute
             endComponents.second = returnTimeComponents.second
-            if let dt = calendar.date(from: endComponents) {
-                endDateTime = dt
-            } else {
-                endDateTime = returntimeLabel.date
-            }
+            endDateTime = calendar.date(from: endComponents) ?? returntimeLabel.date
         case .day:
-            // returntimeLabel is date only, add pickup time to end date time
             let returnDate = returntimeLabel.date
             var endComponents = calendar.dateComponents([.year, .month, .day], from: returnDate)
             let pickupTimeComps = calendar.dateComponents([.hour, .minute, .second], from: pickuptimeLabel.date)
             endComponents.hour = pickupTimeComps.hour
             endComponents.minute = pickupTimeComps.minute
             endComponents.second = pickupTimeComps.second
-            if let dt = calendar.date(from: endComponents) {
-                endDateTime = dt
-            } else {
-                endDateTime = returnDate
-            }
+            endDateTime = calendar.date(from: endComponents) ?? returnDate
         }
-        
-        // Ensure endDateTime >= startDateTime, else add 1 day
         var actualEndDateTime = endDateTime
         if actualEndDateTime < startDateTime {
             actualEndDateTime = calendar.date(byAdding: .day, value: 1, to: actualEndDateTime) ?? actualEndDateTime
         }
-        
         let duration = actualEndDateTime.timeIntervalSince(startDateTime)
-        
         var rentalFee: Double = 0
         var quantityDescription1 = ""
         var quantityDescription2 = ""
         var quantityDescription3 = ""
-        
         switch rentalUnit {
         case .hour:
-            // duration in hours, round up to nearest hour, minimum 1
             let hoursRaw = max(0, duration / 3600)
             let quantityHours = max(1, Int(ceil(hoursRaw)))
             rentalFee = Double(quantityHours) * pricePerHour
-            
-            // Update summary labels
             quantityDescription1 = dateFormatter.string(from: baseDate)
             quantityDescription2 = "\(timeFormatter.string(from: startDateTime)) - \(timeFormatter.string(from: actualEndDateTime))"
             if hoursRaw > 0 {
                 let h = Int(hoursRaw)
                 let m = Int((hoursRaw - Double(h)) * 60)
-                if h > 0 && m > 0 {
-                    quantityDescription3 = "\(h)h \(m)m"
-                } else if h > 0 {
-                    quantityDescription3 = "\(h)h"
-                } else {
-                    quantityDescription3 = "\(m)m"
-                }
+                if h > 0 && m > 0 { quantityDescription3 = "\(h)h \(m)m" }
+                else if h > 0 { quantityDescription3 = "\(h)h" }
+                else { quantityDescription3 = "\(m)m" }
             } else {
                 quantityDescription3 = "0m"
             }
         case .day:
-            // duration in days, ceil, minimum 1
             let daysRaw = max(0, duration / 86400)
             let quantityDays = max(1, Int(ceil(daysRaw)))
             rentalFee = Double(quantityDays) * pricePerDay
-            
-            // Update summary labels
             let startStr = dateFormatter.string(from: baseDate)
             let endStr = dateFormatter.string(from: actualEndDateTime)
             quantityDescription1 = "\(startStr) - \(endStr)"
             quantityDescription2 = timeFormatter.string(from: pickuptimeLabel.date)
             quantityDescription3 = "\(quantityDays) day\(quantityDays == 1 ? "" : "s")"
         }
-        
         let serviceFee = rentalFee * serviceFeeRate
         let total = rentalFee + serviceFee + securityDeposit
-        
-        // Update UI labels
         rentalfee.text = currencyFormatter.string(from: NSNumber(value: rentalFee))
         fee.text = currencyFormatter.string(from: NSNumber(value: serviceFee))
         security.text = currencyFormatter.string(from: NSNumber(value: securityDeposit))
         totalamount.text = currencyFormatter.string(from: NSNumber(value: total))
         priceLabel.text = currencyFormatter.string(from: NSNumber(value: total))
-        
         label1sum?.text = quantityDescription1
         label2sum?.text = quantityDescription2
         label3sum?.text = quantityDescription3
     }
     
     // MARK: - Networking: Send Request
-    
     private func sendRequest() async {
         guard let item = item else {
             presentMissingItemAlert()
             return
         }
-        
         guard let currentUserId = await SupabaseManager.shared.currentUserId() else {
             presentAlert(title: "Error", message: "You must be logged in to send a request.")
             return
         }
         
-        let pricePerDay = item.price_per_day
-        let pricePerHour = (pricePerDay / 8).rounded(toPlaces: 2)
-        
+        // Prepare booking values according to your public.requests schema
         let calendar = Calendar.current
+        let pickupDate = dateLabel.date
+        let pickupTime = pickuptimeLabel.date
+        let returnPicker = returntimeLabel.date
         
-        // Compose start datetime and end datetime same as pricing calculation
-        let baseDate = dateLabel.date
-        
-        var startComponents = calendar.dateComponents([.year, .month, .day], from: baseDate)
-        let pickupTimeComponents = calendar.dateComponents([.hour, .minute, .second], from: pickuptimeLabel.date)
-        startComponents.hour = pickupTimeComponents.hour
-        startComponents.minute = pickupTimeComponents.minute
-        startComponents.second = pickupTimeComponents.second
-        guard let startDateTime = calendar.date(from: startComponents) else {
-            presentAlert(title: "Error", message: "Invalid pickup date/time.")
-            return
-        }
-        
-        let endDateTime: Date
-        
+        let startOfPickup = calendar.startOfDay(for: pickupDate)
+        var endDate: Date
         switch rentalUnit {
+        case .day:
+            endDate = calendar.startOfDay(for: returnPicker)
+            if endDate < startOfPickup {
+                endDate = calendar.date(byAdding: .day, value: 1, to: endDate) ?? endDate
+            }
         case .hour:
-            var endComponents = calendar.dateComponents([.year, .month, .day], from: baseDate)
-            let returnTimeComponents = calendar.dateComponents([.hour, .minute, .second], from: returntimeLabel.date)
+            // If return time earlier than pickup time -> assume next day
+            var endComponents = calendar.dateComponents([.year, .month, .day], from: pickupDate)
+            let returnTimeComponents = calendar.dateComponents([.hour, .minute, .second], from: returnPicker)
             endComponents.hour = returnTimeComponents.hour
             endComponents.minute = returnTimeComponents.minute
             endComponents.second = returnTimeComponents.second
-            if let dt = calendar.date(from: endComponents) {
-                endDateTime = dt
-            } else {
-                endDateTime = returntimeLabel.date
-            }
-        case .day:
-            let returnDate = returntimeLabel.date
-            var endComponents = calendar.dateComponents([.year, .month, .day], from: returnDate)
-            let pickupTimeComps = calendar.dateComponents([.hour, .minute, .second], from: pickuptimeLabel.date)
-            endComponents.hour = pickupTimeComps.hour
-            endComponents.minute = pickupTimeComps.minute
-            endComponents.second = pickupTimeComps.second
-            if let dt = calendar.date(from: endComponents) {
-                endDateTime = dt
-            } else {
-                endDateTime = returnDate
-            }
+            let endDateTime = calendar.date(from: endComponents) ?? returnPicker
+            endDate = endDateTime < pickupTime ? calendar.date(byAdding: .day, value: 1, to: pickupDate) ?? pickupDate : pickupDate
         }
         
-        var actualEndDateTime = endDateTime
-        if actualEndDateTime < startDateTime {
-            actualEndDateTime = calendar.date(byAdding: .day, value: 1, to: actualEndDateTime) ?? actualEndDateTime
-        }
+        // Format for SQL
+        let sqlDateFormatter = DateFormatter()
+        sqlDateFormatter.calendar = Calendar(identifier: .gregorian)
+        sqlDateFormatter.timeZone = TimeZone(secondsFromGMT: 0)
+        sqlDateFormatter.dateFormat = "yyyy-MM-dd"
         
-        let duration = actualEndDateTime.timeIntervalSince(startDateTime)
+        let sqlTimeFormatter = DateFormatter()
+        sqlTimeFormatter.calendar = Calendar(identifier: .gregorian)
+        sqlTimeFormatter.timeZone = TimeZone.current
+        sqlTimeFormatter.dateFormat = "HH:mm:ssXXXXX"
         
-        var rentalFee: Double = 0
-        var units: Double = 0
-        
-        switch rentalUnit {
-        case .hour:
-            let hoursRaw = max(0, duration / 3600)
-            let quantityHours = max(1, Int(ceil(hoursRaw)))
-            units = Double(quantityHours)
-            rentalFee = Double(quantityHours) * pricePerHour
-        case .day:
-            let daysRaw = max(0, duration / 86400)
-            let quantityDays = max(1, Int(ceil(daysRaw)))
-            units = Double(quantityDays)
-            rentalFee = Double(quantityDays) * pricePerDay
-        }
-        
-        let serviceFee = rentalFee * serviceFeeRate
-        let total = rentalFee + serviceFee + securityDeposit
-        
-        let client = SupabaseManager.shared.client
-        
-        struct NewRequest: Encodable {
+        struct NewRequestRow: Encodable {
             let item_id: String
             let owner_id: String
             let borrower_id: String
-            let rental_unit: String
-            let start_at: String
-            let end_at: String
-            let rental_fee: Double
-            let service_fee: Double
-            let security_deposit: Double
-            let total: Double
+            let start_date: String
+            let end_date: String
+            let pickup_time: String?
             let status: String
+            let message: String?
         }
         
-        let newRequest = NewRequest(
+        let row = NewRequestRow(
             item_id: item.id,
             owner_id: item.owner_id,
             borrower_id: currentUserId,
-            rental_unit: rentalUnit == .day ? "day" : "hour",
-            start_at: ISO8601DateFormatter().string(from: startDateTime),
-            end_at: ISO8601DateFormatter().string(from: actualEndDateTime),
-            rental_fee: rentalFee,
-            service_fee: serviceFee,
-            security_deposit: securityDeposit,
-            total: total,
-            status: "pending"
+            start_date: sqlDateFormatter.string(from: startOfPickup),
+            end_date: sqlDateFormatter.string(from: endDate),
+            pickup_time: sqlTimeFormatter.string(from: pickupTime),
+            status: "pending",
+            message: nil
         )
         
         do {
-            _ = try await client
-                .from("rental_requests")
-                .insert(newRequest)
+            _ = try await SupabaseManager.shared.client
+                .from("requests")
+                .insert(row)
                 .execute()
             
-            // Notify observers about new rental request
-            NotificationCenter.default.post(name: Notification.Name("rentalRequestCreated"), object: nil, userInfo: ["item_id": item.id])
+            // Prepare values for RequestSentPage
+            var startComponents = calendar.dateComponents([.year, .month, .day], from: pickupDate)
+            let pickupTimeComponents = calendar.dateComponents([.hour, .minute, .second], from: pickupTime)
+            startComponents.hour = pickupTimeComponents.hour
+            startComponents.minute = pickupTimeComponents.minute
+            startComponents.second = pickupTimeComponents.second
+            let bookingStartDate = calendar.date(from: startComponents) ?? pickupDate
             
-            // Present RequestSentPageViewController from XIB if exists and pass item info if possible
-            if let sentVC = loadRequestSentPageVC() as? RequestSentPageViewController {
-                sentVC.configure(with: item)
-                navigationController?.pushViewController(sentVC, animated: true)
-            } else {
-                // Fallback: dismiss or pop
-                if let nav = navigationController {
-                    nav.popViewController(animated: true)
-                } else {
-                    dismiss(animated: true, completion: nil)
-                }
+            let bookingEndDate: Date
+            switch rentalUnit {
+            case .day:
+                var endComponents = calendar.dateComponents([.year, .month, .day], from: endDate)
+                endComponents.hour = pickupTimeComponents.hour
+                endComponents.minute = pickupTimeComponents.minute
+                endComponents.second = pickupTimeComponents.second
+                bookingEndDate = calendar.date(from: endComponents) ?? endDate
+            case .hour:
+                var endComponents = calendar.dateComponents([.year, .month, .day], from: endDate)
+                let returnTimeComponents = calendar.dateComponents([.hour, .minute, .second], from: returnPicker)
+                endComponents.hour = returnTimeComponents.hour
+                endComponents.minute = returnTimeComponents.minute
+                endComponents.second = returnTimeComponents.second
+                bookingEndDate = calendar.date(from: endComponents) ?? endDate
             }
             
+            NotificationCenter.default.post(name: Notification.Name("rentalRequestCreated"), object: nil, userInfo: ["item_id": item.id])
+            
+            let sentVC = RequestSentPageViewController(nibName: "RequestSentPageViewController", bundle: .main)
+            sentVC.configure(with: item)
+            sentVC.bookingStartDate = bookingStartDate
+            sentVC.bookingEndDate = bookingEndDate
+            sentVC.pickupTime = pickupTime
+            navigationController?.pushViewController(sentVC, animated: true)
         } catch {
             presentAlert(title: "Request Failed", message: error.localizedDescription)
         }
-    }
-    
-    private func loadRequestSentPageVC() -> UIViewController? {
-        // Try to load from XIB
-        let bundle = Bundle(for: RequestSentPageViewController.self)
-        if let vc = RequestSentPageViewController(nibName: "RequestSentPageViewController", bundle: bundle) as UIViewController? {
-            return vc
-        }
-        return nil
     }
     
     // MARK: - Helper
@@ -691,20 +574,7 @@ class RequestViewController: UIViewController {
     }
     
     private func applyItemToUI() {
-        guard isViewLoaded else { return }
-        guard let currentItem = self.item else {
-            #if DEBUG
-            print("[RequestVC] applyItemToUI called with nil item")
-            #endif
-            return
-        }
-        
-        // Clear placeholders to avoid stale static content
-        productTitleLabel?.text = nil
-        productRateLabel?.text = nil
-        productRatingLabel?.text = nil
-        productDistance?.text = nil
-        
+        guard isViewLoaded, let currentItem = self.item else { return }
         productTitleLabel?.text = currentItem.title
         let pricePerHour = (currentItem.price_per_day / 8).rounded(toPlaces: 2)
         switch rentalUnit {
@@ -730,36 +600,21 @@ class RequestViewController: UIViewController {
             productThumbImageView?.tintColor = .secondaryLabel
             productThumbImageView?.contentMode = .scaleAspectFit
         }
-        // Removed hardcoded productRatingLabel and productDistance lines
-        
         recalculatePricing()
     }
     
     private func loadItemIfNeeded() {
         guard item == nil, let id = itemId else { return }
-        // TODO: Replace with actual data-loading implementation
-        // Example: dataProvider.fetchItem(by: id) { [weak self] result in
-        //     switch result {
-        //     case .success(let fetched):
-        //         self?.item = fetched
-        //         self?.applyItemToUI()
-        //     case .failure:
-        //         self?.presentMissingItemAlert()
-        //     }
-        // }
         Task { await fetchItemIfNeeded() }
     }
 }
 
 fileprivate extension Double {
-    /// Rounds the double to decimal places value
     func rounded(toPlaces places: Int) -> Double {
         let divisor = pow(10.0, Double(places))
         return Darwin.round(self * divisor) / divisor
     }
 }
-
-// MARK: - UIColor Hex Extension
 
 extension UIColor {
     convenience init(hex: String) {
@@ -776,10 +631,7 @@ extension UIColor {
     }
 }
 
-// MARK: - UIImageView Loading Extension
-
 extension UIImageView {
-    /// Loads image asynchronously from URL and sets it on main thread
     static func rw_loadImage(from url: URL, completion: @escaping (UIImage?) -> Void) {
         let task = URLSession.shared.dataTask(with: url) { data, _, _ in
             if let data = data, let img = UIImage(data: data) {
@@ -791,4 +643,3 @@ extension UIImageView {
         task.resume()
     }
 }
-

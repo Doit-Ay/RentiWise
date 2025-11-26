@@ -38,10 +38,16 @@ class AddItemDetailViewController: UIViewController {
 
     // Continue button → push AddItemPricingViewController from its XIB
     @IBAction func ContinueTapped(_ sender: UIButton) {
-        // Update draft with chosen values
+        // Update draft with chosen values from UI controls
         draft.category = (selectACategory.text == "Select a category") ? "" : (selectACategory.text ?? "")
         draft.condition = (selectCondition.text == "Select condition") ? "" : (selectCondition.text ?? "")
         draft.description = descriptionTextView.text ?? ""
+
+        // Validate required fields before proceeding
+        if let errorMessage = validateDraft() {
+            presentAlert(title: "Missing Information", message: errorMessage)
+            return
+        }
 
         let vc = AddItemPricingViewController(nibName: "AddItemPricingViewController", bundle: nil)
         vc.title = "Add item"
@@ -53,6 +59,42 @@ class AddItemDetailViewController: UIViewController {
             return
         }
         nav.pushViewController(vc, animated: true)
+    }
+
+    // MARK: - Validation
+
+    // Returns an error message if something is missing; nil if valid.
+    private func validateDraft() -> String? {
+        // Require at least one image from the first screen
+        if draft.images.isEmpty {
+            return "Please add at least one photo."
+        }
+
+        // Title required
+        let trimmedTitle = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedTitle.isEmpty {
+            return "Please enter a title for your item."
+        }
+
+        // Category required
+        let trimmedCategory = draft.category.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedCategory.isEmpty {
+            return "Please select a category."
+        }
+
+        // Condition required
+        let trimmedCondition = draft.condition.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedCondition.isEmpty {
+            return "Please select a condition."
+        }
+
+        // Description required (if you want it mandatory)
+        let trimmedDescription = draft.description.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedDescription.isEmpty {
+            return "Please add a short description."
+        }
+
+        return nil
     }
 
     // MARK: - Lifecycle
@@ -71,8 +113,24 @@ class AddItemDetailViewController: UIViewController {
             navBar.scrollEdgeAppearance = appearance
         }
 
-        if (selectACategory.text?.isEmpty ?? true) { selectACategory.text = "Select a category" }
-        if (selectCondition.text?.isEmpty ?? true) { selectCondition.text = "Select condition" }
+        // Prefill from draft if editing
+        if !draft.category.isEmpty {
+            selectACategory.text = draft.category
+            selectACategory.textColor = .label
+        } else if (selectACategory.text?.isEmpty ?? true) {
+            selectACategory.text = "Select a category"
+        }
+
+        if !draft.condition.isEmpty {
+            selectCondition.text = draft.condition
+            selectCondition.textColor = .label
+        } else if (selectCondition.text?.isEmpty ?? true) {
+            selectCondition.text = "Select condition"
+        }
+
+        if !draft.description.isEmpty {
+            descriptionTextView.text = draft.description
+        }
 
         // Reset and add tap gestures so each row opens its own inline dropdown
         resetGestures()
@@ -147,9 +205,11 @@ class AddItemDetailViewController: UIViewController {
             case .category:
                 self.selectACategory.text = selected
                 self.selectACategory.textColor = .label
+                self.draft.category = selected
             case .condition:
                 self.selectCondition.text = selected
                 self.selectCondition.textColor = .label
+                self.draft.condition = selected
             }
             self.dropdownController = nil
         }, onDismiss: { [weak self] in
@@ -184,6 +244,14 @@ class AddItemDetailViewController: UIViewController {
             label.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             label.centerYAnchor.constraint(equalTo: view.centerYAnchor)
         ])
+    }
+
+    // MARK: - Alerts
+
+    private func presentAlert(title: String, message: String) {
+        let a = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        a.addAction(UIAlertAction(title: "OK", style: .default))
+        present(a, animated: true)
     }
 }
 
@@ -348,3 +416,4 @@ private final class InlineDropdownController: NSObject, UITableViewDataSource, U
         return true
     }
 }
+

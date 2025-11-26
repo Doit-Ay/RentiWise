@@ -101,7 +101,7 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        navigationController?.setNavigationBarHidden(true, animated: animated)
+        navigationController?.setNavigationBarHidden(true, animated: true)
         startHomeImageRotation()
     }
 
@@ -525,9 +525,11 @@ private extension HomeViewController {
         if let path = item.images.first, let url = StorageURLBuilder.publicFileURL(for: path) {
             setImage(into: imageView, from: url)
         } else {
+            // Placeholder: still use aspectFill so it covers the area
             imageView?.image = UIImage(systemName: "photo")
             imageView?.tintColor = .secondaryLabel
-            imageView?.contentMode = .scaleAspectFit
+            imageView?.contentMode = .scaleAspectFill
+            imageView?.clipsToBounds = true
         }
     }
 
@@ -546,7 +548,7 @@ private extension HomeViewController {
         // Basic cache
         if let cached = FeaturedImageCache.shared.image(forKey: url.absoluteString) {
             imageView.image = cached
-            imageView.contentMode = .scaleAspectFit
+            imageView.contentMode = .scaleAspectFill
             imageView.clipsToBounds = true
             return
         }
@@ -557,7 +559,7 @@ private extension HomeViewController {
             FeaturedImageCache.shared.setImage(img, forKey: url.absoluteString)
             DispatchQueue.main.async {
                 imageView.image = img
-                imageView.contentMode = .scaleAspectFit
+                imageView.contentMode = .scaleAspectFill
                 imageView.clipsToBounds = true
             }
         }.resume()
@@ -571,4 +573,3 @@ private final class FeaturedImageCache {
     func image(forKey key: String) -> UIImage? { cache.object(forKey: key as NSString) }
     func setImage(_ img: UIImage, forKey key: String) { cache.setObject(img, forKey: key as NSString) }
 }
-
