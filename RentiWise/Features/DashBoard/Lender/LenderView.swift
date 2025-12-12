@@ -41,7 +41,7 @@ final class LenderView: UIView {
     // IMPORTANT: RequestWithItem and ItemLite are defined ONCE in DashboardLenderRequestViewController.swift
     private var myRequests: [RequestWithItem] = []
 
-    // History data (segment 2) – placeholder model for now
+    // History data (segment 2)
     private var myHistory: [HistoryRow] = []
 
     // Format like in CategoriesViewController
@@ -126,7 +126,7 @@ final class LenderView: UIView {
         tableView.rowHeight = 140
         tableView.estimatedRowHeight = 140
         tableView.separatorStyle = .none
-        tableView.backgroundColor = .white
+        tableView.backgroundColor = .secondarySystemBackground
         tableView.contentInsetAdjustmentBehavior = .always
 
         // Register your cell nibs
@@ -159,10 +159,13 @@ final class LenderView: UIView {
         case 1:
             Task { await loadMyRequests() }
         case 2:
-            // For now we don’t have a backend; clear and show empty state
-            myHistory = []
-            tableView.reloadData()
-            updateEmptyStateIfNeeded()
+            Task {
+                await populateHistoryFromItems()
+                await MainActor.run {
+                    self.tableView.reloadData()
+                    self.updateEmptyStateIfNeeded()
+                }
+            }
         default:
             break
         }
@@ -320,6 +323,47 @@ final class LenderView: UIView {
     @objc private func handleRequestsShouldRefresh() {
         refreshRequests()
     }
+
+    // MARK: - History from database (single item)
+    private func populateHistoryFromItems() async {
+        // Default to empty
+        await MainActor.run { self.myHistory = [] }
+
+        guard let userId = await SupabaseManager.shared.currentUserId() else {
+            return
+        }
+
+        do {
+            // Fetch newest active item for this owner, limit 1
+            let response = try await SupabaseManager.shared.client
+                .from("items")
+                .select()
+                .eq("owner_id", value: userId)
+                .eq("is_active", value: true)
+                .order("created_at", ascending: false)
+                .limit(1)
+                .execute()
+
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            let items = try decoder.decode([Item].self, from: response.data)
+
+            guard let item = items.first else { return }
+
+            let history = HistoryRow(
+                title: item.title,
+                ratePerDay: item.price_per_day,
+                borrowerName: "To: —",
+                imagePath: item.images.first
+            )
+
+            await MainActor.run {
+                self.myHistory = [history]
+            }
+        } catch {
+            // Keep empty on error
+        }
+    }
 }
 
 // MARK: - Models for Variant 1 (only RequestBase lives here for fallback)
@@ -335,9 +379,13 @@ private struct RequestBase: Decodable {
     let created_at: String?
 }
 
-// Temporary placeholder model for History until DB exists
+// History model for dummy UI
 private struct HistoryRow {
     let id: String = UUID().uuidString
+    let title: String
+    let ratePerDay: Double
+    let borrowerName: String
+    let imagePath: String? // optional storage path if you later want to show images
 }
 
 // MARK: - UITableViewDataSource
@@ -365,9 +413,9 @@ extension LenderView: UITableViewDataSource {
             }
             let item = myItems[indexPath.section]
             cell.configure(with: item, currencyFormatter: currencyFormatter)
-            // Ensure white background consistency
-            cell.backgroundColor = .white
-            cell.contentView.backgroundColor = .white
+            // Ensure background consistency for listing card sections
+            cell.backgroundColor = .secondarySystemBackground
+            cell.contentView.backgroundColor = .secondarySystemBackground
             return cell
 
         case 1:
@@ -414,15 +462,42 @@ extension LenderView: UITableViewDataSource {
                 cell.itemImageRequest.contentMode = .scaleAspectFit
             }
 
-            cell.backgroundColor = .white
-            cell.contentView.backgroundColor = .white
+            cell.backgroundColor = .secondarySystemBackground
+            cell.contentView.backgroundColor = .secondarySystemBackground
             return cell
 
         case 2:
             let cell = tableView.dequeueReusableCell(withIdentifier: "History", for: indexPath) as! LenderHistoryTableViewCell
-            // TODO: cell.configure(with: myHistory[indexPath.section])
-            cell.backgroundColor = .white
-            cell.contentView.backgroundColor = .white
+            let row = myHistory[indexPath.section]
+
+            // Title
+            cell.itemNameHistory?.text = row.title
+
+            // Rate
+            let amount = NSNumber(value: row.ratePerDay)
+            let rateText = (currencyFormatter.string(from: amount) ?? "\(row.ratePerDay)") + " / day"
+            cell.itemRateHistory?.text = rateText
+
+            // Borrower label
+            cell.itemBorrowerName?.text = row.borrowerName
+
+            // Image: if you later set imagePath with a public storage path, load it; else show placeholder
+            if let path = row.imagePath, let url = StorageURLBuilder.publicFileURL(for: path) {
+                UIImageView.rw_loadImage(from: url) { [weak cell] image in
+                    DispatchQueue.main.async {
+                        cell?.itemImageHistory?.image = image
+                        cell?.itemImageHistory?.contentMode = .scaleAspectFill
+                        cell?.itemImageHistory?.clipsToBounds = true
+                    }
+                }
+            } else {
+                cell.itemImageHistory?.image = UIImage(systemName: "photo")
+                cell.itemImageHistory?.tintColor = .secondaryLabel
+                cell.itemImageHistory?.contentMode = .scaleAspectFit
+            }
+
+            cell.backgroundColor = .secondarySystemBackground
+            cell.contentView.backgroundColor = .secondarySystemBackground
             return cell
 
         default:
@@ -445,7 +520,7 @@ extension LenderView: UITableViewDelegate {
 
     func tableView(_ tableView: UITableView, viewForFooterInSection section: Int) -> UIView? {
         let v = UIView()
-        v.backgroundColor = .clear
+        v.backgroundColor = .secondarySystemBackground
         return v
     }
 
@@ -464,3 +539,4 @@ extension LenderView: UITableViewDelegate {
         }
     }
 }
+

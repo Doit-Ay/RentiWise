@@ -10,12 +10,6 @@ import UIKit
 // MARK: - UIView styling helpers (programmatic)
 extension UIView {
 
-    /// Apply corner radius and optional border.
-    /// - Parameters:
-    ///   - cornerRadius: Corner radius (default 12).
-    ///   - masksToBounds: Whether to clip sublayers to bounds. Use true when you want content clipped; false if you plan to add shadow on this same layer. Default false.
-    ///   - borderWidth: Border width (default 0 = none).
-    ///   - borderColor: Border color (default nil = none).
     public func applyCornersAndBorder(
         cornerRadius: CGFloat = 12,
         masksToBounds: Bool = false,
@@ -28,15 +22,6 @@ extension UIView {
         layer.borderColor = borderColor?.cgColor
     }
 
-    /// Apply a drop shadow to the view's layer.
-    /// Note: For shadows to be visible, layer.masksToBounds must be false.
-    /// If you also need rounded, clipped content, put that content inside a rounded subview and keep this outer view unmasked.
-    /// - Parameters:
-    ///   - color: Shadow color (default black).
-    ///   - opacity: Shadow opacity 0.0–1.0 (default 0.2).
-    ///   - radius: Shadow blur radius (default 6).
-    ///   - offset: Shadow offset (default .init(width: 0, height: 3)).
-    ///   - shouldRasterize: If true, rasterizes the shadow for performance on static views (default false).
     public func applyShadow(
         color: UIColor = .black,
         opacity: Float = 0.2,
@@ -49,23 +34,10 @@ extension UIView {
         layer.shadowRadius = radius
         layer.shadowOffset = offset
         layer.masksToBounds = false
-
-        // Optional: rasterize for performance if the view won't animate/resize frequently
         layer.shouldRasterize = shouldRasterize
         layer.rasterizationScale = UIScreen.main.scale
     }
 
-    /// Convenience to apply both rounded corners/border and shadow in a common pattern.
-    /// This keeps the shadow visible (outer layer) and clips content inside an inner container if needed.
-    /// - Parameters:
-    ///   - cornerRadius: Corner radius for the inner content container.
-    ///   - borderWidth: Border width on the inner content container.
-    ///   - borderColor: Border color on the inner content container.
-    ///   - shadowColor: Shadow color for the outer layer.
-    ///   - shadowOpacity: Shadow opacity.
-    ///   - shadowRadius: Shadow blur radius.
-    ///   - shadowOffset: Shadow offset.
-    /// - Returns: The inner container view you can add content into, already constrained to fill self.
     @discardableResult
     public func wrapWithRoundedContentContainer(
         cornerRadius: CGFloat = 12,
@@ -76,13 +48,11 @@ extension UIView {
         shadowRadius: CGFloat = 6,
         shadowOffset: CGSize = CGSize(width: 0, height: 3)
     ) -> UIView {
-        // Ensure the outer view draws the shadow
         applyShadow(color: shadowColor,
                     opacity: shadowOpacity,
                     radius: shadowRadius,
                     offset: shadowOffset)
 
-        // Create an inner container that clips content to rounded corners and border
         let container = UIView()
         container.translatesAutoresizingMaskIntoConstraints = false
         addSubview(container)
@@ -97,6 +67,220 @@ extension UIView {
                                         borderWidth: borderWidth,
                                         borderColor: borderColor)
         return container
+    }
+
+    // Stronger UIKit "glass" look with optional tint and highlight overlay.
+    public func applyGlassEffect(
+        cornerRadius: CGFloat = 16,
+        style: UIBlurEffect.Style = .systemThickMaterial, // heavier by default
+        addsVibrancy: Bool = false,
+        showsShadow: Bool = true,
+        borderAlpha: CGFloat = 0.25,
+        // New: subtle tint over blur to increase perceived opacity/contrast
+        tintColorOverride: UIColor? = nil,
+        tintAlpha: CGFloat = 0.08,
+        // New: specular highlight gradient at top
+        showsHighlight: Bool = true,
+        highlightAlpha: CGFloat = 0.15
+    ) {
+        let blurTag = 987_654
+        let tintTag = 987_655
+        let highlightTag = 987_656
+
+        // Blur
+        let blurView: UIVisualEffectView
+        if let existing = viewWithTag(blurTag) as? UIVisualEffectView {
+            blurView = existing
+            blurView.effect = UIBlurEffect(style: style)
+        } else {
+            let blur = UIVisualEffectView(effect: UIBlurEffect(style: style))
+            blur.tag = blurTag
+            blur.translatesAutoresizingMaskIntoConstraints = false
+            insertSubview(blur, at: 0)
+            NSLayoutConstraint.activate([
+                blur.leadingAnchor.constraint(equalTo: leadingAnchor),
+                blur.trailingAnchor.constraint(equalTo: trailingAnchor),
+                blur.topAnchor.constraint(equalTo: topAnchor),
+                blur.bottomAnchor.constraint(equalTo: bottomAnchor)
+            ])
+
+            if addsVibrancy, let blurEffect = blur.effect as? UIBlurEffect {
+                let vibrancy = UIVibrancyEffect(blurEffect: blurEffect)
+                let vibrancyView = UIVisualEffectView(effect: vibrancy)
+                vibrancyView.translatesAutoresizingMaskIntoConstraints = false
+                blur.contentView.addSubview(vibrancyView)
+                NSLayoutConstraint.activate([
+                    vibrancyView.leadingAnchor.constraint(equalTo: blur.contentView.leadingAnchor),
+                    vibrancyView.trailingAnchor.constraint(equalTo: blur.contentView.trailingAnchor),
+                    vibrancyView.topAnchor.constraint(equalTo: blur.contentView.topAnchor),
+                    vibrancyView.bottomAnchor.constraint(equalTo: blur.contentView.bottomAnchor)
+                ])
+            }
+            blurView = blur
+        }
+
+        // Rounded mask for blur
+        layer.cornerRadius = cornerRadius
+        layer.masksToBounds = false
+        blurView.layer.cornerRadius = cornerRadius
+        blurView.layer.masksToBounds = true
+
+        // Border
+        if borderAlpha > 0 {
+            layer.borderWidth = 1.0 / UIScreen.main.scale
+            layer.borderColor = UIColor.white.withAlphaComponent(borderAlpha).cgColor
+        } else {
+            layer.borderWidth = 0
+            layer.borderColor = nil
+        }
+
+        // Stronger shadow
+        if showsShadow {
+            applyShadow(color: .black, opacity: 0.18, radius: 14, offset: CGSize(width: 0, height: 8))
+        } else {
+            layer.shadowOpacity = 0
+        }
+
+        // Optional tint layer to increase opacity/contrast
+        let effectiveTint: UIColor
+        if let tint = tintColorOverride {
+            effectiveTint = tint
+        } else {
+            // default: white in light mode, black in dark mode
+            effectiveTint = (traitCollection.userInterfaceStyle == .dark) ? UIColor.white : UIColor.black
+        }
+
+        let tintView: UIView
+        if let existing = viewWithTag(tintTag) {
+            tintView = existing
+            tintView.backgroundColor = effectiveTint.withAlphaComponent(tintAlpha)
+        } else {
+            let t = UIView()
+            t.tag = tintTag
+            t.translatesAutoresizingMaskIntoConstraints = false
+            t.isUserInteractionEnabled = false
+            t.backgroundColor = effectiveTint.withAlphaComponent(tintAlpha)
+            insertSubview(t, aboveSubview: blurView)
+            NSLayoutConstraint.activate([
+                t.leadingAnchor.constraint(equalTo: leadingAnchor),
+                t.trailingAnchor.constraint(equalTo: trailingAnchor),
+                t.topAnchor.constraint(equalTo: topAnchor),
+                t.bottomAnchor.constraint(equalTo: bottomAnchor)
+            ])
+            t.layer.cornerRadius = cornerRadius
+            t.layer.masksToBounds = true
+            tintView = t
+        }
+
+        // Optional top highlight gradient
+        if showsHighlight {
+            let container: UIView
+            let grad: CAGradientLayer
+            if let existing = viewWithTag(highlightTag) as? UIView,
+               let g = existing.layer.sublayers?.first as? CAGradientLayer {
+                container = existing
+                grad = g
+            } else {
+                container = UIView()
+                container.tag = highlightTag
+                container.isUserInteractionEnabled = false
+                container.translatesAutoresizingMaskIntoConstraints = false
+                insertSubview(container, aboveSubview: tintView)
+                NSLayoutConstraint.activate([
+                    container.leadingAnchor.constraint(equalTo: leadingAnchor),
+                    container.trailingAnchor.constraint(equalTo: trailingAnchor),
+                    container.topAnchor.constraint(equalTo: topAnchor),
+                    container.heightAnchor.constraint(equalTo: heightAnchor, multiplier: 0.35)
+                ])
+                container.layer.cornerRadius = cornerRadius
+                container.layer.masksToBounds = true
+
+                grad = CAGradientLayer()
+                grad.colors = [
+                    UIColor.white.withAlphaComponent(highlightAlpha).cgColor,
+                    UIColor.white.withAlphaComponent(0).cgColor
+                ]
+                grad.startPoint = CGPoint(x: 0.5, y: 0.0)
+                grad.endPoint = CGPoint(x: 0.5, y: 1.0)
+                container.layer.addSublayer(grad)
+            }
+            grad.frame = container.bounds
+        } else {
+            viewWithTag(highlightTag)?.removeFromSuperview()
+        }
+
+        backgroundColor = .clear
+    }
+
+    // MARK: - Thin colored rim (no center fill)
+    public func applyTealRim(
+        color: UIColor,
+        cornerRadius: CGFloat,
+        thickness: CGFloat = 6,
+        opacity: Float = 0.18
+    ) {
+        // Remove previous rim layers
+        layer.sublayers?
+            .filter { $0.name?.hasPrefix("rimLayer_") == true }
+            .forEach { $0.removeFromSuperlayer() }
+
+        let bounds = self.bounds.integral
+        guard bounds.width > 0, bounds.height > 0 else { return }
+
+        func makeGradientLayer(name: String, frame: CGRect, start: CGPoint, end: CGPoint) -> CAGradientLayer {
+            let g = CAGradientLayer()
+            g.name = name
+            g.frame = frame
+            g.colors = [
+                color.withAlphaComponent(CGFloat(opacity)).cgColor,
+                color.withAlphaComponent(0).cgColor
+            ]
+            g.startPoint = start
+            g.endPoint = end
+            return g
+        }
+
+        // Top rim
+        let top = makeGradientLayer(name: "rimLayer_top",
+                                    frame: CGRect(x: 0, y: 0, width: bounds.width, height: thickness),
+                                    start: CGPoint(x: 0.5, y: 0.0),
+                                    end: CGPoint(x: 0.5, y: 1.0))
+        // Bottom rim
+        let bottom = makeGradientLayer(name: "rimLayer_bottom",
+                                       frame: CGRect(x: 0, y: bounds.height - thickness, width: bounds.width, height: thickness),
+                                       start: CGPoint(x: 0.5, y: 1.0),
+                                       end: CGPoint(x: 0.5, y: 0.0))
+        // Left rim
+        let left = makeGradientLayer(name: "rimLayer_left",
+                                     frame: CGRect(x: 0, y: 0, width: thickness, height: bounds.height),
+                                     start: CGPoint(x: 0.0, y: 0.5),
+                                     end: CGPoint(x: 1.0, y: 0.5))
+        // Right rim
+        let right = makeGradientLayer(name: "rimLayer_right",
+                                      frame: CGRect(x: bounds.width - thickness, y: 0, width: thickness, height: bounds.height),
+                                      start: CGPoint(x: 1.0, y: 0.5),
+                                      end: CGPoint(x: 0.0, y: 0.5))
+
+        // Mask with rounded rect so the rims follow the corners
+        let mask = CAShapeLayer()
+        mask.path = UIBezierPath(roundedRect: bounds, cornerRadius: cornerRadius).cgPath
+        mask.fillColor = UIColor.white.cgColor
+
+        // Add layers above blur/tint but below content
+        let container = CALayer()
+        container.name = "rimLayer_container"
+        container.frame = bounds
+        container.masksToBounds = true
+        container.cornerRadius = cornerRadius
+        container.addSublayer(top)
+        container.addSublayer(bottom)
+        container.addSublayer(left)
+        container.addSublayer(right)
+        container.mask = mask
+        container.name = "rimLayer_container"
+
+        // Insert just above existing sublayers that draw blur/tint/highlight
+        layer.addSublayer(container)
     }
 }
 

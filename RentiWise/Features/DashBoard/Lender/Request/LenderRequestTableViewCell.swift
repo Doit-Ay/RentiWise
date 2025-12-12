@@ -13,7 +13,7 @@ final class LenderRequestTableViewCell: UITableViewCell {
     @IBOutlet weak var itemNameRequest: UILabel!
     @IBOutlet weak var itemRateRequest: UILabel!
     @IBOutlet weak var itemBorrowerRequest: UILabel!
-
+    @IBOutlet weak var itemcardview: UIView!
     // If you later add image loading, keep a task to cancel on reuse
     private var imageLoadTask: URLSessionDataTask?
 
@@ -21,10 +21,42 @@ final class LenderRequestTableViewCell: UITableViewCell {
         super.awakeFromNib()
         selectionStyle = .none
 
-        // Optional styling
+        // Match Categories: make the cell itself transparent so the table’s grouped background shows
+        backgroundColor = .clear
+        contentView.backgroundColor = .clear
+        clipsToBounds = false
+        contentView.clipsToBounds = false
+
+        // Image styling
         itemImageRequest?.contentMode = .scaleAspectFill
         itemImageRequest?.clipsToBounds = true
-        itemImageRequest?.layer.cornerRadius = 8
+        itemImageRequest?.layer.cornerRadius = 12
+
+        // Card setup: clear background; glass effect supplies the surface/shadow
+        itemcardview?.layer.cornerRadius = 16
+        itemcardview?.layer.masksToBounds = false
+        itemcardview?.backgroundColor = .clear
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+
+        // Strong, clean glass like CategoryItemCell, with a bit more contrast on grouped bg
+        itemcardview?.applyGlassEffect(
+            cornerRadius: 16,
+            style: .systemThickMaterial,
+            addsVibrancy: false,
+            showsShadow: true,
+            borderAlpha: 0.30,
+            tintColorOverride: .white,
+            tintAlpha: 0.18,     // slightly stronger than default for definition
+            showsHighlight: true,
+            highlightAlpha: 0.16 // subtle specular highlight
+        )
+        // Slightly softer shadow like your category cards
+        itemcardview?.layer.shadowOpacity = 0.12
+        itemcardview?.layer.shadowRadius = 8
+        itemcardview?.layer.shadowOffset = CGSize(width: 0, height: 4)
     }
 
     override func prepareForReuse() {
@@ -35,38 +67,34 @@ final class LenderRequestTableViewCell: UITableViewCell {
         itemNameRequest?.text = nil
         itemRateRequest?.text = nil
         itemBorrowerRequest?.text = nil
+
+        // Keep backgrounds consistent
+        backgroundColor = .clear
+        contentView.backgroundColor = .clear
+        itemcardview?.backgroundColor = .clear
     }
 
     // MARK: - Configure with public.requests row
-    // Use this once LenderView switches to public.requests and decodes RequestsRow
     struct RequestsRowViewModel {
         let itemId: String
         let status: String
         let startDate: Date?
         let endDate: Date?
         let pickupTime: String?
-        // Optional future fields: title, thumbnailURL
     }
 
     func configure(with vm: RequestsRowViewModel) {
-        // Title placeholder: show item_id until you join items to get title
         itemNameRequest?.text = vm.itemId
-
-        // Status
         itemBorrowerRequest?.text = vm.status.capitalized
 
-        // Date range label (was itemRateRequest label in your XIB; repurpose for now)
         if let start = vm.startDate, let end = vm.endDate {
             let df = DateFormatter()
             df.dateFormat = "d MMM yyyy"
-            let range = "\(df.string(from: start)) — \(df.string(from: end))"
-            itemRateRequest?.text = range
+            itemRateRequest?.text = "\(df.string(from: start)) — \(df.string(from: end))"
         } else {
-            // If parsing fails, fall back to raw values or a dash
             itemRateRequest?.text = "—"
         }
 
-        // Image: leave empty for now; when you join items, set itemImageRequest
         itemImageRequest?.image = UIImage(systemName: "photo")
         itemImageRequest?.tintColor = .secondaryLabel
         itemImageRequest?.contentMode = .scaleAspectFit
@@ -88,3 +116,4 @@ final class LenderRequestTableViewCell: UITableViewCell {
         imageLoadTask?.resume()
     }
 }
+

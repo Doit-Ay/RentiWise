@@ -50,11 +50,6 @@ final class SignViewController: UIViewController {
     private lazy var signInServiceDefault: SignInServicing = SignInService()
     private var signInService: SignInServicing!
 
-    private enum Constants {
-        static let appStartingStoryboard = "AppStarting"
-        static let navigationBarID = "NavigationBar"
-    }
-
     // MARK: - Initializers
     init(service: SignInServicing) {
         super.init(nibName: nil, bundle: nil)
@@ -131,34 +126,55 @@ final class SignViewController: UIViewController {
                 email: email
             )
 
-            routeAfterSuccessfulSignIn()
+            routeToProfileTab()
         } catch {
             presentAlert(title: "Sign In Failed", message: error.localizedDescription)
         }
     }
 
-    private func routeAfterSuccessfulSignIn() {
-        switch routeContext {
-        case .fromProfile:
-            // Use ProfileMainViewController's designated initializer which already loads its XIB
-            let profileVC = ProfileMainViewController()
-            profileVC.title = ""
-            profileVC.hidesBottomBarWhenPushed = true
+    // MARK: - Routing to Profile tab
+    private func routeToProfileTab() {
+        // Replace with your actual Profile tab index
+        let profileTabIndex = 1
 
-            if let nav: UINavigationController = navigationController {
-                nav.setNavigationBarHidden(false, animated: false)
-                nav.pushViewController(profileVC, animated: true)
-            } else {
-                let nav = UINavigationController(rootViewController: profileVC)
-                nav.modalPresentationStyle = UIModalPresentationStyle.fullScreen
-                present(nav, animated: true)
+        if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let window = scene.windows.first,
+           let tab = window.rootViewController as? UITabBarController {
+            guard profileTabIndex < (tab.viewControllers?.count ?? 0) else {
+                pushProfileOnCurrentNav()
+                return
             }
 
-        case .default:
-            let storyboard = UIStoryboard(name: Constants.appStartingStoryboard, bundle: nil)
-            let tabBarVC: UIViewController = storyboard.instantiateViewController(withIdentifier: Constants.navigationBarID)
-            tabBarVC.modalPresentationStyle = UIModalPresentationStyle.fullScreen
-            present(tabBarVC, animated: true)
+            tab.selectedIndex = profileTabIndex
+
+            if let nav = tab.viewControllers?[profileTabIndex] as? UINavigationController {
+                let profileVC = ProfileViewController()
+                profileVC.title = ""
+                profileVC.hidesBottomBarWhenPushed = false
+                nav.setViewControllers([profileVC], animated: false)
+            }
+
+            if presentingViewController != nil {
+                dismiss(animated: true)
+            } else if let nav = navigationController {
+                nav.popToRootViewController(animated: true)
+            }
+        } else {
+            pushProfileOnCurrentNav()
+        }
+    }
+
+    private func pushProfileOnCurrentNav() {
+        let profileVC = ProfileViewController()
+        profileVC.title = ""
+        profileVC.hidesBottomBarWhenPushed = false
+        if let nav = navigationController {
+            nav.setNavigationBarHidden(false, animated: false)
+            nav.pushViewController(profileVC, animated: true)
+        } else {
+            let nav = UINavigationController(rootViewController: profileVC)
+            nav.modalPresentationStyle = .fullScreen
+            present(nav, animated: true)
         }
     }
 

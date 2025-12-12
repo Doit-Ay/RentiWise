@@ -8,28 +8,6 @@
 import UIKit
 import Supabase
 
-// Match the Variant 1 model used in LenderView (requests + items join only)
-struct RequestWithItem: Decodable {
-    let id: String
-    let item_id: String
-    let owner_id: String
-    let borrower_id: String
-    let start_date: String   // "yyyy-MM-dd" from DB
-    let end_date: String     // "yyyy-MM-dd" from DB
-    let pickup_time: String?
-    var status: String
-    let created_at: String?
-
-    let items: ItemLite? // joined item
-}
-
-struct ItemLite: Decodable {
-    let id: String
-    let title: String
-    let images: [String]
-    let price_per_day: Double
-}
-
 class DashboardLenderRequestViewController: UIViewController {
 
     // Inject this before pushing
@@ -240,3 +218,4 @@ class DashboardLenderRequestViewController: UIViewController {
         await MainActor.run { self.setButtonsEnabled(true) }
     }
 }
+

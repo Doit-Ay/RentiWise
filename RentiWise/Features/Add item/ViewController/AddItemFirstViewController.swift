@@ -421,27 +421,27 @@ private final class AddCell: UICollectionViewCell {
     }
 
     private func commonInit() {
-        // Apply requested color EBFCFE
-        contentView.backgroundColor = UIColor(hex: "EBFCFE")
+        // Clear base; we'll add frosted glass
+        contentView.backgroundColor = .clear
         contentView.layer.cornerRadius = 12
-        contentView.layer.borderColor = UIColor(hex: "CFEFF3").cgColor // subtle border to match tone
-        contentView.layer.borderWidth = 1
-        contentView.layer.masksToBounds = true
+        contentView.layer.masksToBounds = false
 
+        // Stack
         stack.axis = .vertical
         stack.alignment = .center
         stack.distribution = .equalCentering
         stack.spacing = 8
         stack.translatesAutoresizingMaskIntoConstraints = false
 
+        // Icon and title
         plusView.image = UIImage(systemName: "plus")
-        plusView.tintColor = UIColor(hex: "5DA9B6") // complementary teal for visibility
+        plusView.tintColor = .label // visible on white glass
         plusView.contentMode = .scaleAspectFit
         plusView.setContentHuggingPriority(.required, for: .vertical)
 
         titleLabel.text = "Add Photo"
         titleLabel.font = .systemFont(ofSize: 14, weight: .medium)
-        titleLabel.textColor = UIColor(hex: "5DA9B6")
+        titleLabel.textColor = .label
         titleLabel.textAlignment = .center
         titleLabel.setContentHuggingPriority(.required, for: .vertical)
 
@@ -453,10 +453,23 @@ private final class AddCell: UICollectionViewCell {
             stack.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
             stack.centerYAnchor.constraint(equalTo: contentView.centerYAnchor)
         ])
+
+        // Apply a white-tinted glass effect to the cell’s background
+        // Using helper from UIExtension.applyGlassEffect
+        contentView.applyGlassEffect(
+            cornerRadius: 12,
+            style: .systemThickMaterial,
+            addsVibrancy: false,
+            showsShadow: true,
+            borderAlpha: 0.28,
+            tintColorOverride: .white,   // make it look white
+            tintAlpha: 0.18,             // subtle white tint over blur
+            showsHighlight: true,
+            highlightAlpha: 0.14
+        )
     }
 
     func configure() {
         // Reserved for future styling if needed.
     }
 }
-

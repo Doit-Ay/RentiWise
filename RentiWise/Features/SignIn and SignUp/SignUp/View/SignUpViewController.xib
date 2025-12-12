@@ -146,7 +146,7 @@
                     </constraints>
                     <state key="normal" title="Button"/>
                     <buttonConfiguration key="configuration" style="filled" title="Sign Up">
-                        <color key="baseBackgroundColor" red="0.4372558594" green="0.6552734375" blue="0.7060546875" alpha="1" colorSpace="custom" customColorSpace="displayP3"/>
+                        <color key="baseBackgroundColor" red="0.4392156862745098" green="0.65490196078431373" blue="0.70588235294117641" alpha="1" colorSpace="custom" customColorSpace="displayP3"/>
                     </buttonConfiguration>
                     <connections>
                         <action selector="signUpTapped:" destination="-1" eventType="touchUpInside" id="AcA-uk-coF"/>

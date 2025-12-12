@@ -20,13 +20,6 @@ final class SignUpViewController: UIViewController {
     private let validation = AuthValidationService()
     private var signUpService: SignUpServicing
 
-    private enum Constants {
-        static let appStartingStoryboard = "AppStarting"
-        static let navigationBarID = "NavigationBar"
-        static let authStoryboard = "Main"
-        static let signInID = "SignViewController"
-    }
-
     // Designated DI initializer
     init(service: SignUpServicing) {
         self.signUpService = service
@@ -61,7 +54,6 @@ final class SignUpViewController: UIViewController {
     }
 
     @IBAction private func signinSwitch(_ sender: UIButton) {
-        // If you want XIB for SignViewController as well, load via nibName:
         let nibName = "SignViewController"
         let vc: SignViewController
         if Bundle.main.path(forResource: nibName, ofType: "nib") != nil || Bundle.main.path(forResource: nibName, ofType: "xib") != nil {
@@ -116,10 +108,7 @@ final class SignUpViewController: UIViewController {
                     profile: profile
                 )
 
-                let storyboard = UIStoryboard(name: Constants.appStartingStoryboard, bundle: nil)
-                let tabBarVC: UIViewController = storyboard.instantiateViewController(withIdentifier: Constants.navigationBarID)
-                tabBarVC.modalPresentationStyle = .fullScreen
-                present(tabBarVC, animated: true)
+                routeToProfileTab()
             } else {
                 presentAlert(
                     title: "Confirm your email",
@@ -128,6 +117,52 @@ final class SignUpViewController: UIViewController {
             }
         } catch {
             presentAlert(title: "Sign Up Failed", message: error.localizedDescription)
+        }
+    }
+
+    // MARK: - Routing to Profile tab
+    private func routeToProfileTab() {
+        // Replace with your actual Profile tab index
+        let profileTabIndex = 1
+
+        if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let window = scene.windows.first,
+           let tab = window.rootViewController as? UITabBarController {
+            guard profileTabIndex < (tab.viewControllers?.count ?? 0) else {
+                pushProfileOnCurrentNav()
+                return
+            }
+
+            tab.selectedIndex = profileTabIndex
+
+            if let nav = tab.viewControllers?[profileTabIndex] as? UINavigationController {
+                let profileVC = ProfileViewController()
+                profileVC.title = ""
+                profileVC.hidesBottomBarWhenPushed = false
+                nav.setViewControllers([profileVC], animated: false)
+            }
+
+            if presentingViewController != nil {
+                dismiss(animated: true)
+            } else if let nav = navigationController {
+                nav.popToRootViewController(animated: true)
+            }
+        } else {
+            pushProfileOnCurrentNav()
+        }
+    }
+
+    private func pushProfileOnCurrentNav() {
+        let profileVC = ProfileViewController()
+        profileVC.title = ""
+        profileVC.hidesBottomBarWhenPushed = false
+        if let nav = navigationController {
+            nav.setNavigationBarHidden(false, animated: false)
+            nav.pushViewController(profileVC, animated: true)
+        } else {
+            let nav = UINavigationController(rootViewController: profileVC)
+            nav.modalPresentationStyle = .fullScreen
+            present(nav, animated: true)
         }
     }
 

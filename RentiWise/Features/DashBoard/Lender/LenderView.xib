@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<document type="com.apple.InterfaceBuilder3.CocoaTouch.XIB" version="3.0" toolsVersion="24412" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES">
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.XIB" version="3.0" toolsVersion="24128" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES">
     <device id="retina6_12" orientation="portrait" appearance="light"/>
     <dependencies>
-        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="24405"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="24063"/>
         <capability name="Safe area layout guides" minToolsVersion="9.0"/>
         <capability name="System colors in document resources" minToolsVersion="11.0"/>
         <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
@@ -10,9 +10,6 @@
     <objects>
         <placeholder placeholderIdentifier="IBFilesOwner" id="-1" userLabel="File's Owner" customClass="LenderView" customModule="RentiWise" customModuleProvider="target">
             <connections>
-                <outlet property="earningLabel" destination="Ztz-GR-Mpy" id="FYG-bG-gej"/>
-                <outlet property="earningsView" destination="fc5-DI-duT" id="VGM-aE-x18"/>
-                <outlet property="innerSegmented" destination="e9J-8y-Dm7" id="Dry-Hk-Qgo"/>
                 <outlet property="tableView" destination="YI8-Ds-Ntm" id="nmO-Tl-BUq"/>
                 <outlet property="view" destination="iN0-l3-epB" id="8Xr-TF-2aT"/>
             </connections>
@@ -22,55 +19,8 @@
             <rect key="frame" x="0.0" y="0.0" width="393" height="852"/>
             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
             <subviews>
-                <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="fc5-DI-duT">
-                    <rect key="frame" x="20" y="118" width="353" height="130"/>
-                    <subviews>
-                        <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="My Earning" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="dG5-nO-jSc">
-                            <rect key="frame" x="20" y="15" width="313" height="24"/>
-                            <fontDescription key="fontDescription" type="system" pointSize="20"/>
-                            <color key="textColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
-                            <nil key="highlightedColor"/>
-                        </label>
-                        <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="₹ 6000" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="Ztz-GR-Mpy">
-                            <rect key="frame" x="20" y="49" width="313" height="44.333333333333343"/>
-                            <fontDescription key="fontDescription" type="system" weight="semibold" pointSize="37"/>
-                            <color key="textColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
-                            <nil key="highlightedColor"/>
-                        </label>
-                    </subviews>
-                    <color key="backgroundColor" red="0.43921568630000002" green="0.65490196079999996" blue="0.70588235290000001" alpha="1" colorSpace="custom" customColorSpace="displayP3"/>
-                    <constraints>
-                        <constraint firstItem="Ztz-GR-Mpy" firstAttribute="top" secondItem="dG5-nO-jSc" secondAttribute="bottom" constant="10" id="6iH-07-lVQ"/>
-                        <constraint firstItem="Ztz-GR-Mpy" firstAttribute="leading" secondItem="fc5-DI-duT" secondAttribute="leading" constant="20" id="ChH-h4-lho"/>
-                        <constraint firstItem="dG5-nO-jSc" firstAttribute="top" secondItem="fc5-DI-duT" secondAttribute="top" constant="15" id="fsl-yW-cfd"/>
-                        <constraint firstItem="dG5-nO-jSc" firstAttribute="leading" secondItem="fc5-DI-duT" secondAttribute="leading" constant="20" id="jDw-FP-6un"/>
-                        <constraint firstAttribute="height" constant="130" id="kIi-Co-LV5"/>
-                        <constraint firstAttribute="trailing" secondItem="dG5-nO-jSc" secondAttribute="trailing" constant="20" id="wyX-C0-j20"/>
-                        <constraint firstAttribute="trailing" secondItem="Ztz-GR-Mpy" secondAttribute="trailing" constant="20" id="yiZ-Nu-ASD"/>
-                    </constraints>
-                    <userDefinedRuntimeAttributes>
-                        <userDefinedRuntimeAttribute type="number" keyPath="layer.cornerRadius">
-                            <integer key="value" value="12"/>
-                        </userDefinedRuntimeAttribute>
-                        <userDefinedRuntimeAttribute type="boolean" keyPath="layer.masksToBounds" value="YES"/>
-                    </userDefinedRuntimeAttributes>
-                </view>
-                <segmentedControl opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="left" contentVerticalAlignment="top" segmentControlStyle="plain" selectedSegmentIndex="0" translatesAutoresizingMaskIntoConstraints="NO" id="e9J-8y-Dm7">
-                    <rect key="frame" x="20" y="268" width="353" height="41"/>
-                    <constraints>
-                        <constraint firstAttribute="height" constant="40" id="QzF-uj-7gO"/>
-                    </constraints>
-                    <segments>
-                        <segment title="Listing"/>
-                        <segment title="Request"/>
-                        <segment title="History"/>
-                    </segments>
-                    <connections>
-                        <action selector="innerSegmentChanged:" destination="-1" eventType="valueChanged" id="3d5-Bl-JLC"/>
-                    </connections>
-                </segmentedControl>
                 <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="left" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="wBg-HL-lfP">
-                    <rect key="frame" x="20" y="328" width="51" height="40"/>
+                    <rect key="frame" x="20" y="126" width="51" height="40"/>
                     <color key="backgroundColor" systemColor="tertiarySystemFillColor"/>
                     <constraints>
                         <constraint firstAttribute="height" constant="40" id="ZwZ-eF-8sk"/>
@@ -82,43 +32,43 @@
                     </buttonConfiguration>
                 </button>
                 <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="right" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="hgz-VL-GpX">
-                    <rect key="frame" x="326" y="328" width="47" height="40"/>
+                    <rect key="frame" x="333" y="126" width="40" height="40"/>
                     <color key="backgroundColor" white="0.0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                     <constraints>
                         <constraint firstAttribute="height" constant="40" id="Bg1-gj-lJI"/>
+                        <constraint firstAttribute="width" constant="40" id="Mf4-3B-BSe"/>
                     </constraints>
                     <color key="tintColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                     <state key="normal" title="Button"/>
                     <buttonConfiguration key="configuration" style="filled" image="plus" catalog="system" imagePadding="5">
                         <color key="baseBackgroundColor" red="0.43921568630000002" green="0.6552734375" blue="0.7060546875" alpha="1" colorSpace="custom" customColorSpace="displayP3"/>
                     </buttonConfiguration>
+                    <userDefinedRuntimeAttributes>
+                        <userDefinedRuntimeAttribute type="number" keyPath="ibCornerRadius">
+                            <real key="value" value="50"/>
+                        </userDefinedRuntimeAttribute>
+                    </userDefinedRuntimeAttributes>
                     <connections>
                         <action selector="Additem:" destination="-1" eventType="touchUpInside" id="fuy-Vz-EhO"/>
                     </connections>
                 </button>
                 <tableView clipsSubviews="YES" contentMode="scaleToFill" alwaysBounceVertical="YES" style="plain" separatorStyle="default" rowHeight="-1" estimatedRowHeight="-1" sectionHeaderHeight="-1" estimatedSectionHeaderHeight="-1" sectionFooterHeight="-1" estimatedSectionFooterHeight="-1" translatesAutoresizingMaskIntoConstraints="NO" id="YI8-Ds-Ntm">
-                    <rect key="frame" x="20" y="378" width="353" height="474"/>
+                    <rect key="frame" x="0.0" y="176" width="393" height="676"/>
                     <color key="backgroundColor" systemColor="systemBackgroundColor"/>
-                    <color key="sectionIndexBackgroundColor" white="0.0" alpha="0.0" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                    <color key="sectionIndexBackgroundColor" systemColor="secondarySystemBackgroundColor"/>
                 </tableView>
             </subviews>
             <viewLayoutGuide key="safeArea" id="vUN-kp-3ea"/>
             <color key="backgroundColor" systemColor="systemBackgroundColor"/>
             <constraints>
-                <constraint firstItem="wBg-HL-lfP" firstAttribute="top" secondItem="e9J-8y-Dm7" secondAttribute="bottom" constant="20" id="6W4-Ep-qix"/>
-                <constraint firstItem="YI8-Ds-Ntm" firstAttribute="leading" secondItem="vUN-kp-3ea" secondAttribute="leading" constant="20" id="Axg-G5-L6c"/>
-                <constraint firstItem="vUN-kp-3ea" firstAttribute="trailing" secondItem="fc5-DI-duT" secondAttribute="trailing" constant="20" id="FjH-SZ-cqM"/>
+                <constraint firstItem="YI8-Ds-Ntm" firstAttribute="leading" secondItem="vUN-kp-3ea" secondAttribute="leading" id="Axg-G5-L6c"/>
+                <constraint firstItem="hgz-VL-GpX" firstAttribute="top" secondItem="vUN-kp-3ea" secondAttribute="top" constant="8" id="Mmc-yL-HfD"/>
                 <constraint firstAttribute="bottom" secondItem="YI8-Ds-Ntm" secondAttribute="bottom" id="RXN-mf-4GE"/>
-                <constraint firstItem="vUN-kp-3ea" firstAttribute="trailing" secondItem="e9J-8y-Dm7" secondAttribute="trailing" constant="20" id="XQk-SF-4dQ"/>
                 <constraint firstItem="YI8-Ds-Ntm" firstAttribute="top" secondItem="wBg-HL-lfP" secondAttribute="bottom" constant="10" id="aPT-XP-i0U"/>
-                <constraint firstItem="fc5-DI-duT" firstAttribute="leading" secondItem="vUN-kp-3ea" secondAttribute="leading" constant="20" id="co9-da-aiF"/>
-                <constraint firstItem="vUN-kp-3ea" firstAttribute="trailing" secondItem="YI8-Ds-Ntm" secondAttribute="trailing" constant="20" id="fcr-og-CcA"/>
-                <constraint firstItem="e9J-8y-Dm7" firstAttribute="top" secondItem="fc5-DI-duT" secondAttribute="bottom" constant="20" id="gO1-LV-ECr"/>
-                <constraint firstItem="fc5-DI-duT" firstAttribute="top" secondItem="vUN-kp-3ea" secondAttribute="top" id="hk0-Vu-iQX"/>
-                <constraint firstItem="hgz-VL-GpX" firstAttribute="top" secondItem="e9J-8y-Dm7" secondAttribute="bottom" constant="20" id="kF5-k8-sgy"/>
+                <constraint firstItem="vUN-kp-3ea" firstAttribute="trailing" secondItem="YI8-Ds-Ntm" secondAttribute="trailing" id="fcr-og-CcA"/>
                 <constraint firstItem="wBg-HL-lfP" firstAttribute="leading" secondItem="vUN-kp-3ea" secondAttribute="leading" constant="20" id="ldi-ih-j4E"/>
                 <constraint firstItem="vUN-kp-3ea" firstAttribute="trailing" secondItem="hgz-VL-GpX" secondAttribute="trailing" constant="20" id="nCD-eO-CvB"/>
-                <constraint firstItem="e9J-8y-Dm7" firstAttribute="leading" secondItem="vUN-kp-3ea" secondAttribute="leading" constant="20" id="z0h-1U-t23"/>
+                <constraint firstItem="wBg-HL-lfP" firstAttribute="top" secondItem="vUN-kp-3ea" secondAttribute="top" constant="8" id="wMQ-Qc-yuX"/>
             </constraints>
             <point key="canvasLocation" x="-25.190839694656489" y="90.845070422535215"/>
         </view>
@@ -126,6 +76,9 @@
     <resources>
         <image name="line.3.horizontal.decrease" catalog="system" width="128" height="73"/>
         <image name="plus" catalog="system" width="128" height="113"/>
+        <systemColor name="secondarySystemBackgroundColor">
+            <color red="0.94901960780000005" green="0.94901960780000005" blue="0.96862745100000003" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+        </systemColor>
         <systemColor name="systemBackgroundColor">
             <color white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
         </systemColor>

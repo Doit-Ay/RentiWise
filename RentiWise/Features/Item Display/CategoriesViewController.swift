@@ -40,12 +40,15 @@ final class CategoriesViewController: UIViewController {
         tableViewForItem?.delegate = self
 
         // Fixed card height for every row
-        tableViewForItem?.rowHeight = 160
-        tableViewForItem?.estimatedRowHeight = 160
+        tableViewForItem?.rowHeight = 150
+        tableViewForItem?.estimatedRowHeight = 150
 
         // Visual spacing and cleaner look between cards
         tableViewForItem?.separatorStyle = .none
         tableViewForItem?.backgroundColor = .systemGroupedBackground
+
+        // Add consistent 16pt spacing above first card and below last card
+        tableViewForItem?.contentInset = UIEdgeInsets(top: 16, left: 0, bottom: 16, right: 0)
 
         // IMPORTANT: Do not register UITableViewCell.self for "ItemCell" anywhere,
         // or you will override the storyboard prototype cell.
@@ -101,6 +104,9 @@ final class CategoriesViewController: UIViewController {
 // MARK: - UITableViewDataSource
 extension CategoriesViewController: UITableViewDataSource {
 
+    // Single section; each cell will inset its card internally to create spacing
+    func numberOfSections(in tableView: UITableView) -> Int { 1 }
+
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         items.count
     }
@@ -119,6 +125,9 @@ extension CategoriesViewController: UITableViewDataSource {
             // Clear backgrounds so the table's background shows between rows
             fallback.backgroundColor = .clear
             fallback.contentView.backgroundColor = .clear
+            // Ensure no clipping so shadows render
+            fallback.contentView.clipsToBounds = false
+            fallback.clipsToBounds = false
             return fallback
         }
 
@@ -131,6 +140,10 @@ extension CategoriesViewController: UITableViewDataSource {
         // Make sure the gap color shows around the card
         cell.backgroundColor = .clear
         cell.contentView.backgroundColor = .clear
+
+        // Ensure shadow is not clipped by the cell/contentView
+        cell.contentView.clipsToBounds = false
+        cell.clipsToBounds = false
 
         return cell
     }
@@ -164,6 +177,8 @@ extension CategoriesViewController: UITableViewDelegate {
             present(productVC, animated: true)
         }
     }
+
+    // No footers; spacing is handled by internal insets inside the cell
 }
 
 // MARK: - Lightweight remote image loading
@@ -174,4 +189,3 @@ private extension UIImageView {
         }
     }
 }
-

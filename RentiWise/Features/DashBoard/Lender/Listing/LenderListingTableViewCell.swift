@@ -17,14 +17,69 @@ final class LenderListingTableViewCell: UITableViewCell {
     // Simple in-flight loader task to avoid image flicker when reused
     private var imageLoadTask: URLSessionDataTask?
 
+    // Glass card background (programmatic container)
+    private let cardBackground = UIView()
+    private var didInstallCardConstraints = false
+
     override func awakeFromNib() {
         super.awakeFromNib()
         selectionStyle = .none
 
+        // Make the cell itself transparent so the table’s grouped background shows between cards
+        backgroundColor = .clear
+        contentView.backgroundColor = .clear
+        clipsToBounds = false
+        contentView.clipsToBounds = false
+
         // Optional styling
         itemImageListing.contentMode = .scaleAspectFill
         itemImageListing.clipsToBounds = true
-        itemImageListing.layer.cornerRadius = 8
+        itemImageListing.layer.cornerRadius = 12
+
+        // Install card background once
+        installCardBackgroundIfNeeded()
+    }
+
+    private func installCardBackgroundIfNeeded() {
+        guard !didInstallCardConstraints else { return }
+        didInstallCardConstraints = true
+
+        cardBackground.translatesAutoresizingMaskIntoConstraints = false
+        cardBackground.backgroundColor = .clear
+        cardBackground.layer.cornerRadius = 16
+        cardBackground.layer.masksToBounds = false
+
+        // Insert the background at the back so existing outlets remain visible above it
+        contentView.insertSubview(cardBackground, at: 0)
+
+        // Inset the card within the cell for breathing space (tweak to taste)
+        let inset: CGFloat = 12
+        NSLayoutConstraint.activate([
+            cardBackground.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: inset),
+            cardBackground.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -inset),
+            cardBackground.topAnchor.constraint(equalTo: contentView.topAnchor, constant: inset),
+            cardBackground.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -inset)
+        ])
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        // Apply strong, clean glass like other frosted cards in the app
+        cardBackground.applyGlassEffect(
+            cornerRadius: 16,
+            style: .systemThickMaterial,
+            addsVibrancy: false,
+            showsShadow: true,
+            borderAlpha: 0.30,
+            tintColorOverride: .white,
+            tintAlpha: 0.18,
+            showsHighlight: true,
+            highlightAlpha: 0.16
+        )
+        // Slightly softer shadow to match the rest of the UI
+        cardBackground.layer.shadowOpacity = 0.12
+        cardBackground.layer.shadowRadius = 8
+        cardBackground.layer.shadowOffset = CGSize(width: 0, height: 4)
     }
 
     override func prepareForReuse() {
@@ -35,6 +90,11 @@ final class LenderListingTableViewCell: UITableViewCell {
         itemNameListing.text = nil
         itemRateListing.text = nil
         itemRatingListing.text = nil
+
+        // Keep backgrounds consistent
+        backgroundColor = .clear
+        contentView.backgroundColor = .clear
+        cardBackground.backgroundColor = .clear
     }
 
     /// Configure with your Item model and a currency formatter
@@ -96,4 +156,3 @@ private final class ImageCache {
     func image(forKey key: String) -> UIImage? { cache.object(forKey: key as NSString) }
     func setImage(_ image: UIImage, forKey key: String) { cache.setObject(image, forKey: key as NSString) }
 }
-

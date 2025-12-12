@@ -9,7 +9,7 @@ final class CardsViewController: UIViewController {
     private var selectedRealItem: Item?
     private var itemMap: [String: Item] = [:]
 
-    // Demo data – replace with your ItemsService fetch results
+    // Demo data – now only one dummy entry
     private struct DemoItem {
         let title: String
         let pricePerDay: Double
@@ -20,8 +20,6 @@ final class CardsViewController: UIViewController {
 
     private var demoItems: [DemoItem] = [
         DemoItem(title: "Item Name", pricePerDay: 350, ratingText: "★ 4.5 (23)", distanceText: "2.3 km",
-                 imagePath: "B17E0037-93CC-4B9E-9E33-E3FA4C853EEC/item_1763575596_0.jpg"),
-        DemoItem(title: "Another Item", pricePerDay: 499, ratingText: "★ 4.2 (11)", distanceText: "1.1 km",
                  imagePath: "B17E0037-93CC-4B9E-9E33-E3FA4C853EEC/item_1763575596_0.jpg")
     ]
 
@@ -156,4 +154,3 @@ final class CardsViewController: UIViewController {
         }
     }
 }
-

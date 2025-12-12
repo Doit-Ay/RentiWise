@@ -9,12 +9,14 @@ final class CategoryItemCell: UITableViewCell {
     @IBOutlet weak var itemName: UILabel!
     @IBOutlet weak var itemRate: UILabel!
     @IBOutlet weak var itemDistance: UILabel!
-    @IBOutlet weak var wishlist: UIImageView!
     @IBOutlet weak var itemRating: UILabel!
     @IBOutlet weak var itemViewCard: UIView?
-
-    // Controls the spacing around the card
-    private let verticalInset: CGFloat = 5
+    @IBOutlet weak var rentbutton: UIButton!
+    @IBAction func rentButtonTapped(_ sender: UIButton) {
+    }
+    
+    // Controls the spacing around the card; use 8 top/bottom so two cells make 16 between cards
+    private let verticalInset: CGFloat = 8
     private let horizontalInset: CGFloat = 16
 
     private var addedInsetConstraints = false
@@ -27,19 +29,60 @@ final class CategoryItemCell: UITableViewCell {
         backgroundColor = .clear
         contentView.backgroundColor = .clear
 
-        // Card styling (rounded, no custom border)
-        itemViewCard?.layer.cornerRadius = cornerRadius
-        itemViewCard?.layer.masksToBounds = true
-        itemViewCard?.backgroundColor = UIColor(red: 0x70/255.0,
-                                                green: 0xA7/255.0,
-                                                blue: 0xB4/255.0,
-                                                alpha: 1.0)
+        // Make sure shadows aren’t clipped by the cell or contentView
+        clipsToBounds = false
+        contentView.clipsToBounds = false
 
-      
+        // Card styling: glass effect to match Home cards
+        if let card = itemViewCard {
+            // Ensure no solid background; glass effect will handle visuals
+            card.backgroundColor = .clear
+            card.layer.cornerRadius = cornerRadius
+            card.layer.masksToBounds = false
+            // Apply glass with default settings
+            card.applyGlassEffect(
+                cornerRadius: cornerRadius,
+                style: .systemThickMaterial,
+                addsVibrancy: false,
+                showsShadow: true,
+                borderAlpha: 0.30,
+                tintColorOverride: .white,
+                tintAlpha: 0.14,
+                showsHighlight: true,
+                highlightAlpha: 0.15
+            )
+            // Soften the shadow a bit (lighter and closer)
+            card.layer.shadowOpacity = 0.12
+            card.layer.shadowRadius = 8
+            card.layer.shadowOffset = CGSize(width: 0, height: 4)
+        }
+
         // Image styling
         itemimage?.layer.cornerRadius = 12
         itemimage?.clipsToBounds = true
         itemimage?.contentMode = .scaleAspectFill
+
+        // Rent button: light glass with subtle shadow so it separates on light backgrounds
+        if let b = rentbutton {
+            b.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
+            b.setTitleColor(.label, for: .normal)
+            b.contentEdgeInsets = UIEdgeInsets(top: 8, left: 14, bottom: 8, right: 14)
+            b.applyGlassEffect(
+                cornerRadius: 12,
+                style: .systemThickMaterial,
+                addsVibrancy: false,
+                showsShadow: true,     // subtle separation, like Home buttons
+                borderAlpha: 0.30,
+                tintColorOverride: .white,
+                tintAlpha: 0.20,
+                showsHighlight: true,
+                highlightAlpha: 0.16
+            )
+            // Slightly reduce button shadow as well for consistency
+            b.layer.shadowOpacity = 0.10
+            b.layer.shadowRadius = 6
+            b.layer.shadowOffset = CGSize(width: 0, height: 3)
+        }
 
         // Add insets around the card by constraining it inside contentView
         applyCardInsetsIfNeeded()

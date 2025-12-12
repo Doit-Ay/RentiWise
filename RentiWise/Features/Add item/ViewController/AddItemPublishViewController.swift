@@ -16,7 +16,9 @@ class AddItemPublishViewController: UIViewController {
     @IBOutlet weak var productName: UILabel!
     @IBOutlet weak var productRate: UILabel!
     @IBOutlet weak var productDescription: UILabel!
-
+    @IBOutlet weak var itemViewCard: UIView!
+    
+    
     private let service: AddItemServicing = AddItemService()
 
     // Simple loader UI
@@ -34,6 +36,11 @@ class AddItemPublishViewController: UIViewController {
             navigationItem.backBarButtonItem = UIBarButtonItem(title: "", style: .plain, target: nil, action: nil)
         }
 
+        // Allow description to grow vertically
+        productDescription.numberOfLines = 0
+        productDescription.setContentCompressionResistancePriority(.required, for: .vertical)
+        productDescription.setContentHuggingPriority(.defaultLow, for: .vertical)
+
         // CTA label depending on mode
         if draft.isEditing {
             publishButton?.setTitle("Update", for: .normal)
@@ -48,6 +55,23 @@ class AddItemPublishViewController: UIViewController {
         if let firstImageData = draft.images.first, let image = UIImage(data: firstImageData) {
             itemThumbnail?.image = image
         }
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+
+        // Mirror Home's glass effect for cards
+        itemViewCard.applyGlassEffect(
+            cornerRadius: 16,
+            style: .systemThickMaterial,
+            addsVibrancy: false,
+            showsShadow: true,
+            borderAlpha: 0.30,
+            tintColorOverride: .white,
+            tintAlpha: 0.14,
+            showsHighlight: true,
+            highlightAlpha: 0.15
+        )
     }
 
     @IBAction func PublishTapped(_ sender: UIButton) {
@@ -136,11 +160,10 @@ class AddItemPublishViewController: UIViewController {
     }
 
     private func routeToDashboard() {
-        // Existing routing logic
-        guard let tabBar = (view.window?.rootViewController as? UITabBarController)
-                ?? navigationController?.tabBarController
-                ?? tabBarController
-        else {
+        // Instantiate Dashboard from storyboard
+        let sb = UIStoryboard(name: "AppStarting", bundle: nil)
+        guard let dashboard = sb.instantiateViewController(withIdentifier: "DashboardListing") as? DashboardViewController else {
+            // Fallback: if Dashboard storyboard ID is missing, try to recover by dismissing/popping
             if presentingViewController != nil || navigationController?.presentingViewController != nil {
                 dismiss(animated: true)
             } else {
@@ -149,29 +172,42 @@ class AddItemPublishViewController: UIViewController {
             return
         }
 
-        let sb = UIStoryboard(name: "AppStarting", bundle: nil)
-        let dashboard = sb.instantiateViewController(withIdentifier: "DashboardListing")
-        dashboard.hidesBottomBarWhenPushed = false
+        // Configure Dashboard to show Listing segment without tab bar
+        dashboard.title = "My Listings"
+        dashboard.initialSegment = 0 // Listing
+        dashboard.hidesBottomBarWhenPushed = true
 
-        let dashboardTabIndex = 1
-        if dashboardTabIndex < (tabBar.viewControllers?.count ?? 0) {
-            tabBar.selectedIndex = dashboardTabIndex
+        // Prefer pushing onto an existing navigation controller so we get a back button and no tab bar.
+        if let nav = navigationController {
+            nav.setNavigationBarHidden(false, animated: true)
+            nav.pushViewController(dashboard, animated: true)
+            return
         }
 
-        if let nav = tabBar.selectedViewController as? UINavigationController {
-            nav.setViewControllers([dashboard], animated: true)
-        } else if let selectedVC = tabBar.selectedViewController {
-            let nav = UINavigationController(rootViewController: dashboard)
-            nav.modalPresentationStyle = .fullScreen
-            var vcs = tabBar.viewControllers ?? []
-            if dashboardTabIndex < vcs.count {
-                vcs[dashboardTabIndex] = nav
-                tabBar.setViewControllers(vcs, animated: false)
-                tabBar.selectedIndex = dashboardTabIndex
-            } else {
-                selectedVC.present(nav, animated: true)
+        // If we were presented modally inside a nav controller, push there
+        if let presentingNav = presentingViewController as? UINavigationController {
+            presentingNav.setNavigationBarHidden(false, animated: true)
+            presentingNav.pushViewController(dashboard, animated: true)
+            dismiss(animated: true)
+            return
+        }
+
+        // Try tab bar’s selected navigation controller if available
+        if let tab = (view.window?.rootViewController as? UITabBarController) ?? tabBarController,
+           let nav = tab.selectedViewController as? UINavigationController {
+            nav.setNavigationBarHidden(false, animated: true)
+            nav.pushViewController(dashboard, animated: true)
+            // If we’re in another stack, close ourselves if needed
+            if presentingViewController != nil {
+                dismiss(animated: true)
             }
+            return
         }
+
+        // Final fallback: present inside a fresh navigation controller
+        let nav = UINavigationController(rootViewController: dashboard)
+        nav.modalPresentationStyle = .fullScreen
+        present(nav, animated: true)
     }
 }
 
