@@ -82,12 +82,18 @@ class RequestSentPageViewController: UIViewController {
         
         let cards: [UIView?] = [rentalItemCardView, rentalIteminsideView, bookingPeriodCardView, ownerCardView, priceBreakdownCardView]
         cards.forEach { card in
-            card?.layer.cornerRadius = 12
+            card?.layer.cornerRadius = 16
             card?.layer.masksToBounds = true
         }
         
         CircleView.layer.cornerRadius = CircleView.bounds.height / 2
         CircleView.layer.masksToBounds = true
+        
+        // Apply glass effect to primary cards for visual consistency
+        rentalItemCardView?.applyGlassEffectSimple()
+        bookingPeriodCardView?.applyGlassEffectSimple()
+        ownerCardView?.applyGlassEffectSimple()
+        priceBreakdownCardView?.applyGlassEffectSimple()
         
         // Initialize toggle visual state
         updateToggleUI()

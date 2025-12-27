@@ -12,7 +12,8 @@ import Supabase
 class RequestViewController: UIViewController {
     // MARK: - IBOutlets
     
-    @IBOutlet weak var productCardView: UIView!
+    @IBOutlet weak var itemcardview: UIView!
+    //@IBOutlet weak var productCardView: UIView!
     @IBOutlet weak var productThumbImageView: UIImageView!
     @IBOutlet weak var productTitleLabel: UILabel!
     @IBOutlet weak var productRateLabel: UILabel!
@@ -67,11 +68,12 @@ class RequestViewController: UIViewController {
     }
     
     private enum RentalUnit {
+        case none
         case hour
         case day
     }
     
-    private var rentalUnit: RentalUnit = .day
+    private var rentalUnit: RentalUnit = .none
     
     private let currencyFormatter: NumberFormatter = {
         let f = NumberFormatter()
@@ -96,26 +98,57 @@ class RequestViewController: UIViewController {
         return df
     }()
     
+    private let selectedTeal = UIColor(hex: "5DA9B6")
+    
+    // Keep pickers' text color teal once user has made a selection; black only before selection
+    private func updatePickerTextColors() {
+        // We consider a picker "selected" if user interacted at least once.
+        // UIDatePicker doesn't expose that directly, so we persist it via associated flags.
+        let black: UIColor = .label
+        dateLabel.setValue(hasSelectedDate ? selectedTeal : black, forKey: "textColor")
+        pickuptimeLabel.setValue(hasSelectedPickupTime ? selectedTeal : black, forKey: "textColor")
+        returntimeLabel.setValue(hasSelectedReturnTime ? selectedTeal : black, forKey: "textColor")
+    }
+
+    // Flags to remember if user selected each field at least once
+    private var hasSelectedDate = false
+    private var hasSelectedPickupTime = false
+    private var hasSelectedReturnTime = false
+    
     // MARK: - Lifecycle
     
     override func viewDidLoad() {
         super.viewDidLoad()
         title = "Request"
         navigationController?.setNavigationBarHidden(false, animated: false)
-        view.backgroundColor = .systemBackground
-        [productCardView, rentalTypeCard, selectdateandtimeCard, bookingsummaryCard, ownerCard, priceBreakdownCard].forEach {
-            $0?.layer.cornerRadius = 12
+        view.backgroundColor = .systemGroupedBackground
+        [rentalTypeCard, selectdateandtimeCard, bookingsummaryCard, ownerCard, priceBreakdownCard].forEach {
             $0?.layer.masksToBounds = true
         }
+        // Ensure cards are white over the grouped background
+        itemcardview?.backgroundColor = .white
+        rentalTypeCard?.backgroundColor = .white
+        selectdateandtimeCard?.backgroundColor = .white
+        bookingsummaryCard?.backgroundColor = .white
+        ownerCard?.backgroundColor = .white
+        priceBreakdownCard?.backgroundColor = .white
+        applyGlassToCards()
         dateLabel.datePickerMode = .date
         pickuptimeLabel.datePickerMode = .time
         returntimeLabel.datePickerMode = .time
-        dateLabel.addTarget(self, action: #selector(datePickerChanged), for: .valueChanged)
-        pickuptimeLabel.addTarget(self, action: #selector(datePickerChanged), for: .valueChanged)
-        returntimeLabel.addTarget(self, action: #selector(datePickerChanged), for: .valueChanged)
-        rentalUnit = .day
+        dateLabel.addTarget(self, action: #selector(datePickerChanged(_:)), for: .valueChanged)
+        pickuptimeLabel.addTarget(self, action: #selector(datePickerChanged(_:)), for: .valueChanged)
+        returntimeLabel.addTarget(self, action: #selector(datePickerChanged(_:)), for: .valueChanged)
+        
+        // Initial text colors: black until user selects
+        dateLabel.setValue(UIColor.label, forKey: "textColor")
+        pickuptimeLabel.setValue(UIColor.label, forKey: "textColor")
+        returntimeLabel.setValue(UIColor.label, forKey: "textColor")
+
+        // Removed rentalUnit = .day
+        
         updateRentalButtons()
-        boookingcontainer?.isHidden = false
+        boookingcontainer?.isHidden = true
 
         // clear placeholders
         productTitleLabel?.text = nil
@@ -142,13 +175,26 @@ class RequestViewController: UIViewController {
         }
     }
 
+    // Applies the glass effect to all the primary card views.
+    private func applyGlassToCards() {
+        // Uses the simple glass extension defined in Glass.swift
+        itemcardview?.applyGlassEffectSimple()
+        rentalTypeCard?.applyGlassEffectSimple()
+        selectdateandtimeCard?.applyGlassEffectSimple()
+        bookingsummaryCard?.applyGlassEffectSimple()
+        ownerCard?.applyGlassEffectSimple()
+        priceBreakdownCard?.applyGlassEffectSimple()
+    }
+
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         if item == nil, itemId != nil {
             Task { await fetchItemIfNeeded() }
         } else {
             applyItemToUI()
-            recalculatePricing()
+            if rentalUnit != .none {
+                recalculatePricing()
+            }
         }
     }
     
@@ -264,24 +310,26 @@ class RequestViewController: UIViewController {
         let selectedColor = UIColor(hex: "5DA9B6").cgColor
         let normalColor = UIColor.systemGray4.cgColor
         
-        hourButton.layer.cornerRadius = 12
+        hourButton.layer.cornerRadius = 20
         hourButton.layer.borderWidth = 1
         hourButton.layer.masksToBounds = true
-        dayButton.layer.cornerRadius = 12
+        dayButton.layer.cornerRadius = 20
         dayButton.layer.borderWidth = 1
         dayButton.layer.masksToBounds = true
         
+        // Default state: no selection (both normal)
+        hourButton.layer.borderColor = normalColor
+        dayButton.layer.borderColor = normalColor
+        hourButton.backgroundColor = .white
+        dayButton.backgroundColor = .white
+        
         switch rentalUnit {
+        case .none:
+            break // keep both normal
         case .hour:
             hourButton.layer.borderColor = selectedColor
-            hourButton.backgroundColor = .white
-            dayButton.layer.borderColor = normalColor
-            dayButton.backgroundColor = .white
         case .day:
             dayButton.layer.borderColor = selectedColor
-            dayButton.backgroundColor = .white
-            hourButton.layer.borderColor = normalColor
-            hourButton.backgroundColor = .white
         }
     }
     
@@ -311,8 +359,10 @@ class RequestViewController: UIViewController {
             if returntimeLabel.date < startOfPickup {
                 returntimeLabel.date = startOfPickup
             }
-            returntimeLabel.minimumDate = startOfPickup
+        case .none:
+            break
         }
+        updatePickerTextColors()
         boookingcontainer?.isHidden = false
         Task { await populateUI() }
         recalculatePricing()
@@ -322,28 +372,28 @@ class RequestViewController: UIViewController {
     
     @IBAction func didTapHour(_ sender: UIButton) {
         if rentalUnit == .hour {
+            rentalUnit = .none // deselect
             boookingcontainer?.isHidden = true
             label1sum?.text = ""
             label2sum?.text = ""
             label3sum?.text = ""
-            rentalUnit = .day
-            updateRentalButtons()
         } else {
             selectUnit(.hour)
         }
+        updateRentalButtons()
     }
     
     @IBAction func didTapDay(_ sender: UIButton) {
         if rentalUnit == .day {
+            rentalUnit = .none // deselect
             boookingcontainer?.isHidden = true
             label1sum?.text = ""
             label2sum?.text = ""
             label3sum?.text = ""
-            rentalUnit = .hour
-            updateRentalButtons()
         } else {
             selectUnit(.day)
         }
+        updateRentalButtons()
     }
     
     @IBAction func didTapSendRequest(_ sender: UIButton) {
@@ -355,15 +405,22 @@ class RequestViewController: UIViewController {
         Task { await sendRequest() }
     }
     
-    @objc private func datePickerChanged() {
+    @objc private func datePickerChanged(_ sender: UIDatePicker) {
+        if sender === dateLabel { hasSelectedDate = true }
+        if sender === pickuptimeLabel { hasSelectedPickupTime = true }
+        if sender === returntimeLabel { hasSelectedReturnTime = true }
+        updatePickerTextColors()
         recalculatePricing()
-        boookingcontainer?.isHidden = false
+        if rentalUnit != .none {
+            boookingcontainer?.isHidden = false
+        }
         applyItemToUI()
     }
     
     // MARK: - Pricing Logic
     
     private func recalculatePricing() {
+        if rentalUnit == .none { return }
         guard let item = item else { return }
         let pricePerDay = item.price_per_day
         let pricePerHour = (pricePerDay / 8).rounded(toPlaces: 2)
@@ -392,6 +449,8 @@ class RequestViewController: UIViewController {
             endComponents.minute = pickupTimeComps.minute
             endComponents.second = pickupTimeComps.second
             endDateTime = calendar.date(from: endComponents) ?? returnDate
+        case .none:
+            return
         }
         var actualEndDateTime = endDateTime
         if actualEndDateTime < startDateTime {
@@ -427,6 +486,8 @@ class RequestViewController: UIViewController {
             quantityDescription1 = "\(startStr) - \(endStr)"
             quantityDescription2 = timeFormatter.string(from: pickuptimeLabel.date)
             quantityDescription3 = "\(quantityDays) day\(quantityDays == 1 ? "" : "s")"
+        case .none:
+            return
         }
         let serviceFee = rentalFee * serviceFeeRate
         let total = rentalFee + serviceFee + securityDeposit
@@ -474,6 +535,10 @@ class RequestViewController: UIViewController {
             endComponents.second = returnTimeComponents.second
             let endDateTime = calendar.date(from: endComponents) ?? returnPicker
             endDate = endDateTime < pickupTime ? calendar.date(byAdding: .day, value: 1, to: pickupDate) ?? pickupDate : pickupDate
+        case .none:
+            // If no rental unit selected, do not proceed
+            presentAlert(title: "Error", message: "Please select a rental duration before sending a request.")
+            return
         }
         
         // Format for SQL
@@ -538,6 +603,8 @@ class RequestViewController: UIViewController {
                 endComponents.minute = returnTimeComponents.minute
                 endComponents.second = returnTimeComponents.second
                 bookingEndDate = calendar.date(from: endComponents) ?? endDate
+            case .none:
+                bookingEndDate = endDate
             }
             
             NotificationCenter.default.post(name: Notification.Name("rentalRequestCreated"), object: nil, userInfo: ["item_id": item.id])
@@ -586,6 +653,9 @@ class RequestViewController: UIViewController {
             let amount = NSNumber(value: pricePerHour)
             productRateLabel?.text = (currencyFormatter.string(from: amount) ?? "₹\(pricePerHour)") + " / hour"
             secRate?.text = productRateLabel?.text
+        case .none:
+            productRateLabel?.text = nil
+            secRate?.text = nil
         }
         if let firstImagePath = currentItem.images.first, let url = StorageURLBuilder.publicFileURL(for: firstImagePath) {
             UIImageView.rw_loadImage(from: url) { [weak self] img in
@@ -600,7 +670,7 @@ class RequestViewController: UIViewController {
             productThumbImageView?.tintColor = .secondaryLabel
             productThumbImageView?.contentMode = .scaleAspectFit
         }
-        recalculatePricing()
+        if rentalUnit != .none { recalculatePricing() }
     }
     
     private func loadItemIfNeeded() {
@@ -615,6 +685,7 @@ fileprivate extension Double {
         return Darwin.round(self * divisor) / divisor
     }
 }
+
 
 extension UIColor {
     convenience init(hex: String) {
@@ -643,3 +714,4 @@ extension UIImageView {
         task.resume()
     }
 }
+

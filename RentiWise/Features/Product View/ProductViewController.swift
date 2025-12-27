@@ -45,23 +45,23 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
 
     // MARK: - Description card
     @IBOutlet weak var descriptionCard: UIView!
-    @IBOutlet weak var descriptionTitleLabel: UILabel!
-    @IBOutlet weak var descriptionBodyLabel: UILabel!
+    @IBOutlet weak var descriptionTitleLabel: UILabel?
+    @IBOutlet weak var descriptionBodyLabel: UILabel?
 
     // MARK: - Owner card
-    @IBOutlet weak var ownerCard: UIView!
-    @IBOutlet weak var ownerAvatarImageView: UIImageView!
-    @IBOutlet weak var ownerNameLabel: UILabel!
-    @IBOutlet weak var distanceRightLabel: UILabel!
-    @IBOutlet weak var ownerRating: UILabel!
+    @IBOutlet weak var ownerCard: UIView?
+    @IBOutlet weak var ownerAvatarImageView: UIImageView?
+    @IBOutlet weak var ownerNameLabel: UILabel?
+    @IBOutlet weak var distanceRightLabel: UILabel?
+    @IBOutlet weak var ownerRating: UILabel?
 
     // Optional height constraint outlet (connect only if not using UIStackView)
     @IBOutlet weak var ownerCardHeight: NSLayoutConstraint?
 
     // MARK: - Deposit card
-    @IBOutlet weak var depositCard: UIView!
-    @IBOutlet weak var depositTitleLabel: UILabel!
-    @IBOutlet weak var depositBodyLabel: UILabel!
+    @IBOutlet weak var depositCard: UIView?
+    @IBOutlet weak var depositTitleLabel: UILabel?
+    @IBOutlet weak var depositBodyLabel: UILabel?
 
     // Optional height constraint outlet (connect only if not using UIStackView)
     @IBOutlet weak var depositCardHeight: NSLayoutConstraint?
@@ -94,8 +94,8 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
     @IBOutlet weak var r2CommentLabel: UILabel?
 
     // MARK: - Action buttons
-    @IBOutlet weak var writeAReview: UIButton!
-    @IBOutlet weak var rentNowoutlet: UIButton!
+    @IBOutlet weak var writeAReview: UIButton?
+    @IBOutlet weak var rentNowoutlet: UIButton?
 
     // If buttons are inside a container row, connect it and its height
     @IBOutlet weak var actionButtonsContainer: UIView?
@@ -103,7 +103,7 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
 
     // Spacing constraint that directly connects Description to Reviews title/top
     // Normal value (when sections are visible) = 248, Own-item value = small (e.g., 16)
-    @IBOutlet weak var descriptionAndReview: NSLayoutConstraint!
+    @IBOutlet weak var descriptionAndReview: NSLayoutConstraint?
 
     // MARK: - Gallery (added)
     private var galleryScrollView: UIScrollView?
@@ -118,6 +118,7 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
     // MARK: - Binding
     private func bindItemToUI() {
         guard let item = selectedItem else { return }
+        guard isViewLoaded else { return }
 
         // Title
         self.title = item.title
@@ -137,27 +138,27 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
 
         // Distance (placeholder unless you later compute from user/location)
         distanceLabel?.text = "2.3 km"
-        distanceRightLabel.text = "2.3 km"
+        distanceRightLabel?.text = "2.3 km"
 
         // Description card
-        descriptionTitleLabel.text = "Description"
-        descriptionBodyLabel.text = item.description ?? ""
-        descriptionBodyLabel.numberOfLines = 0
-        descriptionBodyLabel.preferredMaxLayoutWidth = descriptionBodyLabel.bounds.width
+        descriptionTitleLabel?.text = "Description"
+        descriptionBodyLabel?.text = item.description ?? ""
+        descriptionBodyLabel?.numberOfLines = 0
+        descriptionBodyLabel?.preferredMaxLayoutWidth = descriptionBodyLabel?.bounds.width ?? 0
 
         // Deposit card text
-        depositTitleLabel.text = "Refundable Deposit"
+        depositTitleLabel?.text = "Refundable Deposit"
         let depositNumber = NSNumber(value: item.deposit_amount)
         let depositText = currencyFormatter.string(from: depositNumber) ?? String(format: "₹%.2f", item.deposit_amount)
-        depositBodyLabel.text = "A \(depositText) deposit is required and will be fully refunded when the item is returned in the same condition."
+        depositBodyLabel?.text = "A \(depositText) deposit is required and will be fully refunded when the item is returned in the same condition."
 
         // Owner defaults
-        ownerNameLabel.text = nil
-        ownerAvatarImageView.image = nil
-        ownerAvatarImageView.backgroundColor = .secondarySystemBackground
-        ownerAvatarImageView.layer.cornerRadius = ownerAvatarImageView.bounds.height / 2
-        ownerAvatarImageView.layer.masksToBounds = true
-        ownerRating.text = "★ 4.5"
+        ownerNameLabel?.text = nil
+        ownerAvatarImageView?.image = nil
+        ownerAvatarImageView?.backgroundColor = .secondarySystemBackground
+        ownerAvatarImageView?.layer.cornerRadius = (ownerAvatarImageView?.bounds.height ?? 0) / 2
+        ownerAvatarImageView?.layer.masksToBounds = true
+        
 
         Task { [weak self] in
             await self?.fetchAndDisplayOwner(ownerId: item.owner_id)
@@ -185,7 +186,7 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         depositCard?.isHidden = isOwn
         writeAReview?.isHidden = isOwn
         rentNowoutlet?.isHidden = isOwn
-        actionButtonsContainer?.isHidden = isOwn || ((writeAReview == nil || writeAReview.isHidden) && (rentNowoutlet == nil || rentNowoutlet.isHidden))
+        actionButtonsContainer?.isHidden = isOwn || ((writeAReview == nil || writeAReview?.isHidden == true) && (rentNowoutlet == nil || rentNowoutlet?.isHidden == true))
 
         // Collapse heights if not using a UIStackView
         if isOwn {
@@ -396,17 +397,17 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
 
     private func renderOwner(fullName: String?, avatarURLString: String?) {
         let name = (fullName?.isEmpty == false) ? fullName! : "Owner"
-        ownerNameLabel.text = name
-        ownerRating.text = "★ 4.5"
+        ownerNameLabel?.text = name
+        ownerRating?.text = "★ 4.5"
 
         if let avatar = avatarURLString, !avatar.isEmpty {
             if let url = URL(string: avatar), avatar.lowercased().hasPrefix("http") {
                 UIImageView.loadImage(from: url) { [weak self] img in
                     DispatchQueue.main.async {
                         if let img = img {
-                            self?.ownerAvatarImageView.image = img
-                            self?.ownerAvatarImageView.contentMode = .scaleAspectFill
-                            self?.ownerAvatarImageView.clipsToBounds = true
+                            self?.ownerAvatarImageView?.image = img
+                            self?.ownerAvatarImageView?.contentMode = .scaleAspectFill
+                            self?.ownerAvatarImageView?.clipsToBounds = true
                         } else {
                             self?.renderOwnerInitials(fullName: name)
                         }
@@ -416,9 +417,9 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
                 UIImageView.loadImage(from: url) { [weak self] img in
                     DispatchQueue.main.async {
                         if let img = img {
-                            self?.ownerAvatarImageView.image = img
-                            self?.ownerAvatarImageView.contentMode = .scaleAspectFill
-                            self?.ownerAvatarImageView.clipsToBounds = true
+                            self?.ownerAvatarImageView?.image = img
+                            self?.ownerAvatarImageView?.contentMode = .scaleAspectFill
+                            self?.ownerAvatarImageView?.clipsToBounds = true
                         } else {
                             self?.renderOwnerInitials(fullName: name)
                         }
@@ -434,11 +435,11 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
 
     private func renderOwnerInitials(fullName: String) {
         let initials = makeInitials(from: fullName)
-        let size = ownerAvatarImageView.bounds.size == .zero ? CGSize(width: 60, height: 60) : ownerAvatarImageView.bounds.size
-        ownerAvatarImageView.image = drawInitialsImage(initials: initials, size: size)
-        ownerAvatarImageView.contentMode = .scaleAspectFill
-        ownerAvatarImageView.clipsToBounds = true
-        ownerAvatarImageView.backgroundColor = .clear
+        let size = ownerAvatarImageView?.bounds.size == .zero || ownerAvatarImageView?.bounds.size == nil ? CGSize(width: 60, height: 60) : ownerAvatarImageView!.bounds.size
+        ownerAvatarImageView?.image = drawInitialsImage(initials: initials, size: size)
+        ownerAvatarImageView?.contentMode = .scaleAspectFill
+        ownerAvatarImageView?.clipsToBounds = true
+        ownerAvatarImageView?.backgroundColor = .clear
     }
 
     private func makeInitials(from name: String) -> String {
@@ -608,17 +609,20 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = .systemGroupedBackground
         title = "Product Detail"
 
         // Ensure description wraps to allow dynamic card height
-        descriptionBodyLabel.numberOfLines = 0
+        descriptionBodyLabel?.numberOfLines = 0
 
-        bindItemToUI()
+        if selectedItem != nil { bindItemToUI() }
+    }
+    
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        if selectedItem != nil { bindItemToUI() }
     }
 
-    // MARK: - Rent Now action expected by XIB
-    // Connect your "Rent Now" button Touch Up Inside to this action in Interface Builder.
     @IBAction func didTapRentNow(_ sender: UIButton) {
         guard let item = selectedItem else { return }
 
@@ -644,4 +648,32 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
             present(nav, animated: true)
         }
     }
+    
+    @IBAction func didtappreviewbutton(_ sender: UIButton) {
+        guard let item = selectedItem else { return }
+
+        let nibName = "WriteReviewViewController"
+        let reviewVC: WriteReviewViewController
+        if Bundle.main.path(forResource: nibName, ofType: "nib") != nil ||
+            Bundle.main.path(forResource: nibName, ofType: "xib") != nil {
+            reviewVC = WriteReviewViewController(nibName: nibName, bundle: nil)
+        } else {
+            reviewVC = WriteReviewViewController()
+        }
+
+
+
+        reviewVC.title = "Write a Review"
+        reviewVC.hidesBottomBarWhenPushed = true
+
+        if let nav = self.navigationController {
+            nav.setNavigationBarHidden(false, animated: true)
+            nav.pushViewController(reviewVC, animated: true)
+        } else {
+            let nav = UINavigationController(rootViewController: reviewVC)
+            nav.modalPresentationStyle = .formSheet
+            present(nav, animated: true)
+        }
+    }
 }
+
