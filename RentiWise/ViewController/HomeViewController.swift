@@ -21,6 +21,13 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
     @IBOutlet weak var trendingUiView: UIView!
     @IBOutlet weak var locationTapped: UIButton!
     
+    @IBOutlet weak var searchBar: UISearchBar!
+    
+    @IBOutlet weak var homeBG: UIView!
+    
+    // Keep a reference so we can resize and avoid duplicates
+    // private var homeGradientLayer: CAGradientLayer?
+
     @IBAction func notificationBellTapped(_ sender: UIButton) {
         let nibName = "NotificationViewController"
         let vc: NotificationViewController
@@ -191,6 +198,9 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
     private var trendingCollectionView: UICollectionView?
     private var trendingItems: [Item] = []
 
+    // MARK: - Search helper
+    private var homeSearch: HomeSearchController?
+
     override func viewDidLoad() {
         super.viewDidLoad()
 
@@ -208,6 +218,8 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
         collectionView.alwaysBounceVertical = false
         collectionView.alwaysBounceHorizontal = true
         collectionView.setCollectionViewLayout(generateHorizontalFourUpLayout(), animated: false)
+        // Make the surrounding area transparent so only tiles are visible
+        collectionView.backgroundColor = .clear
 
         setupProfileImageTap()
         setupProductTap()
@@ -229,6 +241,15 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
         
         // Refresh location button title ("SRMIST" if none saved)
         refreshLocationButtonTitle()
+
+        // Initialize search helper (rounded search bar, keyboard behavior, inline results)
+        if let sb = searchBar {
+            let hs = HomeSearchController(searchBar: sb, in: view)
+            hs.onSelectItem = { [weak self] item in
+                self?.openItem(item)
+            }
+            self.homeSearch = hs
+        }
     }
 
     override func viewDidLayoutSubviews() {
@@ -239,6 +260,12 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
             didSetInitialHomeImageAfterLayout = true
             updateHomeImage(animated: false)
         }
+
+        // Keep the inline results table pinned under the search bar
+        homeSearch?.layoutForSearchBarBelow()
+
+        // Gradient temporarily disabled
+        // setupHomeBackgroundGradient()
 
         // Apply glass effect to featured cards (once; helper reuses existing blur view by tag)
         applyGlassToFeaturedCardsIfNeeded()
@@ -269,6 +296,33 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
         super.viewSafeAreaInsetsDidChange()
         collectionView.setCollectionViewLayout(generateHorizontalFourUpLayout(), animated: false)
     }
+
+    // MARK: - Gradient background for homeBG (disabled)
+    /*
+    private func setupHomeBackgroundGradient() {
+        guard let container = homeBG else { return }
+
+        if homeGradientLayer == nil {
+            let g = CAGradientLayer()
+
+            let topTint = UIColor(red: 196/255, green: 223/255, blue: 229/255, alpha: 1.0)
+            let grouped = UIColor.systemGroupedBackground
+
+            g.colors = [topTint.cgColor, grouped.cgColor, grouped.cgColor]
+            g.locations = [0.0, 0.22, 1.0] as [NSNumber]
+            g.startPoint = CGPoint(x: 0.5, y: 0.0)
+            g.endPoint   = CGPoint(x: 0.5, y: 1.0)
+
+            homeGradientLayer = g
+            container.layer.insertSublayer(g, at: 0)
+        }
+
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        homeGradientLayer?.frame = container.bounds
+        CATransaction.commit()
+    }
+    */
 
     // MARK: - Profile tap setup
     private func setupProfileImageTap() {
@@ -446,7 +500,7 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
                                                          trailing: interItemSpacing / 2)
 
             // Height for the row (tweak as needed)
-            let rowHeight: CGFloat = 70
+            let rowHeight: CGFloat = 105
 
             // Group spans the full width so that 4 items are visible per "page"
             let groupSize = NSCollectionLayoutSize(
@@ -483,6 +537,19 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
         }
     }
 
+    // Helper: map category title to background asset name
+    private func categoryBackgroundAsset(for title: String) -> String? {
+        switch title {
+        case "Electronics": return "ElectronicsBG"
+        case "Tools":       return "ToolsBG"
+        case "Events":      return "EventsBG"
+        case "Fitness":     return "FitnessBG"
+        case "Hobbies":     return "HobbiesBG"
+        case "Outdoor":     return "OutdoorBG"
+        default:            return nil
+        }
+    }
+
     // MARK: - UICollectionViewDataSource (single implementation branching by collection)
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
         if collectionView === trendingCollectionView {
@@ -510,14 +577,36 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
         let item = categories[indexPath.item]
         cell.categoryLabel.text = item.title
 
-        let config = UIImage.SymbolConfiguration(pointSize: 32, weight: .regular, scale: .medium)
+        // Background image from assets (full-bleed)
+        if let assetName = categoryBackgroundAsset(for: item.title) {
+            cell.categoryBg.image = UIImage(named: assetName)
+            cell.categoryBg.contentMode = .scaleAspectFill
+            cell.categoryBg.clipsToBounds = true
+        } else {
+            cell.categoryBg.image = nil
+        }
+
+        // Foreground icon (SF Symbol) and style
+        let config = UIImage.SymbolConfiguration(pointSize: 28, weight: .regular, scale: .medium)
         cell.categoryImage.preferredSymbolConfiguration = config
         cell.categoryImage.image = UIImage(systemName: item.systemImageName)
-        cell.categoryImage.tintColor = categoryIconTintColor
+        // Light icon tint for readability on photos
+        cell.categoryImage.tintColor = UIColor(white: 1.0, alpha: 0.92)
 
+        // Label styling for readability
+        cell.categoryLabel.textColor = .white
+        cell.categoryLabel.font = .systemFont(ofSize: 14, weight: .semibold)
+        // Optional subtle text shadow to help over bright areas
+        cell.categoryLabel.shadowColor = UIColor.black.withAlphaComponent(0.35)
+        cell.categoryLabel.shadowOffset = CGSize(width: 0, height: 1)
+
+        // Rounded corners on the tile
         cell.contentView.layer.cornerRadius = 12
         cell.contentView.layer.masksToBounds = true
-        cell.contentView.backgroundColor = UIColor.systemGroupedBackground
+
+        // Clear background so the asset shows cleanly
+        cell.contentView.backgroundColor = .clear
+        cell.backgroundColor = .clear
 
         return cell
     }
@@ -833,20 +922,29 @@ private extension HomeViewController {
         // Desired container size; adjust if you need bigger/smaller circles
         let containerSide: CGFloat = 44
 
+        // Brand teal color used across the app
+        let brandTeal = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0)
+
         func ensureContainer(for button: UIButton, existing: inout UIView?) {
             if let container = existing {
+                // Keep existing wrapper but make it a solid circle (no glass)
+                container.backgroundColor = brandTeal
                 container.layer.cornerRadius = containerSide / 2
+                container.layer.masksToBounds = false
+                // Optional soft shadow to lift the circle slightly
+                container.layer.shadowOpacity = 0.12
+                container.layer.shadowRadius = 5
+                container.layer.shadowOffset = CGSize(width: 0, height: 3)
+                // Do NOT call applyGlassEffect anymore.
+                // Don’t force icon tint here; you will set it in Interface Builder.
                 return
             }
 
             let wrapper = UIView()
             wrapper.translatesAutoresizingMaskIntoConstraints = false
-            view.addSubview(wrapper)
 
             if let superview = button.superview {
                 superview.addSubview(wrapper)
-                wrapper.translatesAutoresizingMaskIntoConstraints = false
-
                 NSLayoutConstraint.activate([
                     wrapper.widthAnchor.constraint(equalToConstant: containerSide),
                     wrapper.heightAnchor.constraint(equalToConstant: containerSide),
@@ -854,6 +952,8 @@ private extension HomeViewController {
                     wrapper.centerYAnchor.constraint(equalTo: button.centerYAnchor)
                 ])
             } else {
+                // Fallback: add to self.view if button has no superview (shouldn’t happen normally)
+                view.addSubview(wrapper)
                 NSLayoutConstraint.activate([
                     wrapper.widthAnchor.constraint(equalToConstant: containerSide),
                     wrapper.heightAnchor.constraint(equalToConstant: containerSide),
@@ -862,18 +962,15 @@ private extension HomeViewController {
                 ])
             }
 
+            // Solid circle (no glass)
+            wrapper.backgroundColor = brandTeal
             wrapper.layer.cornerRadius = containerSide / 2
             wrapper.layer.masksToBounds = false
-            wrapper.applyGlassEffect(
-                cornerRadius: containerSide / 2,
-                style: .systemThickMaterial,
-                addsVibrancy: false,
-                showsShadow: true,
-                borderAlpha: 0.25,
-                tintColorOverride: .white,
-                tintAlpha: 0.18
-            )
+            wrapper.layer.shadowOpacity = 0.12
+            wrapper.layer.shadowRadius = 5
+            wrapper.layer.shadowOffset = CGSize(width: 0, height: 3)
 
+            // Move the button inside the wrapper and center it
             button.translatesAutoresizingMaskIntoConstraints = false
             wrapper.addSubview(button)
             NSLayoutConstraint.activate([
@@ -881,9 +978,10 @@ private extension HomeViewController {
                 button.centerYAnchor.constraint(equalTo: wrapper.centerYAnchor)
             ])
 
+            // Keep button visuals neutral so you can set icon color in IB
             button.backgroundColor = .clear
-            button.setTitleColor(.label, for: .normal)
             button.contentEdgeInsets = .zero
+            // Do NOT force template/white here; you’ll set Tint in the Inspector.
 
             existing = wrapper
         }
@@ -957,7 +1055,7 @@ private extension HomeViewController {
         rateLabel?.text = priceText
         // Make rate fully black and regular
         rateLabel?.textColor = .label
-        rateLabel?.font = .systemFont(ofSize: 16, weight: .regular)
+        rateLabel?.font = .systemFont(ofSize: 14, weight: .regular)
 
         ratingLabel?.text = "★ 4.5 (23)"
         distanceLabel?.text = "2.3 km"
@@ -1002,14 +1100,6 @@ private extension HomeViewController {
             }
         }.resume()
     }
-}
-
-// Simple cache for featured images
-private final class FeaturedImageCache {
-    static let shared = FeaturedImageCache()
-    private let cache = NSCache<NSString, UIImage>()
-    func image(forKey key: String) -> UIImage? { cache.object(forKey: key as NSString) }
-    func setImage(_ img: UIImage, forKey key: String) { cache.setObject(img, forKey: key as NSString) }
 }
 
 // MARK: - Listing section (empty vs manage)
@@ -1138,7 +1228,7 @@ private extension HomeViewController {
         // Title
         let title = UILabel()
         title.text = "Manage Listings"
-        title.font = .systemFont(ofSize: 20, weight: .bold) // title3-ish
+        title.font = .systemFont(ofSize: 18, weight: .bold) // title3-ish
         title.textColor = .label
 
         // Horizontal actions row
@@ -1203,7 +1293,7 @@ private extension HomeViewController {
             return wrapper
         }
 
-        let add = roundAction(symbol: "plus", title: "List Item", selector: #selector(manageListItemTapped))
+        let add = roundAction(symbol: "plus", title: "Add Item", selector: #selector(manageListItemTapped))
         let req = roundAction(symbol: "tray.and.arrow.down", title: "Requests", selector: #selector(manageRequestsTapped))
         let man = roundAction(symbol: "rectangle.stack", title: "Manage", selector: #selector(manageManageTapped))
 
