@@ -10,6 +10,11 @@ import UIKit
 class WriteReviewViewController: UIViewController {
 
     @IBOutlet var StarView: UIView!
+    // Make reviewTextView optional; ensure to connect this outlet in Interface Builder to prevent runtime nil issues
+    @IBOutlet weak var reviewTextView: UITextView?
+    
+    var onReviewSubmitted: ((_ rating: Int, _ text: String) -> Void)?
+    
     private var starButtons: [UIButton] = []
     private var currentRating: Int = 0 { // 0...5
         didSet { updateStarAppearance() }
@@ -20,6 +25,7 @@ class WriteReviewViewController: UIViewController {
         view.backgroundColor = .systemGroupedBackground
         StarView.backgroundColor = .systemGroupedBackground
         configureStars()
+        reviewTextView?.text = ""
     }
     
     private func configureStars() {
@@ -113,6 +119,9 @@ class WriteReviewViewController: UIViewController {
     }
     
     @IBAction func didTapSubmit(_ sender: UIButton) {
+        let rating = currentRating
+        let text = reviewTextView?.text ?? ""
+        onReviewSubmitted?(rating, text)
         if let nav = navigationController {
             nav.popViewController(animated: true)
         } else {
@@ -120,3 +129,4 @@ class WriteReviewViewController: UIViewController {
         }
     }
 }
+

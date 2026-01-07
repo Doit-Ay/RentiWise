@@ -12,6 +12,16 @@ import Supabase
 final class ProductViewController: UIViewController, UIScrollViewDelegate {
     // The selected item to display. Set this before presenting/pushing.
     var selectedItem: Item?
+    
+    struct Review {
+        let userInitials: String
+        let username: String
+        let comment: String
+        let rating: Int
+        let date: Date
+    }
+    
+    private var reviews: [Review] = []
 
     // MARK: - Display mode
     enum DisplayMode {
@@ -66,9 +76,10 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
     // Optional height constraint outlet (connect only if not using UIStackView)
     @IBOutlet weak var depositCardHeight: NSLayoutConstraint?
 
-    // MARK: - Reviews section (two sample reviews)
+    // MARK: - Reviews section (superseded by reviewsStack)
     @IBOutlet weak var reviewsTitleLabel: UILabel?
 
+    // Old review outlets (superseded by reviewsStack)
     // Review 1 (Alex K.)
     @IBOutlet weak var review1Card: UIView?
     @IBOutlet weak var review1DateLabel: UILabel?
@@ -92,6 +103,10 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
     @IBOutlet weak var r2AvatarImageView: UIImageView?
     @IBOutlet weak var r2NameLabel: UILabel?
     @IBOutlet weak var r2CommentLabel: UILabel?
+
+    // New reviews stack replacing the above
+    // Make sure to connect this outlet in Interface Builder to avoid it being nil
+    @IBOutlet weak var reviewsStack: UIStackView?
 
     // MARK: - Action buttons
     @IBOutlet weak var writeAReview: UIButton?
@@ -159,21 +174,13 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         ownerAvatarImageView?.layer.cornerRadius = (ownerAvatarImageView?.bounds.height ?? 0) / 2
         ownerAvatarImageView?.layer.masksToBounds = true
         
-
         Task { [weak self] in
             await self?.fetchAndDisplayOwner(ownerId: item.owner_id)
         }
 
-        // Reviews section title and placeholders
+        // Reviews section title
         reviewsTitleLabel?.text = "Reviews"
-        r1NameLabel?.text = "Alex K."
-        r1CommentLabel?.text = "Great quality and easy pickup."
-        setStars([r1star1, r1star2, r1star3, r1star4, r1star5], to: unifiedRating)
-        r2NameLabel?.text = "Emily R."
-        r2CommentLabel?.text = "Worked as expected. Would rent again."
-        setStars([r2star1, r2star2, r2star3, r2star4, r2star5], to: unifiedRating)
-
-        // Apply display mode visibility and collapse gaps if needed
+        
         applyDisplayMode()
         setupNavBarForDisplayMode()
     }
@@ -294,6 +301,49 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
             }
         }
         return results
+    }
+
+    // Fetch current user's display name and initials from Supabase auth/users table
+    private func fetchCurrentUserNameAndInitials() async -> (String, String) {
+        do {
+            let client = SupabaseManager.shared.client
+            // Get current session/user
+            if let session = try? await client.auth.session, let userId = session.user.id.uuidString as String? {
+                // Try to read full_name from users table
+                do {
+                    let response = try await client
+                        .from("users")
+                        .select("full_name")
+                        .eq("id", value: userId)
+                        .single()
+                        .execute()
+
+                    if let data = response.data as? Data {
+                        struct NameDTO: Decodable { let full_name: String? }
+                        if let dto = try? JSONDecoder().decode(NameDTO.self, from: data) {
+                            let name = (dto.full_name?.isEmpty == false) ? dto.full_name! : "Me"
+                            let initials = self.makeInitials(from: name)
+                            return (name, initials)
+                        }
+                    }
+                } catch {
+                    // Fall through to use email or default
+                }
+
+                // Fallback to email username or generic
+                let emailName: String
+                if let email = session.user.email, let namePart = email.split(separator: "@").first, !namePart.isEmpty {
+                    emailName = String(namePart)
+                } else {
+                    emailName = "Me"
+                }
+                let initials = self.makeInitials(from: emailName)
+                return (emailName, initials)
+            }
+        }
+        // No session: default placeholders
+        let fallback = "Me"
+        return (fallback, self.makeInitials(from: fallback))
     }
 
     private func confirmDeleteAndDelete() async {
@@ -614,6 +664,14 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
 
         // Ensure description wraps to allow dynamic card height
         descriptionBodyLabel?.numberOfLines = 0
+        
+        // Setup initial reviews for demo
+        reviews = [
+            Review(userInitials: "AK", username: "Alex K.", comment: "Great quality and easy pickup.", rating: 5, date: Date(timeIntervalSinceNow: -86400)),
+            Review(userInitials: "ER", username: "Emily R.", comment: "Worked as expected. Would rent again.", rating: 4, date: Date(timeIntervalSinceNow: -3600*48))
+        ]
+        
+        refreshReviewsUI()
 
         if selectedItem != nil { bindItemToUI() }
     }
@@ -621,6 +679,31 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         if selectedItem != nil { bindItemToUI() }
+    }
+    
+    private func refreshReviewsUI() {
+        // Show up to 2 reviews
+        let reviewCards = [
+            (card: review1Card, dateLabel: review1DateLabel, nameLabel: r1NameLabel, commentLabel: r1CommentLabel, stars: [r1star1, r1star2, r1star3, r1star4, r1star5], avatarImageView: r1AvatarImageView),
+            (card: review2Card, dateLabel: review2DateLabel, nameLabel: r2NameLabel, commentLabel: r2CommentLabel, stars: [r2star1, r2star2, r2star3, r2star4, r2star5], avatarImageView: r2AvatarImageView)
+        ]
+        let df = DateFormatter()
+        df.dateStyle = .medium
+        for (i, cardData) in reviewCards.enumerated() {
+            if i < reviews.count {
+                let review = reviews[i]
+                cardData.card?.isHidden = false
+                cardData.dateLabel?.text = df.string(from: review.date)
+                cardData.nameLabel?.text = review.username
+                cardData.commentLabel?.text = review.comment
+                setStars(cardData.stars, to: Double(review.rating))
+                // Set initials/avatar
+                let initials = review.userInitials
+                cardData.avatarImageView?.image = drawInitialsImage(initials: initials, size: CGSize(width: 36, height: 36))
+            } else {
+                cardData.card?.isHidden = true
+            }
+        }
     }
 
     @IBAction func didTapRentNow(_ sender: UIButton) {
@@ -661,10 +744,28 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
             reviewVC = WriteReviewViewController()
         }
 
-
-
         reviewVC.title = "Write a Review"
         reviewVC.hidesBottomBarWhenPushed = true
+
+        // Add completion handler to receive new review and update UI
+        reviewVC.onReviewSubmitted = { [weak self] rating, text in
+            guard let self = self else { return }
+            Task { [weak self] in
+                guard let self = self else { return }
+                let (displayName, initials) = await self.fetchCurrentUserNameAndInitials()
+                let newReview = Review(
+                    userInitials: initials,
+                    username: displayName,
+                    comment: text,
+                    rating: rating,
+                    date: Date()
+                )
+                await MainActor.run {
+                    self.reviews.insert(newReview, at: 0)
+                    self.refreshReviewsUI()
+                }
+            }
+        }
 
         if let nav = self.navigationController {
             nav.setNavigationBarHidden(false, animated: true)
@@ -676,4 +777,3 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         }
     }
 }
-
