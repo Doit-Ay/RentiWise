@@ -2,6 +2,7 @@
 // RentiWise
 
 import UIKit
+import Supabase
 
 final class CategoryItemCell: UITableViewCell {
 
@@ -12,6 +13,8 @@ final class CategoryItemCell: UITableViewCell {
     @IBOutlet weak var itemRating: UILabel!
     @IBOutlet weak var itemViewCard: UIView?
     @IBOutlet weak var rentbutton: UIButton!
+    
+    @IBOutlet weak var ownerName: UILabel!
     @IBAction func rentButtonTapped(_ sender: UIButton) {
     }
     
@@ -23,6 +26,9 @@ final class CategoryItemCell: UITableViewCell {
 
     // Card appearance
     private let cornerRadius: CGFloat = 20
+
+    // Track the owner id this cell is currently representing to guard against reuse
+    private var currentOwnerId: String?
 
     override func awakeFromNib() {
         super.awakeFromNib()
@@ -118,6 +124,13 @@ final class CategoryItemCell: UITableViewCell {
     override func prepareForReuse() {
         super.prepareForReuse()
         itemimage?.image = nil
+        itemName?.text = nil
+        itemRate?.text = nil
+        itemDistance?.text = nil
+        itemRating?.attributedText = nil
+        itemRating?.text = nil
+        ownerName?.text = nil
+        currentOwnerId = nil
     }
 
     func configure(with item: Item, currencyFormatter: NumberFormatter) {
@@ -127,8 +140,14 @@ final class CategoryItemCell: UITableViewCell {
         let currency = currencyFormatter.string(from: amount) ?? "\(item.price_per_day)"
         itemRate?.text = "\(currency) / day"
 
-        itemDistance?.text = ""
-        itemRating?.text = ""
+        // Defaults so nothing looks blank if backend doesn’t provide values
+        applyYellowStarRating(valueText: "3.5")           // ★ in yellow, number in black
+        itemDistance?.text = "1.5 km"                     // distance text in black (label)
+
+        // Owner name: set placeholder, then resolve asynchronously with cache
+        ownerName?.text = "Owner"
+        currentOwnerId = item.owner_id
+        resolveOwnerName(for: item.owner_id)
 
         // If your bucket is private and you need signed URLs:
         if let path = item.images.first {
@@ -160,6 +179,101 @@ final class CategoryItemCell: UITableViewCell {
             itemimage?.image = nil
         }
         */
+    }
+
+    // MARK: - Owner name resolution (self-contained, cached)
+    private static var ownerNameCache = NSCache<NSString, NSString>()
+
+    private func resolveOwnerName(for ownerId: String) {
+        // 1) Cache hit
+        if let cached = CategoryItemCell.ownerNameCache.object(forKey: ownerId as NSString) {
+            if currentOwnerId == ownerId {
+                ownerName?.text = cached as String
+            }
+            return
+        }
+
+        // 2) Fetch from public.users; if missing, fallback to profiles
+        Task { [weak self] in
+            guard let self else { return }
+            struct NameDTO: Decodable { let full_name: String? }
+
+            // Helper to apply name with cache and reuse guard
+            func apply(name: String) async {
+                CategoryItemCell.ownerNameCache.setObject(name as NSString, forKey: ownerId as NSString)
+                await MainActor.run { [weak self] in
+                    if self?.currentOwnerId == ownerId {
+                        self?.ownerName?.text = name
+                    }
+                }
+            }
+
+            // First try public.users
+            do {
+                let response = try await SupabaseManager.shared.client
+                    .from("users")
+                    .select("full_name")
+                    .eq("id", value: ownerId)
+                    .single()
+                    .execute()
+
+                if let data = response.data as? Data {
+                    let dto = try JSONDecoder().decode(NameDTO.self, from: data)
+                    let name = (dto.full_name?.isEmpty == false) ? dto.full_name! : "Owner"
+                    await apply(name: name)
+                    return
+                }
+            } catch {
+                // continue to fallback
+            }
+
+            // Fallback: profiles table (used elsewhere in your app)
+            do {
+                let response = try await SupabaseManager.shared.client
+                    .from("profiles")
+                    .select("full_name")
+                    .eq("id", value: ownerId)
+                    .single()
+                    .execute()
+
+                if let data = response.data as? Data {
+                    let dto = try JSONDecoder().decode(NameDTO.self, from: data)
+                    let name = (dto.full_name?.isEmpty == false) ? dto.full_name! : "Owner"
+                    await apply(name: name)
+                    return
+                }
+            } catch {
+                // final fallback below
+            }
+
+            // Final fallback
+            await MainActor.run { [weak self] in
+                if self?.currentOwnerId == ownerId {
+                    self?.ownerName?.text = "Owner"
+                }
+            }
+        }
+    }
+
+    // MARK: - Rating styling helper
+    private func applyYellowStarRating(valueText: String) {
+        // Build "★ 3.5" with yellow star and black number
+        let star = "★"
+        let space = " "
+        let full = star + space + valueText
+
+        let attr = NSMutableAttributedString(string: full, attributes: [
+            .foregroundColor: UIColor.label,
+            .font: itemRating?.font ?? UIFont.systemFont(ofSize: 14, weight: .regular)
+        ])
+
+        // Color only the star in systemYellow
+        if let starRange = full.range(of: star) {
+            let nsRange = NSRange(starRange, in: full)
+            attr.addAttribute(.foregroundColor, value: UIColor.systemYellow, range: nsRange)
+        }
+
+        itemRating?.attributedText = attr
     }
 }
 

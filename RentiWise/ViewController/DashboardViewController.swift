@@ -15,15 +15,14 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
 
     // MARK: - Actions
     @IBAction func Additem(_ sender: UIButton) {
-        // Start Add Item flow with login check (same as Home)
+        print("[Dashboard] Additem tapped") // DEBUG
         Task { [weak self] in
             guard let self else { return }
             do {
-                // Require login
                 let session = try await SupabaseManager.shared.client.auth.session
-                _ = session.user // throws if not logged in
+                _ = session.user
 
-                // Logged in -> start Add Item flow
+                print("[Dashboard] Logged in, pushing AddItemFirst") // DEBUG
                 let vc = AddItemFirstViewController(nibName: "AddItemFirstViewController", bundle: nil)
                 vc.title = "Add item"
                 vc.hidesBottomBarWhenPushed = true
@@ -32,17 +31,16 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
                     nav.setNavigationBarHidden(false, animated: true)
                     nav.pushViewController(vc, animated: true)
                 } else {
-                    // Fallback: present inside a nav so title/back appear
                     let nav = UINavigationController(rootViewController: vc)
                     nav.modalPresentationStyle = .fullScreen
                     self.present(nav, animated: true)
                 }
             } catch {
-                // Not logged in -> open Sign In
+                print("[Dashboard] Not logged in, pushing SignIn") // DEBUG
                 let nibName = "SignViewController"
                 let signInVC: SignViewController
                 if Bundle.main.path(forResource: nibName, ofType: "nib") != nil ||
-                    Bundle.main.path(forResource: nibName, ofType: "xib") != nil {
+                    Bundle.main.path(forResource: "SignViewController", ofType: "xib") != nil {
                     signInVC = SignViewController(nibName: nibName, bundle: nil)
                 } else {
                     signInVC = SignViewController(service: SignInService())
@@ -63,28 +61,14 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
         }
     }
 
-    @IBAction func filterTapped(_ sender: UIButton) {
-    }
-
     // MARK: - Private UI
     private let tableView = UITableView(frame: .zero, style: .plain)
 
-    // MARK: - Data
-    private enum Segment: Int {
-        case listing = 0
-        case history = 1
-    }
-
-    // Allows callers (e.g., Home “Manage”) to preselect a segment.
+    private enum Segment: Int { case listing = 0, history = 1 }
     var initialSegment: Int?
 
     private var items: [Item] = []
-    private struct HistoryRow {
-        let title: String
-        let ratePerDay: Double
-        let borrowerName: String
-        let imagePath: String?
-    }
+    private struct HistoryRow { let title: String; let ratePerDay: Double; let borrowerName: String; let imagePath: String? }
     private var historyRows: [HistoryRow] = []
 
     private let currencyFormatter: NumberFormatter = {
@@ -101,30 +85,61 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
 
         title = "My Listings"
 
+        setupNavigationFilterButton()
         setupTable()
         setupSegmentedControl()
 
-        // If a caller provided an initial segment, honor it; else default to Listing.
+        // Hide any storyboard buttons inside the content container (old ones)
+        hideLegacyStoryboardButtonsIfAny()
+
         if let initial = initialSegment, initial >= 0, initial < roleSegmented.numberOfSegments {
             roleSegmented.selectedSegmentIndex = initial
         } else if roleSegmented.selectedSegmentIndex == UISegmentedControl.noSegment {
             roleSegmented.selectedSegmentIndex = Segment.listing.rawValue
         }
 
-        // Load initial data
         reloadForSelectedSegment()
     }
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        // Ensure nav bar is visible and tab bar is hidden when pushed
         hidesBottomBarWhenPushed = true
         navigationController?.setNavigationBarHidden(false, animated: animated)
     }
 
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+    }
+
+    // MARK: - Navigation bar button (Filter on right)
+    private func setupNavigationFilterButton() {
+        let symbol = UIImage(systemName: "line.3.horizontal.decrease.circle")
+        let item = UIBarButtonItem(image: symbol, style: .plain, target: self, action: #selector(didTapNavFilter))
+        item.tintColor = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0) // brand teal
+        navigationItem.rightBarButtonItem = item
+    }
+
+    @objc private func didTapNavFilter() {
+        presentFilterSheet()
+    }
+
+    private func presentFilterSheet() {
+        let ac = UIAlertController(title: "Filter", message: "Select a filter option", preferredStyle: .actionSheet)
+        ac.addAction(UIAlertAction(title: "Active", style: .default, handler: { _ in
+            // TODO: implement filter
+        }))
+        ac.addAction(UIAlertAction(title: "Inactive", style: .default, handler: { _ in
+            // TODO: implement filter
+        }))
+        ac.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        if let pop = ac.popoverPresentationController {
+            pop.barButtonItem = navigationItem.rightBarButtonItem
+        }
+        present(ac, animated: true)
+    }
+
     // MARK: - Setup
     private func setupSegmentedControl() {
-        // Ensure we listen to value changes
         roleSegmented.addTarget(self, action: #selector(segmentedChanged(_:)), for: .valueChanged)
     }
 
@@ -132,15 +147,12 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
         tableView.translatesAutoresizingMaskIntoConstraints = false
         tableView.dataSource = self
         tableView.delegate = self
-
-        // Visuals
         tableView.separatorStyle = .none
         tableView.backgroundColor = .systemGroupedBackground
         tableView.contentInset = UIEdgeInsets(top: 16, left: 0, bottom: 16, right: 0)
         tableView.rowHeight = 140
         tableView.estimatedRowHeight = 140
 
-        // Register cells
         tableView.register(UINib(nibName: "LenderListingTableViewCell", bundle: nil), forCellReuseIdentifier: "Listing")
         tableView.register(UINib(nibName: "LenderHistoryTableViewCell", bundle: nil), forCellReuseIdentifier: "History")
 
@@ -153,23 +165,27 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
         ])
     }
 
-    // MARK: - Segment handling
-    // IB was wired to roleChanged: previously; keep this shim so old connections don’t crash.
-    @objc func roleChanged(_ sender: UISegmentedControl) {
-        segmentedChanged(sender)
+    // MARK: - Hide any legacy storyboard buttons in the container
+    private func hideLegacyStoryboardButtonsIfAny() {
+        // If there are any UIButton subviews in contentContainer, hide them so they don't interfere.
+        for sub in contentContainer.subviews {
+            if let button = sub as? UIButton {
+                button.isHidden = true
+                button.isUserInteractionEnabled = false
+                print("[Dashboard] Hiding legacy storyboard button: \(button)")
+            }
+        }
     }
 
-    @objc private func segmentedChanged(_ sender: UISegmentedControl) {
-        reloadForSelectedSegment()
-    }
+    // MARK: - Segment handling
+    @objc func roleChanged(_ sender: UISegmentedControl) { segmentedChanged(sender) }
+    @objc private func segmentedChanged(_ sender: UISegmentedControl) { reloadForSelectedSegment() }
 
     private func reloadForSelectedSegment() {
         guard let segment = Segment(rawValue: roleSegmented.selectedSegmentIndex) else { return }
         switch segment {
-        case .listing:
-            Task { await loadMyItems() }
-        case .history:
-            Task { await loadHistoryPlaceholder() }
+        case .listing: Task { await loadMyItems() }
+        case .history: Task { await loadHistoryPlaceholder() }
         }
     }
 
@@ -191,7 +207,6 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
     }
 
     private func loadMyItems() async {
-        // Require login; if not logged in, show empty
         guard let userId = await SupabaseManager.shared.currentUserId() else {
             await MainActor.run {
                 self.items = []
@@ -202,7 +217,6 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
         }
 
         do {
-            // Newest first
             let response = try await SupabaseManager.shared.client
                 .from("items")
                 .select()
@@ -228,7 +242,6 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
         }
     }
 
-    // Placeholder: mimic LenderView’s simple history example (newest active item)
     private func loadHistoryPlaceholder() async {
         await MainActor.run {
             self.historyRows = []
@@ -265,7 +278,6 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
                     self.loadEmptyStateIfNeeded()
                 }
             } else {
-                // No items -> keep empty state (“No History Yet”)
                 await MainActor.run {
                     self.historyRows = []
                     self.tableView.reloadData()
@@ -273,7 +285,6 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
                 }
             }
         } catch {
-            // Keep empty on error
             await MainActor.run {
                 self.historyRows = []
                 self.tableView.reloadData()
@@ -283,31 +294,21 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
     }
 }
 
-// MARK: - UITableViewDataSource
 extension DashboardViewController: UITableViewDataSource {
     func numberOfSections(in tableView: UITableView) -> Int {
-        if Segment(rawValue: roleSegmented.selectedSegmentIndex) == .listing {
-            return items.count
-        } else {
-            return historyRows.count
-        }
+        if Segment(rawValue: roleSegmented.selectedSegmentIndex) == .listing { return items.count }
+        else { return historyRows.count }
     }
-
-    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        // One card per section for spacing via footers
-        return 1
-    }
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { 1 }
 
     func tableView(_ tableView: UITableView,
                    cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-
         if Segment(rawValue: roleSegmented.selectedSegmentIndex) == .listing {
             guard let cell = tableView.dequeueReusableCell(withIdentifier: "Listing", for: indexPath) as? LenderListingTableViewCell else {
                 return UITableViewCell()
             }
             let item = items[indexPath.section]
             cell.configure(with: item, currencyFormatter: currencyFormatter)
-            // Transparent cell so grouped background shows
             cell.backgroundColor = .clear
             cell.contentView.backgroundColor = .clear
             return cell
@@ -335,8 +336,6 @@ extension DashboardViewController: UITableViewDataSource {
                 cell.itemImageHistory?.tintColor = .secondaryLabel
                 cell.itemImageHistory?.contentMode = .scaleAspectFit
             }
-
-            // Transparent to show grouped background
             cell.backgroundColor = .clear
             cell.contentView.backgroundColor = .clear
             return cell
@@ -344,22 +343,47 @@ extension DashboardViewController: UITableViewDataSource {
     }
 }
 
-// MARK: - UITableViewDelegate
 extension DashboardViewController: UITableViewDelegate {
-    // Spacing between cards via section footers
-    func tableView(_ tableView: UITableView, heightForFooterInSection section: Int) -> CGFloat {
-        16
-    }
-
+    func tableView(_ tableView: UITableView, heightForFooterInSection section: Int) -> CGFloat { 16 }
     func tableView(_ tableView: UITableView, viewForFooterInSection section: Int) -> UIView? {
-        let v = UIView()
-        v.backgroundColor = .clear
-        return v
+        let v = UIView(); v.backgroundColor = .clear; return v
     }
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        tableView.deselectRow(at: indexPath, animated: true)
-        // Optional: handle selection for listing/history rows here
+        defer { tableView.deselectRow(at: indexPath, animated: true) }
+
+        guard let segment = Segment(rawValue: roleSegmented.selectedSegmentIndex) else { return }
+
+        switch segment {
+        case .listing:
+            // Open own item detail with 3-dots menu (Edit/Delete)
+            let item = items[indexPath.section]
+
+            let nibName = "ProductViewController"
+            let productVC: ProductViewController
+            if Bundle.main.path(forResource: nibName, ofType: "nib") != nil ||
+                Bundle.main.path(forResource: nibName, ofType: "xib") != nil {
+                productVC = ProductViewController(nibName: nibName, bundle: nil)
+            } else {
+                productVC = ProductViewController()
+            }
+            productVC.configure(with: item)
+            productVC.displayMode = .ownItem
+            productVC.title = "Product Detail"
+            productVC.hidesBottomBarWhenPushed = true
+
+            if let nav = self.navigationController {
+                nav.setNavigationBarHidden(false, animated: true)
+                nav.pushViewController(productVC, animated: true)
+            } else {
+                let nav = UINavigationController(rootViewController: productVC)
+                nav.modalPresentationStyle = .fullScreen
+                present(nav, animated: true)
+            }
+
+        case .history:
+            // For now, no detail on history row tap
+            break
+        }
     }
 }
-

@@ -11,7 +11,6 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
 
     @IBOutlet weak var collectionView: UICollectionView!
 
-    @IBOutlet var ProfileImageTapped: UIImageView!
     @IBOutlet var productclicked: UIView!
     // Single image outlet only
     @IBOutlet weak var homeimage: UIImageView!
@@ -221,7 +220,6 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
         // Make the surrounding area transparent so only tiles are visible
         collectionView.backgroundColor = .clear
 
-        setupProfileImageTap()
         setupProductTap()
         setupFeaturedItemTaps()
 
@@ -267,9 +265,9 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
         // Gradient temporarily disabled
         // setupHomeBackgroundGradient()
 
-        // Apply glass effect to featured cards (once; helper reuses existing blur view by tag)
+        // Apply glass to featured cards (once; helper reuses existing blur view by tag)
         applyGlassToFeaturedCardsIfNeeded()
-        // Apply glass effect to Rent buttons
+        // Apply glass to Rent buttons
         applyGlassToRentButtonsIfNeeded()
         // Apply round glass containers to notification and add-item buttons
         applyGlassToHeaderRoundButtons()
@@ -323,17 +321,6 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
         CATransaction.commit()
     }
     */
-
-    // MARK: - Profile tap setup
-    private func setupProfileImageTap() {
-        guard let imageView = ProfileImageTapped else { return }
-        imageView.isUserInteractionEnabled = true
-        let tap = UITapGestureRecognizer(target: self, action: #selector(didTapProfileImage))
-        imageView.addGestureRecognizer(tap)
-        imageView.isAccessibilityElement = true
-        imageView.accessibilityLabel = "Profile"
-        imageView.accessibilityTraits = .button
-    }
 
     // MARK: - Product tap setup
     private func setupProductTap() {
@@ -414,51 +401,6 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
         }
     }
 
-    @objc private func didTapProfileImage() {
-        // Check Supabase auth session to decide where to route
-        Task { [weak self] in
-            guard let self else { return }
-            do {
-                let session = try await SupabaseManager.shared.client.auth.session
-                _ = session.user
-                // Logged in -> open Profile
-                let profileVC = ProfileMainViewController()
-                profileVC.title = ""
-                profileVC.hidesBottomBarWhenPushed = true
-                if let nav = self.navigationController {
-                    nav.setNavigationBarHidden(false, animated: true)
-                    nav.pushViewController(profileVC, animated: true)
-                } else {
-                    let nav = UINavigationController(rootViewController: profileVC)
-                    nav.modalPresentationStyle = .fullScreen
-                    self.present(nav, animated: true)
-                }
-            } catch {
-                // Not logged in -> open Sign In, and tag context to route to Profile after success
-                let nibName = "SignViewController"
-                let signInVC: SignViewController
-                if Bundle.main.path(forResource: nibName, ofType: "nib") != nil ||
-                    Bundle.main.path(forResource: nibName, ofType: "xib") != nil {
-                    signInVC = SignViewController(nibName: nibName, bundle: nil)
-                } else {
-                    signInVC = SignViewController(service: SignInService())
-                }
-                signInVC.routeContext = .fromProfile
-                signInVC.title = "Sign in"
-                signInVC.hidesBottomBarWhenPushed = true
-
-                if let nav = self.navigationController {
-                    nav.setNavigationBarHidden(false, animated: true)
-                    nav.pushViewController(signInVC, animated: true)
-                } else {
-                    let nav = UINavigationController(rootViewController: signInVC)
-                    nav.modalPresentationStyle = .fullScreen
-                    self.present(nav, animated: true)
-                }
-            }
-        }
-    }
-
     @objc private func didTapProductView() {
         // Instantiate ProductViewController from XIB if available, else fallback to code
         let nibName = "ProductViewController"
@@ -500,7 +442,7 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
                                                          trailing: interItemSpacing / 2)
 
             // Height for the row (tweak as needed)
-            let rowHeight: CGFloat = 105
+            let rowHeight: CGFloat = 100
 
             // Group spans the full width so that 4 items are visible per "page"
             let groupSize = NSCollectionLayoutSize(
@@ -644,7 +586,7 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
     @IBOutlet weak var item1Distance: UILabel!
     @IBOutlet weak var item1CardView: UIView!
     @IBOutlet weak var rentButton1: UIButton!
-    
+    @IBOutlet weak var item1owner: UILabel!
     
     // featured item 2
     @IBOutlet weak var item2Image: UIImageView!
@@ -654,6 +596,7 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
     @IBOutlet weak var item2Distance: UILabel!
     @IBOutlet weak var item2CardView: UIView!
     @IBOutlet weak var rentButton2: UIButton!
+    @IBOutlet weak var item2owner: UILabel!
     
     // featured item 3
     @IBOutlet weak var item3Image: UIImageView!
@@ -663,6 +606,7 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
     @IBOutlet weak var item3Distance: UILabel!
     @IBOutlet weak var item3CardView: UIView!
     @IBOutlet weak var rentButton3: UIButton!
+    @IBOutlet weak var item3owner: UILabel!
     
     // featured item 4
     @IBOutlet weak var item4Image: UIImageView!
@@ -672,6 +616,7 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
     @IBOutlet weak var item4Distance: UILabel!
     @IBOutlet weak var item4CardView: UIView!
     @IBOutlet weak var rentButton4: UIButton!
+    @IBOutlet weak var item4owner: UILabel!
 }
 
 // MARK: - Location handling (sheet + persistence)
@@ -1030,11 +975,16 @@ private extension HomeViewController {
             (item4Image, item4Name, item4Rate, item4Rating, item4Distance)
         ]
 
+        // Clear owner labels upfront
+        [item1owner, item2owner, item3owner, item4owner].forEach { $0?.text = nil }
+
         for i in 0..<slots.count {
             let slot = slots[i]
             if i < items.count {
                 let item = items[i]
                 configureFeaturedSlot(slot, with: item)
+                // Resolve and set owner name for this slot
+                resolveOwnerName(for: item.owner_id, slotIndex: i)
             } else {
                 clearFeaturedSlot(slot)
             }
@@ -1099,6 +1049,66 @@ private extension HomeViewController {
                 imageView.clipsToBounds = true
             }
         }.resume()
+    }
+
+    // MARK: - Owner name resolution for featured items
+
+    // Capitalize only the first letter of the provided string, leaving the rest unchanged.
+    func capitalizingFirstLetter(_ s: String) -> String {
+        guard let first = s.unicodeScalars.first else { return s }
+        let firstChar = String(first).uppercased()
+        let remainder = String(s.unicodeScalars.dropFirst())
+        return firstChar + remainder
+    }
+
+    // Fetch owner display name using users.full_name, fallback to profiles.full_name
+    func resolveOwnerName(for ownerId: String, slotIndex: Int) {
+        Task {
+            struct NameDTO: Decodable { let full_name: String? }
+
+            // Try users table first
+            if let usersName = try? await fetchName(from: "users", ownerId: ownerId) {
+                await applyOwnerName(usersName, toSlotAt: slotIndex)
+                return
+            }
+
+            // Fallback to profiles table
+            if let profilesName = try? await fetchName(from: "profiles", ownerId: ownerId) {
+                await applyOwnerName(profilesName, toSlotAt: slotIndex)
+                return
+            }
+
+            // Final fallback: "Owner"
+            await applyOwnerName("Owner", toSlotAt: slotIndex)
+        }
+    }
+
+    private func fetchName(from table: String, ownerId: String) async throws -> String? {
+        struct NameDTO: Decodable { let full_name: String? }
+        let response = try await SupabaseManager.shared.client
+            .from(table)
+            .select("full_name")
+            .eq("id", value: ownerId)
+            .single()
+            .execute()
+
+        if let data = response.data as? Data {
+            let dto = try JSONDecoder().decode(NameDTO.self, from: data)
+            if let n = dto.full_name, !n.isEmpty { return n }
+        }
+        return nil
+    }
+
+    @MainActor
+    private func applyOwnerName(_ name: String, toSlotAt index: Int) {
+        let display = capitalizingFirstLetter(name)
+        switch index {
+        case 0: item1owner?.text = display
+        case 1: item2owner?.text = display
+        case 2: item3owner?.text = display
+        case 3: item4owner?.text = display
+        default: break
+        }
     }
 }
 
@@ -1215,20 +1225,10 @@ private extension HomeViewController {
         card.layer.borderWidth = 0
         card.layer.borderColor = nil
 
-        // Add a thin teal rim near the edges (center remains white/clear)
-        let brandTeal = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0)
-        DispatchQueue.main.async {
-            self.addTealRim(to: card,
-                            color: brandTeal,
-                            cornerRadius: 16,
-                            thickness: 6,
-                            opacity: 0.18)
-        }
-
         // Title
         let title = UILabel()
         title.text = "Manage Listings"
-        title.font = .systemFont(ofSize: 18, weight: .bold) // title3-ish
+        title.font = .systemFont(ofSize: 18, weight: .semibold) // updated to system semibold 18
         title.textColor = .label
 
         // Horizontal actions row
