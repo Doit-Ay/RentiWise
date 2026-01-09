@@ -4,6 +4,10 @@
 import UIKit
 import Supabase
 
+protocol CategoryItemCellDelegate: AnyObject {
+    func categoryItemCellDidTapRent(_ cell: CategoryItemCell)
+}
+
 final class CategoryItemCell: UITableViewCell {
 
     @IBOutlet weak var itemimage: UIImageView!
@@ -15,7 +19,11 @@ final class CategoryItemCell: UITableViewCell {
     @IBOutlet weak var rentbutton: UIButton!
     
     @IBOutlet weak var ownerName: UILabel!
+
+    weak var delegate: CategoryItemCellDelegate?
+
     @IBAction func rentButtonTapped(_ sender: UIButton) {
+        delegate?.categoryItemCellDidTapRent(self)
     }
     
     // Controls the spacing around the card; use 8 top/bottom so two cells make 16 between cards

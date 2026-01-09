@@ -671,6 +671,9 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
             Review(userInitials: "ER", username: "Emily R.", comment: "Worked as expected. Would rent again.", rating: 4, date: Date(timeIntervalSinceNow: -3600*48))
         ]
         
+        r1CommentLabel?.numberOfLines = 0
+        r2CommentLabel?.numberOfLines = 0
+        
         refreshReviewsUI()
 
         if selectedItem != nil { bindItemToUI() }
@@ -693,17 +696,28 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
             if i < reviews.count {
                 let review = reviews[i]
                 cardData.card?.isHidden = false
+                cardData.nameLabel?.isHidden = false
+                cardData.commentLabel?.isHidden = false
+                cardData.commentLabel?.numberOfLines = 0
                 cardData.dateLabel?.text = df.string(from: review.date)
                 cardData.nameLabel?.text = review.username
                 cardData.commentLabel?.text = review.comment
+                cardData.commentLabel?.textColor = .label
+                cardData.commentLabel?.preferredMaxLayoutWidth = cardData.commentLabel?.bounds.width ?? 0
                 setStars(cardData.stars, to: Double(review.rating))
                 // Set initials/avatar
                 let initials = review.userInitials
                 cardData.avatarImageView?.image = drawInitialsImage(initials: initials, size: CGSize(width: 36, height: 36))
+                cardData.card?.setNeedsLayout()
+                cardData.card?.layoutIfNeeded()
             } else {
                 cardData.card?.isHidden = true
+                cardData.nameLabel?.isHidden = true
+                cardData.commentLabel?.isHidden = true
             }
         }
+        self.view.setNeedsLayout()
+        self.view.layoutIfNeeded()
     }
 
     @IBAction func didTapRentNow(_ sender: UIButton) {
@@ -777,3 +791,4 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         }
     }
 }
+

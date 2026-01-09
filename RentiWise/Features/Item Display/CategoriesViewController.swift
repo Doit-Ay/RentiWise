@@ -133,6 +133,7 @@ extension CategoriesViewController: UITableViewDataSource {
 
         let item = items[indexPath.row]
         cell.configure(with: item, currencyFormatter: currencyFormatter)
+        cell.delegate = self
 
         // No accessory arrow
         cell.accessoryType = .none
@@ -179,6 +180,34 @@ extension CategoriesViewController: UITableViewDelegate {
     }
 
     // No footers; spacing is handled by internal insets inside the cell
+}
+
+extension CategoriesViewController: CategoryItemCellDelegate {
+    func categoryItemCellDidTapRent(_ cell: CategoryItemCell) {
+        guard let indexPath = tableViewForItem.indexPath(for: cell) else { return }
+        let item = items[indexPath.row]
+
+        let nibName = "RequestViewController"
+        let requestVC: RequestViewController
+        if Bundle.main.path(forResource: nibName, ofType: "nib") != nil ||
+            Bundle.main.path(forResource: nibName, ofType: "xib") != nil {
+            requestVC = RequestViewController(nibName: nibName, bundle: nil)
+        } else {
+            requestVC = RequestViewController()
+        }
+        requestVC.configure(with: item)
+        requestVC.title = "Request"
+        requestVC.hidesBottomBarWhenPushed = true
+
+        if let nav = navigationController {
+            nav.setNavigationBarHidden(false, animated: true)
+            nav.pushViewController(requestVC, animated: true)
+        } else {
+            let nav = UINavigationController(rootViewController: requestVC)
+            nav.modalPresentationStyle = .fullScreen
+            present(nav, animated: true)
+        }
+    }
 }
 
 // MARK: - Lightweight remote image loading
