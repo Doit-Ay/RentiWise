@@ -37,18 +37,6 @@ class BorrowerTableViewCell: UITableViewCell {
         borrowerItemImage?.clipsToBounds = true
         borrowerItemImage?.layer.cornerRadius = 12
 
-        borrowerItemName?.font = .systemFont(ofSize: 17, weight: .semibold)
-        borrowerItemName?.textColor = .label
-
-        borrowerItemRate?.font = .systemFont(ofSize: 16, weight: .regular)
-        borrowerItemRate?.textColor = .label
-
-        borrowerItemDistance?.font = .systemFont(ofSize: 14, weight: .regular)
-        borrowerItemDistance?.textColor = .secondaryLabel
-
-        borrowerItemOwnerName?.font = .systemFont(ofSize: 14, weight: .regular)
-        borrowerItemOwnerName?.textColor = .secondaryLabel
-
         installCardBackgroundIfNeeded()
     }
 

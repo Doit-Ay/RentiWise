@@ -9,6 +9,30 @@ import UIKit
 
 class BookingApprovalViewController: UIViewController {
 
+    enum RequestStatus {
+        case approved
+        case pending
+    }
+
+    // Current request status; set this from outside as needed
+    var status: RequestStatus = .pending {
+        didSet { updateStatusUI() }
+    }
+
+    // Booking dates passed from RequestViewController
+    private var startDate: Date?
+    private var pickupTime: Date?
+    private var returnTime: Date?
+
+    // Tracks if a payment has been completed
+    private var hasCompletedPayment: Bool = false
+
+    // Connect this to the Proceed to Payment button in Interface Builder
+    
+    @IBOutlet weak var getdirectionbutton: UIButton!
+    @IBOutlet weak var copybutton: UIButton!
+    @IBOutlet weak var paymentButton: UIButton!
+
     @IBOutlet weak var outerblueCard: UIView!
     @IBOutlet weak var inneRCard: UIView!
     @IBOutlet weak var imageprod: UIImageView!
@@ -38,6 +62,78 @@ class BookingApprovalViewController: UIViewController {
     @IBOutlet weak var code5Label: UILabel!
     @IBOutlet weak var c6view: UIView!
     @IBOutlet weak var code6Label: UILabel!
+    @IBOutlet weak var price: UIView!
+    @IBOutlet weak var addresscard: UIView!
+    @IBOutlet weak var summary: UIView!
+    
+    @IBOutlet weak var dateperiodLabel: UILabel!
+    @IBOutlet weak var picktimeLabel: UILabel!
+    @IBOutlet weak var numLabeldays: UILabel!
+    @IBOutlet weak var ownNameLabel: UILabel!
+    @IBOutlet weak var rateOwnerlabel: UILabel!
+    @IBOutlet weak var addressLabel: UILabel!
+    @IBOutlet weak var fee: UILabel!
+    @IBOutlet weak var seclabel: UILabel!
+    @IBOutlet weak var totamountlabel: UILabel!
+    @IBOutlet weak var tickimage: UIImageView!
+    @IBOutlet weak var approvedpending: UILabel!
+    
+    // Constraint from statusView's bottom to viewCodeUIView's top
+    @IBOutlet weak var statusToViewCodeTop: NSLayoutConstraint!
+    
+    private func updateDatesUI() {
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateStyle = .medium
+        dateFormatter.timeStyle = .none
+
+        let timeFormatter = DateFormatter()
+        timeFormatter.dateStyle = .none
+        timeFormatter.timeStyle = .short
+
+        if let s = startDate {
+            dateperiodLabel.text = dateFormatter.string(from: s)
+        }
+        if let p = pickupTime {
+            picktimeLabel.text = timeFormatter.string(from: p)
+        }
+        if let s = startDate, let r = returnTime {
+            // Calculate number of days between dates (ceil to include partial days)
+            let days = max(1, Int(ceil(r.timeIntervalSince(s) / 86400.0)))
+            numLabeldays.text = "\(days) Days"
+        }
+    }
+    
+    // Generates and assigns a unique 6-digit numeric code to the code labels
+    func generateNewCode() {
+        let digits = (0..<6).map { _ in String(Int.random(in: 0...9)) }
+        let labels: [UILabel?] = [code1Label, code2Label, code3Label, code4Label, code5Label, code6Label]
+        for (i, lbl) in labels.enumerated() {
+            lbl?.text = digits[i]
+        }
+    }
+
+    private func updateStatusUI() {
+        switch status {
+        case .approved:
+            approvedpending.text = "Approved"
+            tickimage.image = UIImage(systemName: "checkmark.circle")
+            tickimage.tintColor = .systemGreen
+        case .pending:
+            approvedpending.text = "Pending"
+            tickimage.image = UIImage(systemName: "questionmark.circle.dashed")
+            // If payment hasn't been done, keep the icon white; else use orange to indicate attention
+            tickimage.tintColor = .white
+        }
+        tickimage.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 22, weight: .regular)
+        tickimage.contentMode = .scaleAspectFit
+
+        // Show/hide View Code container depending on payment status
+        viewCodeUIView.isHidden = !hasCompletedPayment
+        
+        // Adjust spacing: 16 when hidden, default (e.g., 0) when shown
+        statusToViewCodeTop?.constant = viewCodeUIView.isHidden ? 16 : 0
+        view.layoutIfNeeded()
+    }
 
     // Height constraint for the new "View Code" container
     @IBOutlet weak var viewCodeHeight: NSLayoutConstraint!
@@ -90,6 +186,73 @@ class BookingApprovalViewController: UIViewController {
         codeStackCollapseConstraint?.isActive = true
         viewCodeHeight?.constant = collapsedViewCodeHeight
         viewCodeHeight?.isActive = true
+
+        // Hide code view until payment completes
+        viewCodeUIView.isHidden = true
+
+        // Style payment button with black border
+        paymentButton.layer.borderColor = UIColor.black.cgColor
+        paymentButton.layer.borderWidth = 1
+        paymentButton.layer.cornerRadius = 8
+        paymentButton.layer.masksToBounds = true
+
+        // Style get direction and copy buttons with black border
+        getdirectionbutton.layer.borderColor = UIColor.black.cgColor
+        getdirectionbutton.layer.borderWidth = 1
+        getdirectionbutton.layer.cornerRadius = 8
+        getdirectionbutton.layer.masksToBounds = true
+
+        copybutton.layer.borderColor = UIColor.black.cgColor
+        copybutton.layer.borderWidth = 1
+        copybutton.layer.cornerRadius = 8
+        copybutton.layer.masksToBounds = true
+
+        // When code view is hidden, keep 16pt spacing below statusView
+        statusToViewCodeTop?.constant = 16
+
+        // Initialize status UI based on current status
+        updateStatusUI()
+
+        // Generate a fresh 6-digit code for the current product selection
+        generateNewCode()
+        
+        // Apply glass effect to key cards
+        
+
+        // Reflect any pre-configured dates
+        updateDatesUI()
+    }
+
+    func setStatus(_ newStatus: RequestStatus) {
+        self.status = newStatus
+    }
+
+    // Configure booking dates/times from RequestViewController
+    func configureDates(startDate: Date?, pickupTime: Date?, returnTime: Date?) {
+        self.startDate = startDate
+        self.pickupTime = pickupTime
+        self.returnTime = returnTime
+        updateDatesUI()
+    }
+
+    // Call this when a new product is selected from My Rentals to refresh the pickup code
+    func didSelectNewProductFromMyRentals() {
+        hasCompletedPayment = false
+        viewCodeUIView.isHidden = true
+        statusToViewCodeTop?.constant = 16
+        paymentButton.setTitle("Proceed to Payment", for: .normal)
+        generateNewCode()
+        updateStatusUI()
+    }
+
+    @IBAction func acceptbuttontapped(_ sender: UIButton) {
+        // Mark as approved; UI updates automatically via didSet
+        setStatus(.approved)
+    }
+
+    @IBAction func denybuttontapped(_ sender: UIButton) {
+        // Keep pending if denied (adjust if you want a separate denied state)
+        setStatus(.pending)
     }
 
     @IBAction func ViewHideCodeButton(_ sender: UIButton) {
@@ -130,4 +293,54 @@ class BookingApprovalViewController: UIViewController {
     @IBAction func openChatButtonTapped(_ sender: Any) {
         openChat()
     }
+    
+    @IBAction func paymentbuttontapped(_ sender: UIButton) {
+        let actionSheet = UIAlertController(title: "Choose Payment Method", message: nil, preferredStyle: .actionSheet)
+
+        let handlePaymentSelection: (String) -> Void = { method in
+            // TODO: Integrate real payment flow for \(method)
+            self.hasCompletedPayment = true
+            // Reveal code view after successful payment
+            self.viewCodeUIView.isHidden = false
+            self.statusToViewCodeTop?.constant = 0
+            // Update payment button title
+            sender.setTitle("Payment Successful", for: .normal)
+            // Refresh status UI to update icon tinting if needed
+            self.updateStatusUI()
+        }
+
+        let applePay = UIAlertAction(title: "Apple Pay", style: .default) { _ in
+            handlePaymentSelection("Apple Pay")
+        }
+        let cardPay = UIAlertAction(title: "Credit/Debit Card", style: .default) { _ in
+            handlePaymentSelection("Card")
+        }
+        let cash = UIAlertAction(title: "Cash on Delivery", style: .default) { _ in
+            handlePaymentSelection("Cash on Delivery")
+        }
+        let cancel = UIAlertAction(title: "Cancel", style: .cancel, handler: nil)
+
+        actionSheet.addAction(applePay)
+        actionSheet.addAction(cardPay)
+        actionSheet.addAction(cash)
+        actionSheet.addAction(cancel)
+
+        if let popover = actionSheet.popoverPresentationController {
+            popover.sourceView = sender
+            popover.sourceRect = sender.bounds
+        }
+
+        present(actionSheet, animated: true)
+    }
 }
+
+// MARK: - Glass effect fallback
+extension UIView {
+    @objc func applyGlassEffectSimple() {
+        // If you already have a real implementation elsewhere, remove this fallback.
+        self.backgroundColor = self.backgroundColor?.withAlphaComponent(0.5) ?? UIColor.systemBackground.withAlphaComponent(0.3)
+        self.layer.cornerRadius = self.layer.cornerRadius == 0 ? 16 : self.layer.cornerRadius
+        self.layer.masksToBounds = true
+    }
+}
+
