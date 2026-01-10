@@ -40,12 +40,12 @@ class RequestViewController: UIViewController {
     @IBOutlet weak var ownerName: UILabel!
     @IBOutlet weak var ownerImage: UIImageView!
     @IBOutlet weak var priceBreakdownCard: UIView!
-    @IBOutlet weak var priceLabel: UILabel!
-    @IBOutlet weak var rentalfee: UILabel!
+    // Removed priceLabel
+    @IBOutlet weak var rentalfee: UILabel!     // Static title: "Rental fee"
     @IBOutlet weak var totalamount: UILabel!
-    @IBOutlet weak var secRate: UILabel!
-    @IBOutlet weak var fee: UILabel!
-    @IBOutlet weak var security: UILabel!
+    @IBOutlet weak var secRate: UILabel!       // Shows security deposit amount
+    @IBOutlet weak var fee: UILabel!           // Shows computed rental fee amount
+    @IBOutlet weak var security: UILabel!      // Static title: "Security deposit"
     @IBOutlet weak var total: UILabel!
     @IBOutlet weak var boookingcontainer: UIView?
     @IBOutlet weak var dateTitleLabel: UILabel!
@@ -102,8 +102,6 @@ class RequestViewController: UIViewController {
     
     // Keep pickers' text color teal once user has made a selection; black only before selection
     private func updatePickerTextColors() {
-        // We consider a picker "selected" if user interacted at least once.
-        // UIDatePicker doesn't expose that directly, so we persist it via associated flags.
         let black: UIColor = .label
         dateLabel.setValue(hasSelectedDate ? selectedTeal : black, forKey: "textColor")
         pickuptimeLabel.setValue(hasSelectedPickupTime ? selectedTeal : black, forKey: "textColor")
@@ -145,8 +143,6 @@ class RequestViewController: UIViewController {
         pickuptimeLabel.setValue(UIColor.label, forKey: "textColor")
         returntimeLabel.setValue(UIColor.label, forKey: "textColor")
 
-        // Removed rentalUnit = .day
-        
         updateRentalButtons()
         boookingcontainer?.isHidden = true
 
@@ -177,7 +173,6 @@ class RequestViewController: UIViewController {
 
     // Applies the glass effect to all the primary card views.
     private func applyGlassToCards() {
-        // Uses the simple glass extension defined in Glass.swift
         itemcardview?.applyGlassEffectSimple()
         rentalTypeCard?.applyGlassEffectSimple()
         selectdateandtimeCard?.applyGlassEffectSimple()
@@ -233,76 +228,142 @@ class RequestViewController: UIViewController {
     private func populateUI() async {
         guard let item = item else { return }
         applyItemToUI()
-        await fetchAndDisplayOwnerProfile(for: item.owner_id)
+        await fetchAndDisplayOwnerUnified(for: item.owner_id)
         securityDeposit = item.deposit_amount
         recalculatePricing()
     }
     
-    private func fetchAndDisplayOwnerProfile(for ownerId: String) async {
-        struct ProfileDTO: Decodable {
+    // Unify with ProductViewController behavior: try users first, then profiles; handle http vs storage; fallback to initials.
+    private func urlForAvatarPath(_ path: String) -> URL? {
+        if path.lowercased().hasPrefix("http://") || path.lowercased().hasPrefix("https://") {
+            return URL(string: path)
+        } else {
+            return StorageURLBuilder.publicFileURL(for: path)
+        }
+    }
+    
+    private func makeInitials(from name: String) -> String {
+        let parts = name.split(separator: " ").filter { !$0.isEmpty }
+        let first = parts.first?.first.map { String($0).uppercased() } ?? ""
+        let last = parts.dropFirst().last?.first.map { String($0).uppercased() } ?? ""
+        let combined = first + last
+        return combined.isEmpty ? "?" : combined
+    }
+    
+    private func drawInitialsImage(initials: String, size: CGSize) -> UIImage? {
+        let rect = CGRect(origin: .zero, size: size)
+        let renderer = UIGraphicsImageRenderer(size: size, format: UIGraphicsImageRendererFormat.default())
+        return renderer.image { _ in
+            UIColor.systemGray5.setFill()
+            UIBezierPath(ovalIn: rect).fill()
+
+            let attributes: [NSAttributedString.Key: Any] = [
+                .font: UIFont.systemFont(ofSize: min(size.width, size.height) * 0.4, weight: .semibold),
+                .foregroundColor: UIColor.label
+            ]
+            let textSize = (initials as NSString).size(withAttributes: attributes)
+            let textRect = CGRect(
+                x: (size.width - textSize.width) / 2.0,
+                y: (size.height - textSize.height) / 2.0,
+                width: textSize.width,
+                height: textSize.height
+            )
+            (initials as NSString).draw(in: textRect, withAttributes: attributes)
+        }
+    }
+    
+    private func renderOwnerInitials(fullName: String) {
+        let initials = makeInitials(from: fullName)
+        let size = ownerImage?.bounds.size == .zero || ownerImage?.bounds.size == nil ? CGSize(width: 60, height: 60) : ownerImage!.bounds.size
+        ownerImage?.image = drawInitialsImage(initials: initials, size: size)
+        ownerImage?.contentMode = .scaleAspectFill
+        ownerImage?.clipsToBounds = true
+        ownerImage?.backgroundColor = .clear
+    }
+    
+    private func renderOwner(fullName: String?, avatarURLString: String?) {
+        let name = (fullName?.isEmpty == false) ? fullName! : "Owner"
+        ownerName?.text = name
+        if ownerRating?.text?.isEmpty ?? true {
+            ownerRating?.text = "★ 4.5"
+            productRatingLabel?.text = "★ 4.5"
+        }
+        if ownerDist?.text?.isEmpty ?? true {
+            ownerDist?.text = "2.3 km"
+            productDistance?.text = "2.3 km"
+        }
+        
+        if let avatar = avatarURLString, !avatar.isEmpty, let url = urlForAvatarPath(avatar) {
+            UIImageView.rw_loadImage(from: url) { [weak self] img in
+                DispatchQueue.main.async {
+                    if let img = img {
+                        self?.ownerImage?.image = img
+                        self?.ownerImage?.contentMode = .scaleAspectFill
+                        self?.ownerImage?.clipsToBounds = true
+                    } else {
+                        self?.renderOwnerInitials(fullName: name)
+                    }
+                }
+            }
+        } else {
+            renderOwnerInitials(fullName: name)
+        }
+    }
+    
+    private func fetchAndDisplayOwnerUnified(for ownerId: String) async {
+        struct UsersDTO: Decodable {
+            let id: String
             let full_name: String?
+            let profile_photo_url: String?
+        }
+        struct ProfilesDTO: Decodable {
+            let full_name: String?
+            let avatar_url: String?
             let rating: Double?
             let distance_km: Double?
-            let avatar_url: String?
         }
         
         do {
             let client = SupabaseManager.shared.client
-            let response = try await client
-                .from("profiles")
-                .select("full_name,rating,distance_km,avatar_url")
+            if let usersData = try? await client
+                .from("users")
+                .select("id,full_name,profile_photo_url")
                 .eq("id", value: ownerId)
                 .single()
                 .execute()
-            
-            guard let data = response.data as? Data else {
-                setDefaultOwnerInfo()
+                .data as? Data {
+                
+                let dto = try JSONDecoder().decode(UsersDTO.self, from: usersData)
+                renderOwner(fullName: dto.full_name, avatarURLString: dto.profile_photo_url)
                 return
             }
             
-            let dto = try JSONDecoder().decode(ProfileDTO.self, from: data)
-            let fullName = dto.full_name ?? "Owner"
-            let rating = dto.rating ?? 4.7
-            let distanceKm = dto.distance_km ?? 2.3
-            let avatarUrlString = dto.avatar_url
-            
-            DispatchQueue.main.async { [weak self] in
-                self?.ownerName.text = fullName
-                self?.ownerRating.text = String(format: "%.1f", rating)
-                self?.ownerDist.text = String(format: "%.1f km", distanceKm)
-                self?.productRatingLabel?.text = String(format: "★ %.1f", rating)
-                self?.productDistance?.text = String(format: "%.1f km", distanceKm)
+            if let profilesData = try? await client
+                .from("profiles")
+                .select("full_name,avatar_url,rating,distance_km")
+                .eq("id", value: ownerId)
+                .single()
+                .execute()
+                .data as? Data {
+                
+                let dto = try JSONDecoder().decode(ProfilesDTO.self, from: profilesData)
+                renderOwner(fullName: dto.full_name, avatarURLString: dto.avatar_url)
+                
+                if let r = dto.rating {
+                    ownerRating?.text = String(format: "★ %.1f", r)
+                    productRatingLabel?.text = String(format: "★ %.1f", r)
+                }
+                if let d = dto.distance_km {
+                    let distText = String(format: "%.1f km", d)
+                    ownerDist?.text = distText
+                    productDistance?.text = distText
+                }
+                return
             }
             
-            if let avatarUrlString = avatarUrlString,
-               let avatarUrl = URL(string: avatarUrlString) {
-                UIImageView.rw_loadImage(from: avatarUrl) { [weak self] img in
-                    DispatchQueue.main.async {
-                        self?.ownerImage.image = img
-                        self?.ownerImage.contentMode = .scaleAspectFill
-                        self?.ownerImage.clipsToBounds = true
-                    }
-                }
-            } else {
-                DispatchQueue.main.async { [weak self] in
-                    self?.ownerImage.image = UIImage(systemName: "person.circle")
-                    self?.ownerImage.tintColor = .secondaryLabel
-                    self?.ownerImage.contentMode = .scaleAspectFit
-                }
-            }
+            renderOwner(fullName: "Owner", avatarURLString: nil)
         } catch {
-            setDefaultOwnerInfo()
-        }
-    }
-    
-    private func setDefaultOwnerInfo() {
-        DispatchQueue.main.async { [weak self] in
-            self?.ownerName.text = "Owner"
-            self?.ownerRating.text = "4.7"
-            self?.ownerDist.text = "2.3 km"
-            self?.ownerImage.image = UIImage(systemName: "person.circle")
-            self?.ownerImage.tintColor = .secondaryLabel
-            self?.ownerImage.contentMode = .scaleAspectFit
+            renderOwner(fullName: "Owner", avatarURLString: nil)
         }
     }
     
@@ -317,7 +378,6 @@ class RequestViewController: UIViewController {
         dayButton.layer.borderWidth = 1
         dayButton.layer.masksToBounds = true
         
-        // Default state: no selection (both normal)
         hourButton.layer.borderColor = normalColor
         dayButton.layer.borderColor = normalColor
         hourButton.backgroundColor = .white
@@ -325,7 +385,7 @@ class RequestViewController: UIViewController {
         
         switch rentalUnit {
         case .none:
-            break // keep both normal
+            break
         case .hour:
             hourButton.layer.borderColor = selectedColor
         case .day:
@@ -372,7 +432,7 @@ class RequestViewController: UIViewController {
     
     @IBAction func didTapHour(_ sender: UIButton) {
         if rentalUnit == .hour {
-            rentalUnit = .none // deselect
+            rentalUnit = .none
             boookingcontainer?.isHidden = true
             label1sum?.text = ""
             label2sum?.text = ""
@@ -385,7 +445,7 @@ class RequestViewController: UIViewController {
     
     @IBAction func didTapDay(_ sender: UIButton) {
         if rentalUnit == .day {
-            rentalUnit = .none // deselect
+            rentalUnit = .none
             boookingcontainer?.isHidden = true
             label1sum?.text = ""
             label2sum?.text = ""
@@ -401,7 +461,6 @@ class RequestViewController: UIViewController {
     }
     
     @IBAction func requestRentalclicked(_ sender: UIButton) {
-        // Treat this as the "Request" action and use the existing flow.
         Task { await sendRequest() }
     }
     
@@ -422,16 +481,20 @@ class RequestViewController: UIViewController {
     private func recalculatePricing() {
         if rentalUnit == .none { return }
         guard let item = item else { return }
+        
         let pricePerDay = item.price_per_day
         let pricePerHour = (pricePerDay / 8).rounded(toPlaces: 2)
+        
         let calendar = Calendar.current
         let baseDate = dateLabel.date
+        
         var startComponents = calendar.dateComponents([.year, .month, .day], from: baseDate)
         let pickupTimeComponents = calendar.dateComponents([.hour, .minute, .second], from: pickuptimeLabel.date)
         startComponents.hour = pickupTimeComponents.hour
         startComponents.minute = pickupTimeComponents.minute
         startComponents.second = pickupTimeComponents.second
         guard let startDateTime = calendar.date(from: startComponents) else { return }
+        
         let endDateTime: Date
         switch rentalUnit {
         case .hour:
@@ -452,20 +515,23 @@ class RequestViewController: UIViewController {
         case .none:
             return
         }
+        
         var actualEndDateTime = endDateTime
         if actualEndDateTime < startDateTime {
             actualEndDateTime = calendar.date(byAdding: .day, value: 1, to: actualEndDateTime) ?? actualEndDateTime
         }
+        
         let duration = actualEndDateTime.timeIntervalSince(startDateTime)
-        var rentalFee: Double = 0
+        var rentalFeeAmount: Double = 0
         var quantityDescription1 = ""
         var quantityDescription2 = ""
         var quantityDescription3 = ""
+        
         switch rentalUnit {
         case .hour:
             let hoursRaw = max(0, duration / 3600)
             let quantityHours = max(1, Int(ceil(hoursRaw)))
-            rentalFee = Double(quantityHours) * pricePerHour
+            rentalFeeAmount = Double(quantityHours) * pricePerHour
             quantityDescription1 = dateFormatter.string(from: baseDate)
             quantityDescription2 = "\(timeFormatter.string(from: startDateTime)) - \(timeFormatter.string(from: actualEndDateTime))"
             if hoursRaw > 0 {
@@ -480,7 +546,7 @@ class RequestViewController: UIViewController {
         case .day:
             let daysRaw = max(0, duration / 86400)
             let quantityDays = max(1, Int(ceil(daysRaw)))
-            rentalFee = Double(quantityDays) * pricePerDay
+            rentalFeeAmount = Double(quantityDays) * pricePerDay
             let startStr = dateFormatter.string(from: baseDate)
             let endStr = dateFormatter.string(from: actualEndDateTime)
             quantityDescription1 = "\(startStr) - \(endStr)"
@@ -489,13 +555,21 @@ class RequestViewController: UIViewController {
         case .none:
             return
         }
-        let serviceFee = rentalFee * serviceFeeRate
-        let total = rentalFee + serviceFee + securityDeposit
-        rentalfee.text = currencyFormatter.string(from: NSNumber(value: rentalFee))
-        fee.text = currencyFormatter.string(from: NSNumber(value: serviceFee))
-        security.text = currencyFormatter.string(from: NSNumber(value: securityDeposit))
+        
+        // If you do not want to include service fee in totalamount, exclude it here.
+        // Keep computing it if you’ll use it elsewhere visually.
+        let serviceFee = rentalFeeAmount * serviceFeeRate
+        let total = rentalFeeAmount /* + serviceFee */ + securityDeposit
+        
+        // Assign amounts to the correct labels per your requirement:
+        // - fee: shows the computed rental fee amount
+        // - secRate: shows the security deposit amount
+        // - rentalfee and security are static titles; do not change them here
+        fee.text = currencyFormatter.string(from: NSNumber(value: rentalFeeAmount))
+        secRate.text = currencyFormatter.string(from: NSNumber(value: securityDeposit))
+        
         totalamount.text = currencyFormatter.string(from: NSNumber(value: total))
-        priceLabel.text = currencyFormatter.string(from: NSNumber(value: total))
+        
         label1sum?.text = quantityDescription1
         label2sum?.text = quantityDescription2
         label3sum?.text = quantityDescription3
@@ -512,7 +586,6 @@ class RequestViewController: UIViewController {
             return
         }
         
-        // Prepare booking values according to your public.requests schema
         let calendar = Calendar.current
         let pickupDate = dateLabel.date
         let pickupTime = pickuptimeLabel.date
@@ -527,7 +600,6 @@ class RequestViewController: UIViewController {
                 endDate = calendar.date(byAdding: .day, value: 1, to: endDate) ?? endDate
             }
         case .hour:
-            // If return time earlier than pickup time -> assume next day
             var endComponents = calendar.dateComponents([.year, .month, .day], from: pickupDate)
             let returnTimeComponents = calendar.dateComponents([.hour, .minute, .second], from: returnPicker)
             endComponents.hour = returnTimeComponents.hour
@@ -536,12 +608,10 @@ class RequestViewController: UIViewController {
             let endDateTime = calendar.date(from: endComponents) ?? returnPicker
             endDate = endDateTime < pickupTime ? calendar.date(byAdding: .day, value: 1, to: pickupDate) ?? pickupDate : pickupDate
         case .none:
-            // If no rental unit selected, do not proceed
             presentAlert(title: "Error", message: "Please select a rental duration before sending a request.")
             return
         }
         
-        // Format for SQL
         let sqlDateFormatter = DateFormatter()
         sqlDateFormatter.calendar = Calendar(identifier: .gregorian)
         sqlDateFormatter.timeZone = TimeZone(secondsFromGMT: 0)
@@ -563,9 +633,10 @@ class RequestViewController: UIViewController {
             let message: String?
         }
         
+        guard let itemObj = self.item else { return }
         let row = NewRequestRow(
-            item_id: item.id,
-            owner_id: item.owner_id,
+            item_id: itemObj.id,
+            owner_id: itemObj.owner_id,
             borrower_id: currentUserId,
             start_date: sqlDateFormatter.string(from: startOfPickup),
             end_date: sqlDateFormatter.string(from: endDate),
@@ -580,7 +651,6 @@ class RequestViewController: UIViewController {
                 .insert(row)
                 .execute()
             
-            // Prepare values for RequestSentPage
             var startComponents = calendar.dateComponents([.year, .month, .day], from: pickupDate)
             let pickupTimeComponents = calendar.dateComponents([.hour, .minute, .second], from: pickupTime)
             startComponents.hour = pickupTimeComponents.hour
@@ -607,10 +677,10 @@ class RequestViewController: UIViewController {
                 bookingEndDate = endDate
             }
             
-            NotificationCenter.default.post(name: Notification.Name("rentalRequestCreated"), object: nil, userInfo: ["item_id": item.id])
+            NotificationCenter.default.post(name: Notification.Name("rentalRequestCreated"), object: nil, userInfo: ["item_id": itemObj.id])
             
             let sentVC = RequestSentPageViewController(nibName: "RequestSentPageViewController", bundle: .main)
-            sentVC.configure(with: item)
+            sentVC.configure(with: itemObj)
             sentVC.bookingStartDate = bookingStartDate
             sentVC.bookingEndDate = bookingEndDate
             sentVC.pickupTime = pickupTime
@@ -643,20 +713,19 @@ class RequestViewController: UIViewController {
     private func applyItemToUI() {
         guard isViewLoaded, let currentItem = self.item else { return }
         productTitleLabel?.text = currentItem.title
+        
         let pricePerHour = (currentItem.price_per_day / 8).rounded(toPlaces: 2)
         switch rentalUnit {
         case .day:
             let amount = NSNumber(value: currentItem.price_per_day)
             productRateLabel?.text = (currencyFormatter.string(from: amount) ?? "₹\(currentItem.price_per_day)") + " / day"
-            secRate?.text = productRateLabel?.text
         case .hour:
             let amount = NSNumber(value: pricePerHour)
             productRateLabel?.text = (currencyFormatter.string(from: amount) ?? "₹\(pricePerHour)") + " / hour"
-            secRate?.text = productRateLabel?.text
         case .none:
             productRateLabel?.text = nil
-            secRate?.text = nil
         }
+        
         if let firstImagePath = currentItem.images.first, let url = StorageURLBuilder.publicFileURL(for: firstImagePath) {
             UIImageView.rw_loadImage(from: url) { [weak self] img in
                 DispatchQueue.main.async {
@@ -670,6 +739,7 @@ class RequestViewController: UIViewController {
             productThumbImageView?.tintColor = .secondaryLabel
             productThumbImageView?.contentMode = .scaleAspectFit
         }
+        
         if rentalUnit != .none { recalculatePricing() }
     }
     
@@ -685,7 +755,6 @@ fileprivate extension Double {
         return Darwin.round(self * divisor) / divisor
     }
 }
-
 
 extension UIColor {
     convenience init(hex: String) {
@@ -714,4 +783,3 @@ extension UIImageView {
         task.resume()
     }
 }
-

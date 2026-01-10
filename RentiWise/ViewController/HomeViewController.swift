@@ -126,7 +126,7 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
                 let nibName = "SignViewController"
                 let signInVC: SignViewController
                 if Bundle.main.path(forResource: nibName, ofType: "nib") != nil ||
-                    Bundle.main.path(forResource: nibName, ofType: "xib") != nil {
+                    Bundle.main.path(forResource: "SignViewController", ofType: "xib") != nil {
                     signInVC = SignViewController(nibName: nibName, bundle: nil)
                 } else {
                     signInVC = SignViewController(service: SignInService())
@@ -196,6 +196,9 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
     // MARK: - Trending collection (new)
     private var trendingCollectionView: UICollectionView?
     private var trendingItems: [Item] = []
+
+    // Owner name cache for trending items (no longer used for UI, but kept if needed later)
+    private var ownerNameCache: [String: String] = [:]
 
     // MARK: - Search helper
     private var homeSearch: HomeSearchController?
@@ -294,33 +297,6 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
         super.viewSafeAreaInsetsDidChange()
         collectionView.setCollectionViewLayout(generateHorizontalFourUpLayout(), animated: false)
     }
-
-    // MARK: - Gradient background for homeBG (disabled)
-    /*
-    private func setupHomeBackgroundGradient() {
-        guard let container = homeBG else { return }
-
-        if homeGradientLayer == nil {
-            let g = CAGradientLayer()
-
-            let topTint = UIColor(red: 196/255, green: 223/255, blue: 229/255, alpha: 1.0)
-            let grouped = UIColor.systemGroupedBackground
-
-            g.colors = [topTint.cgColor, grouped.cgColor, grouped.cgColor]
-            g.locations = [0.0, 0.22, 1.0] as [NSNumber]
-            g.startPoint = CGPoint(x: 0.5, y: 0.0)
-            g.endPoint   = CGPoint(x: 0.5, y: 1.0)
-
-            homeGradientLayer = g
-            container.layer.insertSublayer(g, at: 0)
-        }
-
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        homeGradientLayer?.frame = container.bounds
-        CATransaction.commit()
-    }
-    */
 
     // MARK: - Product tap setup
     private func setupProductTap() {
@@ -508,6 +484,7 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
             cell.onRentTapped = { [weak self] in
                 self?.openItem(item)
             }
+            // Owner name removed from trending UI; no resolution or setting here.
             return cell
         }
 
@@ -1007,7 +984,9 @@ private extension HomeViewController {
         rateLabel?.textColor = .label
         rateLabel?.font = .systemFont(ofSize: 14, weight: .regular)
 
-        ratingLabel?.text = "★ 4.5 (23)"
+        // Rating: yellow star + normal text
+        ratingLabel?.attributedText = makeYellowStarRatingText(valueText: "4.5", reviewsText: "(23)")
+
         distanceLabel?.text = "2.3 km"
 
         if let path = item.images.first, let url = StorageURLBuilder.publicFileURL(for: path) {
@@ -1025,6 +1004,7 @@ private extension HomeViewController {
         imageView?.image = nil
         nameLabel?.text = nil
         rateLabel?.text = nil
+        ratingLabel?.attributedText = nil
         ratingLabel?.text = nil
         distanceLabel?.text = nil
     }
@@ -1109,6 +1089,26 @@ private extension HomeViewController {
         case 3: item4owner?.text = display
         default: break
         }
+    }
+
+    // MARK: - Rating attributed text helper (yellow star)
+    private func makeYellowStarRatingText(valueText: String, reviewsText: String? = "(23)") -> NSAttributedString {
+        // Build "★ 4.5 (23)" with only the star in systemYellow
+        let star = "★"
+        let space = " "
+        let rest = [valueText, reviewsText].compactMap { $0 }.joined(separator: " ")
+        let full = star + space + rest
+
+        let attr = NSMutableAttributedString(string: full, attributes: [
+            .foregroundColor: UIColor.label,
+            .font: UIFont.systemFont(ofSize: 14, weight: .regular)
+        ])
+
+        if let starRange = full.range(of: star) {
+            let ns = NSRange(starRange, in: full)
+            attr.addAttribute(.foregroundColor, value: UIColor.systemYellow, range: ns)
+        }
+        return attr
     }
 }
 
@@ -1458,6 +1458,35 @@ private extension HomeViewController {
         trendingItems = Array(items.prefix(5))
         trendingCollectionView?.reloadData()
     }
+
+    // Resolve owner name for trending cells with caching
+    // (UI no longer displays owner name in trending; function retained only if needed elsewhere)
+    func resolveTrendingOwnerName(for ownerId: String, completion: @escaping (String) -> Void) {
+        if let cached = ownerNameCache[ownerId] {
+            completion(cached)
+            return
+        }
+
+        Task {
+            // Try users first
+            if let n = try? await fetchName(from: "users", ownerId: ownerId), !n.isEmpty {
+                let display = capitalizingFirstLetter(n)
+                ownerNameCache[ownerId] = display
+                completion(display)
+                return
+            }
+            // Fallback profiles
+            if let n = try? await fetchName(from: "profiles", ownerId: ownerId), !n.isEmpty {
+                let display = capitalizingFirstLetter(n)
+                ownerNameCache[ownerId] = display
+                completion(display)
+                return
+            }
+            let display = "Owner"
+            ownerNameCache[ownerId] = display
+            completion(display)
+        }
+    }
 }
 
 // MARK: - TrendingItemCell (code-only)
@@ -1468,6 +1497,7 @@ private final class TrendingItemCell: UICollectionViewCell {
     private let card = UIView()
     private let imageView = UIImageView()
     private let titleLabel = UILabel()
+    // Removed owner label from UI
 
     // Price styled as: colored currency + “ / day” in secondary
     private let priceStack = UIStackView()
@@ -1631,11 +1661,11 @@ private final class TrendingItemCell: UICollectionViewCell {
         row2.spacing = 8
         row2.translatesAutoresizingMaskIntoConstraints = false
 
-        // Vertical stack content
+        // Vertical stack content (image, title, rows) — owner removed
         let v = UIStackView(arrangedSubviews: [imageView, titleLabel, row1, row2])
         v.axis = .vertical
         v.alignment = .fill
-        v.spacing = 10
+        v.spacing = 8
         v.translatesAutoresizingMaskIntoConstraints = false
         card.addSubview(v)
 
@@ -1695,4 +1725,3 @@ private final class TrendingItemCell: UICollectionViewCell {
         }
     }
 }
-
