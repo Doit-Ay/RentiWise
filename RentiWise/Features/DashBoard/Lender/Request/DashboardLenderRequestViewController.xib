@@ -37,7 +37,7 @@
             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
             <subviews>
                 <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="f0F-xW-9La">
-                    <rect key="frame" x="21.666666666666657" y="138" width="350" height="140"/>
+                    <rect key="frame" x="16" y="138" width="361" height="140"/>
                     <subviews>
                         <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="Image 1" translatesAutoresizingMaskIntoConstraints="NO" id="94J-0c-Nik">
                             <rect key="frame" x="16" y="16" width="130" height="108"/>
@@ -51,7 +51,7 @@
                             </userDefinedRuntimeAttributes>
                         </imageView>
                         <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Item Name" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="hXq-ES-Fem">
-                            <rect key="frame" x="166" y="18" width="164" height="18"/>
+                            <rect key="frame" x="166" y="18" width="175" height="18"/>
                             <fontDescription key="fontDescription" type="system" weight="medium" pointSize="15"/>
                             <nil key="textColor"/>
                             <nil key="highlightedColor"/>
@@ -65,7 +65,6 @@
                     </subviews>
                     <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                     <constraints>
-                        <constraint firstAttribute="width" constant="350" id="4vg-QX-CcP"/>
                         <constraint firstItem="nt9-XR-kuE" firstAttribute="top" secondItem="hXq-ES-Fem" secondAttribute="bottom" constant="10" id="T02-7G-cY9"/>
                         <constraint firstItem="94J-0c-Nik" firstAttribute="leading" secondItem="f0F-xW-9La" secondAttribute="leading" constant="16" id="XPB-2v-cDt"/>
                         <constraint firstItem="hXq-ES-Fem" firstAttribute="top" secondItem="f0F-xW-9La" secondAttribute="top" constant="18" id="b0H-hh-CDX"/>
@@ -76,6 +75,11 @@
                         <constraint firstItem="nt9-XR-kuE" firstAttribute="leading" secondItem="hXq-ES-Fem" secondAttribute="leading" id="rdg-rM-Kca"/>
                         <constraint firstItem="hXq-ES-Fem" firstAttribute="leading" secondItem="94J-0c-Nik" secondAttribute="trailing" constant="20" id="ymv-fL-j5R"/>
                     </constraints>
+                    <userDefinedRuntimeAttributes>
+                        <userDefinedRuntimeAttribute type="number" keyPath="ibCornerRadius">
+                            <real key="value" value="20"/>
+                        </userDefinedRuntimeAttribute>
+                    </userDefinedRuntimeAttributes>
                 </view>
                 <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="ezw-7Q-Yax" userLabel="bookingperiodView">
                     <rect key="frame" x="16" y="288" width="361" height="138"/>
@@ -138,7 +142,7 @@
                     </constraints>
                     <userDefinedRuntimeAttributes>
                         <userDefinedRuntimeAttribute type="number" keyPath="ibCornerRadius">
-                            <real key="value" value="12"/>
+                            <real key="value" value="20"/>
                         </userDefinedRuntimeAttribute>
                     </userDefinedRuntimeAttributes>
                 </view>
@@ -194,6 +198,11 @@
                         <constraint firstItem="PwW-9J-eGx" firstAttribute="leading" secondItem="T1c-9z-xZc" secondAttribute="leading" id="ucd-BW-fnj"/>
                         <constraint firstItem="T1c-9z-xZc" firstAttribute="leading" secondItem="Htu-yM-Ku2" secondAttribute="trailing" constant="20" id="uh4-j4-sjh"/>
                     </constraints>
+                    <userDefinedRuntimeAttributes>
+                        <userDefinedRuntimeAttribute type="number" keyPath="ibCornerRadius">
+                            <real key="value" value="20"/>
+                        </userDefinedRuntimeAttribute>
+                    </userDefinedRuntimeAttributes>
                 </view>
                 <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="tpc-qJ-MNq" userLabel="pricebreakdownView">
                     <rect key="frame" x="16" y="558" width="361" height="150"/>
@@ -277,6 +286,11 @@
                         <constraint firstItem="2Kh-DX-D3T" firstAttribute="centerY" secondItem="pVI-ta-osJ" secondAttribute="centerY" id="uxG-H8-Q1A"/>
                         <constraint firstItem="f8R-nu-T83" firstAttribute="top" secondItem="2Kh-DX-D3T" secondAttribute="bottom" constant="10" id="xex-cc-Wuk"/>
                     </constraints>
+                    <userDefinedRuntimeAttributes>
+                        <userDefinedRuntimeAttribute type="number" keyPath="ibCornerRadius">
+                            <real key="value" value="20"/>
+                        </userDefinedRuntimeAttribute>
+                    </userDefinedRuntimeAttributes>
                 </view>
                 <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="ZRU-ah-bio">
                     <rect key="frame" x="16" y="728" width="361" height="44"/>
@@ -325,11 +339,12 @@
                 <constraint firstItem="ezw-7Q-Yax" firstAttribute="leading" secondItem="fnl-2z-Ty3" secondAttribute="leading" constant="16" id="Tp2-Vq-IFu"/>
                 <constraint firstItem="fnl-2z-Ty3" firstAttribute="trailing" secondItem="tpc-qJ-MNq" secondAttribute="trailing" constant="16" id="Vty-5A-ccf"/>
                 <constraint firstItem="tpc-qJ-MNq" firstAttribute="top" secondItem="ZfJ-16-hEq" secondAttribute="bottom" constant="16" id="Z6R-4B-G0e"/>
-                <constraint firstItem="f0F-xW-9La" firstAttribute="centerX" secondItem="fnl-2z-Ty3" secondAttribute="centerX" id="gMt-s0-QNv"/>
+                <constraint firstItem="fnl-2z-Ty3" firstAttribute="trailing" secondItem="f0F-xW-9La" secondAttribute="trailing" constant="16" id="hlt-mC-8Vz"/>
                 <constraint firstItem="ezw-7Q-Yax" firstAttribute="top" secondItem="f0F-xW-9La" secondAttribute="bottom" constant="10" id="jq7-x1-qS7"/>
                 <constraint firstItem="CqJ-NT-2M7" firstAttribute="top" secondItem="ZRU-ah-bio" secondAttribute="bottom" constant="16" id="ngV-2b-gI0"/>
                 <constraint firstItem="fnl-2z-Ty3" firstAttribute="trailing" secondItem="ezw-7Q-Yax" secondAttribute="trailing" constant="16" id="uuj-WH-hDn"/>
                 <constraint firstItem="CqJ-NT-2M7" firstAttribute="centerX" secondItem="fnl-2z-Ty3" secondAttribute="centerX" id="xMw-wS-lLo"/>
+                <constraint firstItem="f0F-xW-9La" firstAttribute="leading" secondItem="fnl-2z-Ty3" secondAttribute="leading" constant="16" id="zM3-2w-YyZ"/>
             </constraints>
             <point key="canvasLocation" x="130.53435114503816" y="111.9718309859155"/>
         </view>

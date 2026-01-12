@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<document type="com.apple.InterfaceBuilder3.CocoaTouch.XIB" version="3.0" toolsVersion="24128" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES">
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.XIB" version="3.0" toolsVersion="24412" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES">
     <device id="retina6_12" orientation="portrait" appearance="light"/>
     <dependencies>
-        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="24063"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="24405"/>
         <capability name="Safe area layout guides" minToolsVersion="9.0"/>
         <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
     </dependencies>
@@ -20,26 +20,26 @@
                         <rect key="frame" x="8" y="11.666666666666671" width="350" height="140"/>
                         <subviews>
                             <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="Image 1" translatesAutoresizingMaskIntoConstraints="NO" id="fMW-jl-mMn">
-                                <rect key="frame" x="20" y="20" width="120" height="100"/>
+                                <rect key="frame" x="16" y="16" width="130" height="108"/>
                                 <constraints>
-                                    <constraint firstAttribute="width" constant="120" id="18d-aB-SrC"/>
+                                    <constraint firstAttribute="height" constant="108" id="ADk-WD-9bW"/>
+                                    <constraint firstAttribute="width" constant="130" id="MI6-tx-OPa"/>
                                 </constraints>
                             </imageView>
                             <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Item Name" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="nhW-J8-bHQ">
-                                <rect key="frame" x="160" y="30" width="170" height="18"/>
-                                <fontDescription key="fontDescription" type="system" pointSize="15"/>
+                                <rect key="frame" x="166" y="16" width="164" height="18"/>
+                                <fontDescription key="fontDescription" type="system" weight="medium" pointSize="15"/>
                                 <nil key="textColor"/>
                                 <nil key="highlightedColor"/>
                             </label>
                             <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Rate" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="ax1-Ff-WAs">
-                                <rect key="frame" x="160" y="53.000000000000007" width="31.333333333333343" height="17.999999999999993"/>
-                                <fontDescription key="fontDescription" type="system" pointSize="15"/>
+                                <rect key="frame" x="166" y="44" width="32" height="18"/>
+                                <fontDescription key="fontDescription" type="system" weight="medium" pointSize="15"/>
                                 <nil key="textColor"/>
                                 <nil key="highlightedColor"/>
                             </label>
-                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" fixedFrame="YES" text="From: Shorya Kumar" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="aC3-FX-zYc">
-                                <rect key="frame" x="160" y="92" width="139" height="18"/>
-                                <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="From: Shorya Kumar" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="aC3-FX-zYc">
+                                <rect key="frame" x="166" y="82" width="139" height="18"/>
                                 <fontDescription key="fontDescription" type="system" pointSize="15"/>
                                 <nil key="textColor"/>
                                 <nil key="highlightedColor"/>
@@ -48,15 +48,17 @@
                         <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                         <constraints>
                             <constraint firstItem="nhW-J8-bHQ" firstAttribute="leading" secondItem="fMW-jl-mMn" secondAttribute="trailing" constant="20" id="2nb-6A-3GM"/>
-                            <constraint firstItem="fMW-jl-mMn" firstAttribute="top" secondItem="jzG-cA-364" secondAttribute="top" constant="20" id="9hh-DM-IY1"/>
-                            <constraint firstItem="fMW-jl-mMn" firstAttribute="leading" secondItem="jzG-cA-364" secondAttribute="leading" constant="20" id="Gyq-EM-L5a"/>
-                            <constraint firstItem="ax1-Ff-WAs" firstAttribute="top" secondItem="nhW-J8-bHQ" secondAttribute="bottom" constant="5" id="HU1-LD-xbx"/>
+                            <constraint firstItem="fMW-jl-mMn" firstAttribute="top" secondItem="jzG-cA-364" secondAttribute="top" constant="16" id="9hh-DM-IY1"/>
+                            <constraint firstItem="fMW-jl-mMn" firstAttribute="leading" secondItem="jzG-cA-364" secondAttribute="leading" constant="16" id="Gyq-EM-L5a"/>
+                            <constraint firstItem="ax1-Ff-WAs" firstAttribute="top" secondItem="nhW-J8-bHQ" secondAttribute="bottom" constant="10" id="HU1-LD-xbx"/>
                             <constraint firstAttribute="trailing" secondItem="nhW-J8-bHQ" secondAttribute="trailing" constant="20" id="JQy-R0-aVQ"/>
                             <constraint firstAttribute="width" constant="350" id="Qw4-mV-f8b"/>
                             <constraint firstAttribute="height" constant="140" id="TXn-w6-8oD"/>
+                            <constraint firstItem="aC3-FX-zYc" firstAttribute="leading" secondItem="fMW-jl-mMn" secondAttribute="trailing" constant="20" id="YBd-7n-TaX"/>
+                            <constraint firstItem="aC3-FX-zYc" firstAttribute="top" secondItem="ax1-Ff-WAs" secondAttribute="bottom" constant="20" id="d8l-5g-EpU"/>
                             <constraint firstItem="ax1-Ff-WAs" firstAttribute="leading" secondItem="nhW-J8-bHQ" secondAttribute="leading" id="hrK-5m-qU8"/>
-                            <constraint firstItem="nhW-J8-bHQ" firstAttribute="top" secondItem="jzG-cA-364" secondAttribute="top" constant="30" id="kGB-aV-AFZ"/>
-                            <constraint firstAttribute="bottom" secondItem="fMW-jl-mMn" secondAttribute="bottom" constant="20" id="qIV-sm-XOW"/>
+                            <constraint firstItem="nhW-J8-bHQ" firstAttribute="top" secondItem="jzG-cA-364" secondAttribute="top" constant="16" id="kGB-aV-AFZ"/>
+                            <constraint firstAttribute="bottom" secondItem="fMW-jl-mMn" secondAttribute="bottom" constant="16" id="qIV-sm-XOW"/>
                         </constraints>
                         <userDefinedRuntimeAttributes>
                             <userDefinedRuntimeAttribute type="number" keyPath="layer.cornerRadius">

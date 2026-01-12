@@ -14,9 +14,14 @@ class BookingApprovalViewController: UIViewController {
         case pending
     }
 
+    static let requestApprovedNotification = Notification.Name("BookingApprovalRequestApprovedNotification")
+
     // Current request status; set this from outside as needed
     var status: RequestStatus = .pending {
-        didSet { updateStatusUI() }
+        didSet {
+            print("[BookingApproval] Status changed to: \(status)")
+            updateStatusUI()
+        }
     }
 
     // Booking dates passed from RequestViewController
@@ -26,6 +31,10 @@ class BookingApprovalViewController: UIViewController {
 
     // Tracks if a payment has been completed
     private var hasCompletedPayment: Bool = false
+
+    // Observer token to manage notification observer lifecycle
+    private var approvalObserver: NSObjectProtocol?
+    private var requestsRefreshObserver: NSObjectProtocol?
 
     // Connect this to the Proceed to Payment button in Interface Builder
     
@@ -92,14 +101,21 @@ class BookingApprovalViewController: UIViewController {
 
         if let s = startDate {
             dateperiodLabel.text = dateFormatter.string(from: s)
+        } else {
+            dateperiodLabel.text = ""
         }
+
         if let p = pickupTime {
             picktimeLabel.text = timeFormatter.string(from: p)
+        } else {
+            picktimeLabel.text = ""
         }
+
         if let s = startDate, let r = returnTime {
-            // Calculate number of days between dates (ceil to include partial days)
             let days = max(1, Int(ceil(r.timeIntervalSince(s) / 86400.0)))
             numLabeldays.text = "\(days) Days"
+        } else {
+            numLabeldays.text = ""
         }
     }
     
@@ -113,26 +129,35 @@ class BookingApprovalViewController: UIViewController {
     }
 
     private func updateStatusUI() {
+        // Update status visuals
         switch status {
         case .approved:
             approvedpending.text = "Approved"
             tickimage.image = UIImage(systemName: "checkmark.circle")
             tickimage.tintColor = .systemGreen
+            paymentButton.isEnabled = true
+            paymentButton.alpha = 1.0
         case .pending:
             approvedpending.text = "Pending"
             tickimage.image = UIImage(systemName: "questionmark.circle.dashed")
-            // If payment hasn't been done, keep the icon white; else use orange to indicate attention
             tickimage.tintColor = .white
+            paymentButton.isEnabled = false
+            paymentButton.alpha = 0.5
         }
+
         tickimage.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 22, weight: .regular)
         tickimage.contentMode = .scaleAspectFit
 
-        // Show/hide View Code container depending on payment status
-        viewCodeUIView.isHidden = !hasCompletedPayment
-        
-        // Adjust spacing: 16 when hidden, default (e.g., 0) when shown
-        statusToViewCodeTop?.constant = viewCodeUIView.isHidden ? 16 : 0
-        view.layoutIfNeeded()
+        // Show/hide View Code container depending on payment status and adjust layout
+        let shouldShowCode = hasCompletedPayment
+        viewCodeUIView.isHidden = !shouldShowCode
+        if shouldShowCode {
+            viewCodeHeight?.constant = collapsedViewCodeHeight
+            statusToViewCodeTop?.constant = 0
+        } else {
+            viewCodeHeight?.constant = 0
+            statusToViewCodeTop?.constant = 0
+        }
     }
 
     // Height constraint for the new "View Code" container
@@ -148,9 +173,9 @@ class BookingApprovalViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        // Round only top corners of statusView
+        // Round all corners of statusView
         statusView.layer.cornerRadius = 20
-        statusView.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
+        statusView.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner, .layerMinXMaxYCorner, .layerMaxXMaxYCorner]
         statusView.layer.masksToBounds = true
 
         // Round only bottom corners of viewCodeUIView
@@ -184,11 +209,11 @@ class BookingApprovalViewController: UIViewController {
         // Start collapsed: show only the button, hide the stack
         codestack.isHidden = true
         codeStackCollapseConstraint?.isActive = true
-        viewCodeHeight?.constant = collapsedViewCodeHeight
-        viewCodeHeight?.isActive = true
-
-        // Hide code view until payment completes
+        // Hide code view until payment completes and collapse its height/spacing
         viewCodeUIView.isHidden = true
+        viewCodeHeight?.constant = 0
+        viewCodeHeight?.isActive = true
+        statusToViewCodeTop?.constant = 0
 
         // Style payment button with black border
         paymentButton.layer.borderColor = UIColor.black.cgColor
@@ -207,8 +232,10 @@ class BookingApprovalViewController: UIViewController {
         copybutton.layer.cornerRadius = 8
         copybutton.layer.masksToBounds = true
 
-        // When code view is hidden, keep 16pt spacing below statusView
-        statusToViewCodeTop?.constant = 16
+        // Start in Pending state and disable payment until accepted
+        status = .pending
+        paymentButton.isEnabled = false
+        paymentButton.alpha = 0.5
 
         // Initialize status UI based on current status
         updateStatusUI()
@@ -221,8 +248,51 @@ class BookingApprovalViewController: UIViewController {
 
         // Reflect any pre-configured dates
         updateDatesUI()
-    }
 
+        // TEMP: Populate with sample values so the screen always shows data
+        if startDate == nil && pickupTime == nil && returnTime == nil {
+            let now = Date()
+            let pickup = Calendar.current.date(bySettingHour: 9, minute: 30, second: 0, of: now)
+            let returnDate = Calendar.current.date(byAdding: .day, value: 2, to: now)
+            configureDates(startDate: now, pickupTime: pickup, returnTime: returnDate)
+        }
+        
+        // Removed old observer registration here (moved to viewWillAppear)
+    }
+    
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        // Ensure Booking Period reflects latest configured dates
+        updateDatesUI()
+
+        if approvalObserver == nil {
+            approvalObserver = NotificationCenter.default.addObserver(forName: BookingApprovalViewController.requestApprovedNotification, object: nil, queue: .main) { [weak self] _ in
+                guard let self = self else { return }
+                print("[BookingApproval] Notification received: requestApprovedNotification")
+                self.setStatus(.approved)
+            }
+        }
+        if requestsRefreshObserver == nil {
+            requestsRefreshObserver = NotificationCenter.default.addObserver(forName: Notification.Name("requestsShouldRefresh"), object: nil, queue: .main) { [weak self] _ in
+                guard let self = self else { return }
+                print("[BookingApproval] Notification received: requestsShouldRefresh -> marking Approved")
+                self.setStatus(.approved)
+            }
+        }
+    }
+    
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        if let token = approvalObserver {
+            NotificationCenter.default.removeObserver(token)
+            approvalObserver = nil
+        }
+        if let token = requestsRefreshObserver {
+            NotificationCenter.default.removeObserver(token)
+            requestsRefreshObserver = nil
+        }
+    }
+    
     func setStatus(_ newStatus: RequestStatus) {
         self.status = newStatus
     }
@@ -233,6 +303,13 @@ class BookingApprovalViewController: UIViewController {
         self.pickupTime = pickupTime
         self.returnTime = returnTime
         updateDatesUI()
+    }
+
+    @objc private func handleExternalApproval() {
+        DispatchQueue.main.async {
+            print("[BookingApproval] External approval received -> setting status Approved")
+            self.setStatus(.approved)
+        }
     }
 
     // Call this when a new product is selected from My Rentals to refresh the pickup code
@@ -331,6 +408,15 @@ class BookingApprovalViewController: UIViewController {
         }
 
         present(actionSheet, animated: true)
+    }
+    
+    @IBAction func debugForceApprove(_ sender: Any) {
+        print("[BookingApproval] debugForceApprove tapped")
+        setStatus(.approved)
+    }
+    
+    deinit {
+        NotificationCenter.default.removeObserver(self, name: BookingApprovalViewController.requestApprovedNotification, object: nil)
     }
 }
 

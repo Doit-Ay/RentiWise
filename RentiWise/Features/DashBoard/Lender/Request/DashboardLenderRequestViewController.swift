@@ -163,6 +163,8 @@ class DashboardLenderRequestViewController: UIViewController {
 
     @IBAction func acceptbuttontapped(_ sender: UIButton) {
         Task { await updateStatus(to: "accepted") }
+        // Notify BookingApprovalViewController that this request was accepted
+        NotificationCenter.default.post(name: BookingApprovalViewController.requestApprovedNotification, object: nil)
     }
 
     @IBAction func denybuttontapped(_ sender: UIButton) {
