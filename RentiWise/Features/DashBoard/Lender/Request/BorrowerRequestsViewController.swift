@@ -4,8 +4,30 @@ import Supabase
 
 final class BorrowerRequestsViewController: UIViewController {
 
+    // MARK: - UI
+    private let headerContainer = UIView()
+    private let searchBar = UISearchBar()
+    private let filterButton = UIButton(type: .system)
     private let tableView = UITableView(frame: .zero, style: .plain)
-    private var rows: [RequestWithItem] = []
+
+    // MARK: - Data
+    private var rows: [RequestWithItem] = []            // full dataset
+    private var filteredRows: [RequestWithItem] = []     // displayed dataset
+
+    // Simple status filter
+    private enum StatusFilter: String, CaseIterable {
+        case all = "All"
+        case pending = "Pending"
+        case approved = "Approved"
+        // Add more if you use them, e.g. case denied = "Denied"
+    }
+    private var currentStatusFilter: StatusFilter = .all {
+        didSet { applyFilters() }
+    }
+
+    private var searchText: String = "" {
+        didSet { applyFilters() }
+    }
 
     private let currencyFormatter: NumberFormatter = {
         let f = NumberFormatter()
@@ -20,10 +42,73 @@ final class BorrowerRequestsViewController: UIViewController {
         title = "My Rentals"
 
         view.backgroundColor = .systemGroupedBackground
+        setupHeader()
         setupTable()
         Task { await loadRequests() }
     }
 
+    // MARK: - Header (Search + Filter)
+    private func setupHeader() {
+        headerContainer.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(headerContainer)
+
+        // Search bar
+        searchBar.translatesAutoresizingMaskIntoConstraints = false
+        searchBar.placeholder = "Search rentals"
+        searchBar.delegate = self
+        searchBar.searchBarStyle = .minimal
+        searchBar.backgroundImage = UIImage()
+        searchBar.setBackgroundImage(UIImage(), for: .any, barMetrics: .default)
+        searchBar.searchTextField.backgroundColor = UIColor.secondarySystemBackground
+
+        // Filter button
+        filterButton.translatesAutoresizingMaskIntoConstraints = false
+        filterButton.setTitle("Filter", for: .normal)
+        filterButton.setImage(UIImage(systemName: "line.3.horizontal.decrease.circle"), for: .normal)
+        filterButton.tintColor = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0)
+        filterButton.addTarget(self, action: #selector(didTapFilter), for: .touchUpInside)
+
+        // Layout: search left, filter right
+        headerContainer.addSubview(searchBar)
+        headerContainer.addSubview(filterButton)
+
+        let topGuide = view.safeAreaLayoutGuide
+        NSLayoutConstraint.activate([
+            headerContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            headerContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            headerContainer.topAnchor.constraint(equalTo: topGuide.topAnchor),
+
+            searchBar.leadingAnchor.constraint(equalTo: headerContainer.leadingAnchor, constant: 16),
+            searchBar.topAnchor.constraint(equalTo: headerContainer.topAnchor, constant: 8),
+            searchBar.bottomAnchor.constraint(equalTo: headerContainer.bottomAnchor, constant: -8),
+
+            filterButton.leadingAnchor.constraint(equalTo: searchBar.trailingAnchor, constant: 8),
+            filterButton.trailingAnchor.constraint(equalTo: headerContainer.trailingAnchor, constant: -16),
+            filterButton.centerYAnchor.constraint(equalTo: searchBar.centerYAnchor),
+
+            // Make filter button hug its content
+            filterButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 44)
+        ])
+    }
+
+    @objc private func didTapFilter() {
+        let ac = UIAlertController(title: "Filter by status", message: nil, preferredStyle: .actionSheet)
+
+        for option in StatusFilter.allCases {
+            ac.addAction(UIAlertAction(title: option.rawValue, style: .default, handler: { [weak self] _ in
+                self?.currentStatusFilter = option
+            }))
+        }
+        ac.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+
+        if let pop = ac.popoverPresentationController {
+            pop.sourceView = filterButton
+            pop.sourceRect = filterButton.bounds
+        }
+        present(ac, animated: true)
+    }
+
+    // MARK: - Table
     private func setupTable() {
         tableView.translatesAutoresizingMaskIntoConstraints = false
         tableView.backgroundColor = .systemGroupedBackground
@@ -32,24 +117,28 @@ final class BorrowerRequestsViewController: UIViewController {
         tableView.estimatedRowHeight = 140
         tableView.dataSource = self
         tableView.delegate = self
-        tableView.contentInset = UIEdgeInsets(top: 16, left: 0, bottom: 16, right: 0)
+        tableView.contentInset = UIEdgeInsets(top: 8, left: 0, bottom: 16, right: 0) // small top spacing since header is present
 
-        // Reuse your existing LenderRequestTableViewCell nib
+        // Reuse existing nib/cell
         tableView.register(UINib(nibName: "LenderRequestTableViewCell", bundle: nil), forCellReuseIdentifier: "Request")
 
         view.addSubview(tableView)
         NSLayoutConstraint.activate([
             tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            tableView.topAnchor.constraint(equalTo: view.topAnchor),
+            tableView.topAnchor.constraint(equalTo: headerContainer.bottomAnchor),
             tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
     }
 
+    // MARK: - Data
     private func showEmptyStateIfNeeded() {
-        if rows.isEmpty {
+        if filteredRows.isEmpty {
             let label = UILabel()
             label.text = "No rentals yet"
+            if !searchText.isEmpty || currentStatusFilter != .all {
+                label.text = "No results"
+            }
             label.textAlignment = .center
             label.textColor = .secondaryLabel
             label.numberOfLines = 0
@@ -64,6 +153,7 @@ final class BorrowerRequestsViewController: UIViewController {
         guard let userId = await SupabaseManager.shared.currentUserId() else {
             await MainActor.run {
                 self.rows = []
+                self.filteredRows = []
                 self.tableView.reloadData()
                 self.showEmptyStateIfNeeded()
                 self.presentLoginAlert()
@@ -81,19 +171,19 @@ final class BorrowerRequestsViewController: UIViewController {
             let response = try await SupabaseManager.shared.client
                 .from("requests")
                 .select(select)
-                .eq("borrower_id", value: userId)     // key difference from RequestsListViewController
+                .eq("borrower_id", value: userId)
                 .order("created_at", ascending: false)
                 .execute()
 
             let rows = try JSONDecoder().decode([RequestWithItem].self, from: response.data)
             await MainActor.run {
                 self.rows = rows
-                self.tableView.reloadData()
-                self.showEmptyStateIfNeeded()
+                self.applyFilters()
             }
         } catch {
             await MainActor.run {
                 self.rows = []
+                self.filteredRows = []
                 self.tableView.reloadData()
                 self.showEmptyStateIfNeeded()
             }
@@ -105,11 +195,59 @@ final class BorrowerRequestsViewController: UIViewController {
         ac.addAction(UIAlertAction(title: "OK", style: .default))
         present(ac, animated: true)
     }
+
+    // MARK: - Filtering
+    private func applyFilters() {
+        // Start with all rows
+        var result = rows
+
+        // Status filter
+        switch currentStatusFilter {
+        case .all:
+            break
+        case .pending:
+            result = result.filter { $0.status.caseInsensitiveCompare("pending") == .orderedSame }
+        case .approved:
+            result = result.filter { $0.status.caseInsensitiveCompare("approved") == .orderedSame }
+        }
+
+        // Search text filter
+        let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty {
+            let q = trimmed.lowercased()
+            result = result.filter { row in
+                let title = row.items?.title.lowercased() ?? ""
+                let id = row.item_id.lowercased()
+                return title.contains(q) || id.contains(q)
+            }
+        }
+
+        filteredRows = result
+        tableView.reloadData()
+        showEmptyStateIfNeeded()
+    }
+}
+
+// MARK: - UISearchBarDelegate
+extension BorrowerRequestsViewController: UISearchBarDelegate {
+    func searchBar(_ searchBar: UISearchBar, textDidChange text: String) {
+        searchText = text
+    }
+
+    func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
+        searchBar.resignFirstResponder()
+    }
+
+    func searchBarCancelButtonClicked(_ searchBar: UISearchBar) {
+        searchBar.text = ""
+        searchText = ""
+        searchBar.resignFirstResponder()
+    }
 }
 
 // MARK: - UITableViewDataSource
 extension BorrowerRequestsViewController: UITableViewDataSource {
-    func numberOfSections(in tableView: UITableView) -> Int { rows.count }
+    func numberOfSections(in tableView: UITableView) -> Int { filteredRows.count }
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { 1 }
 
     func tableView(_ tableView: UITableView,
@@ -118,14 +256,14 @@ extension BorrowerRequestsViewController: UITableViewDataSource {
             return UITableViewCell()
         }
 
-        let req = rows[indexPath.section]
+        let req = filteredRows[indexPath.section]
 
         // Name: prefer item title, fallback to item_id
         cell.itemNameRequest.text = req.items?.title ?? req.item_id
         cell.itemNameRequest.numberOfLines = 1
         cell.itemNameRequest.lineBreakMode = .byTruncatingTail
 
-        // Rate: from items.price_per_day if available; else show date range
+        // Rate: from items.price_per_day if available; else date range
         if let p = req.items?.price_per_day {
             let text = (currencyFormatter.string(from: NSNumber(value: p)) ?? "\(p)") + " / day"
             cell.itemRateRequest.text = text
@@ -146,7 +284,7 @@ extension BorrowerRequestsViewController: UITableViewDataSource {
             }
         }
 
-        // Borrower/status label (for borrower list, show status too)
+        // Status label
         cell.itemBorrowerRequest.text = req.status.capitalized
 
         // Image: first item image if any
@@ -184,7 +322,7 @@ extension BorrowerRequestsViewController: UITableViewDelegate {
         detail.hidesBottomBarWhenPushed = true
 
         // Inject the selected request
-        detail.request = rows[indexPath.section]
+        detail.request = filteredRows[indexPath.section]
 
         navigationController?.setNavigationBarHidden(false, animated: false)
         navigationController?.pushViewController(detail, animated: true)

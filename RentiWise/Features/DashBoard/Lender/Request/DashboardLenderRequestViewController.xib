@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<document type="com.apple.InterfaceBuilder3.CocoaTouch.XIB" version="3.0" toolsVersion="24412" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES">
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.XIB" version="3.0" toolsVersion="24128" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES">
     <device id="retina6_12" orientation="portrait" appearance="light"/>
     <dependencies>
-        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="24405"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="24063"/>
         <capability name="Safe area layout guides" minToolsVersion="9.0"/>
         <capability name="System colors in document resources" minToolsVersion="11.0"/>
         <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
@@ -11,9 +11,11 @@
         <placeholder placeholderIdentifier="IBFilesOwner" id="-1" userLabel="File's Owner" customClass="DashboardLenderRequestViewController" customModule="RentiWise" customModuleProvider="target">
             <connections>
                 <outlet property="Bookingcard" destination="ezw-7Q-Yax" id="8kf-31-uDG"/>
+                <outlet property="acceptButton" destination="ZRU-ah-bio" id="cVz-Da-aMe"/>
                 <outlet property="categoryLabel" destination="nt9-XR-kuE" id="Co3-Xq-oTc"/>
                 <outlet property="datelabel" destination="gj7-ap-f16" id="XVf-Em-xOS"/>
                 <outlet property="denyButton" destination="CqJ-NT-2M7" id="WOb-lE-GrA"/>
+                <outlet property="denybutton" destination="CqJ-NT-2M7" id="gsh-hK-1Dk"/>
                 <outlet property="feerentLabel" destination="Pvx-Mk-UpF" id="ggp-sA-msA"/>
                 <outlet property="initial" destination="Htu-yM-Ku2" id="63K-mV-byG"/>
                 <outlet property="itemNameLabel" destination="hXq-ES-Fem" id="Xi2-QF-xfV"/>
@@ -21,7 +23,6 @@
                 <outlet property="ownCard" destination="ZfJ-16-hEq" id="NWg-K2-uec"/>
                 <outlet property="ownDistLabel" destination="AQS-fL-Bbd" id="9Me-eB-vr5"/>
                 <outlet property="ownNameLabel" destination="T1c-9z-xZc" id="ncf-xd-2Cs"/>
-                <outlet property="ownRatingLabel" destination="PwW-9J-eGx" id="z1d-T2-WIh"/>
                 <outlet property="pickuptimeLabel" destination="lHa-ld-1EK" id="feE-sc-hLW"/>
                 <outlet property="priceCard" destination="tpc-qJ-MNq" id="ovR-3y-6UT"/>
                 <outlet property="prodimage" destination="94J-0c-Nik" id="9hI-YK-Nts"/>
@@ -176,26 +177,18 @@
                             <nil key="textColor"/>
                             <nil key="highlightedColor"/>
                         </label>
-                        <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Rating" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="PwW-9J-eGx">
-                            <rect key="frame" x="92" y="45.666666666666686" width="46.333333333333343" height="19.333333333333329"/>
-                            <fontDescription key="fontDescription" type="system" pointSize="16"/>
-                            <nil key="textColor"/>
-                            <nil key="highlightedColor"/>
-                        </label>
                     </subviews>
                     <color key="backgroundColor" systemColor="systemBackgroundColor"/>
                     <constraints>
                         <constraint firstAttribute="width" constant="361" id="DYa-3o-iAh"/>
                         <constraint firstItem="AQS-fL-Bbd" firstAttribute="centerY" secondItem="9yg-6z-hf4" secondAttribute="centerY" id="WcL-Y2-Q2u"/>
                         <constraint firstItem="9yg-6z-hf4" firstAttribute="leading" secondItem="ZfJ-16-hEq" secondAttribute="leading" constant="250" id="a45-Lp-W7p"/>
-                        <constraint firstItem="PwW-9J-eGx" firstAttribute="top" secondItem="T1c-9z-xZc" secondAttribute="bottom" constant="8" id="ddd-X4-rw1"/>
                         <constraint firstItem="Htu-yM-Ku2" firstAttribute="leading" secondItem="ZfJ-16-hEq" secondAttribute="leading" constant="16" id="e2P-L1-7Pw"/>
                         <constraint firstItem="Htu-yM-Ku2" firstAttribute="top" secondItem="ZfJ-16-hEq" secondAttribute="top" constant="16" id="ghV-cr-Rp6"/>
                         <constraint firstItem="T1c-9z-xZc" firstAttribute="top" secondItem="ZfJ-16-hEq" secondAttribute="top" constant="16" id="jTi-B7-0qt"/>
                         <constraint firstAttribute="height" constant="100" id="of5-bo-MsE"/>
                         <constraint firstItem="9yg-6z-hf4" firstAttribute="top" secondItem="ZfJ-16-hEq" secondAttribute="top" constant="71" id="phJ-JI-eLA"/>
                         <constraint firstItem="AQS-fL-Bbd" firstAttribute="leading" secondItem="9yg-6z-hf4" secondAttribute="trailing" constant="10" id="pzP-uQ-Ryk"/>
-                        <constraint firstItem="PwW-9J-eGx" firstAttribute="leading" secondItem="T1c-9z-xZc" secondAttribute="leading" id="ucd-BW-fnj"/>
                         <constraint firstItem="T1c-9z-xZc" firstAttribute="leading" secondItem="Htu-yM-Ku2" secondAttribute="trailing" constant="20" id="uh4-j4-sjh"/>
                     </constraints>
                     <userDefinedRuntimeAttributes>
@@ -360,7 +353,7 @@
             <color white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
         </systemColor>
         <systemColor name="systemGroupedBackgroundColor">
-            <color red="0.94901960784313721" green="0.94901960784313721" blue="0.96862745098039216" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+            <color red="0.94901960780000005" green="0.94901960780000005" blue="0.96862745100000003" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
         </systemColor>
     </resources>
 </document>

@@ -15,11 +15,12 @@ final class ProfileViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = ""
+        // Show a visible title for Profile (SwiftUI will also set its own)
+        title = "Profile"
         // Page background should be grouped to let white cards pop
         view.backgroundColor = .systemGroupedBackground
 
-        // Build SwiftUI root without the UIKit push callback for My Rentals
+        // Build SwiftUI root
         let root = ProfileRootView()
         let host = UIHostingController(rootView: root)
         addChild(host)
@@ -36,17 +37,51 @@ final class ProfileViewController: UIViewController {
     }
 }
 
-// MARK: - SwiftUI Profile
+// MARK: - SwiftUI wrappers
 
-// Wrapper to host the UIKit MyRentalsViewController inside SwiftUI navigation
+// A host that embeds MyRentalsViewController inside SwiftUI and hides the tab bar while active.
 private struct MyRentalsHostView: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> MyRentalsViewController {
-        MyRentalsViewController()
+        let vc = MyRentalsViewController()
+        // Ensure title is correct from the VC side too
+        vc.title = "My Rentals"
+        // Important: this flag only applies when pushed in UIKit. Since we’re in SwiftUI,
+        // we’ll also hide the tab bar via a UIKit bridge (below) on appear.
+        vc.hidesBottomBarWhenPushed = true
+        return vc
     }
     func updateUIViewController(_ uiViewController: MyRentalsViewController, context: Context) {}
 }
 
+// A helper UIViewController to toggle tab bar visibility when presented in SwiftUI.
+private struct TabBarHider: UIViewControllerRepresentable {
+    let hidden: Bool
+    func makeUIViewController(context: Context) -> UIViewController {
+        let vc = UIViewController()
+        DispatchQueue.main.async {
+            if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+               let window = scene.windows.first,
+               let tab = window.rootViewController as? UITabBarController {
+                tab.tabBar.isHidden = hidden
+            }
+        }
+        return vc
+    }
+    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {
+        DispatchQueue.main.async {
+            if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+               let window = scene.windows.first,
+               let tab = window.rootViewController as? UITabBarController {
+                tab.tabBar.isHidden = hidden
+            }
+        }
+    }
+}
+
+// MARK: - SwiftUI Profile
+
 private struct ProfileRootView: View {
+
     @State private var isLoggedIn: Bool = false
     @State private var displayName: String = "Guest User"
     @State private var userEmail: String = ""
@@ -54,8 +89,6 @@ private struct ProfileRootView: View {
     @State private var showEditProfile = false
 
     @AppStorage("notificationsEnabled") private var notificationsEnabled = true
-
-    init() {}
 
     var body: some View {
         NavigationStack {
@@ -97,60 +130,43 @@ private struct ProfileRootView: View {
                     }
                 }
 
-                // More (visible only after login)
-                if isLoggedIn {
-                    Section {
-                        // My Rentals now hosts the UIKit view controller with search + filter + BorrowerTableViewCell
-                        NavigationLink {
-                            MyRentalsHostView()
-                        } label: {
-                            Label("My Rentals", systemImage: "bag")
-                        }
-
-                        NavigationLink {
-                            WishlistPage()
-                        } label: {
-                            Label("Wishlist", systemImage: "heart")
-                        }
-
-                        NavigationLink {
-                            PrivacySecurityPage()
-                        } label: {
-                            Label("Privacy & Security", systemImage: "lock.shield")
-                        }
-
-                        NavigationLink {
-                            HelpSupportPage()
-                        } label: {
-                            Label("Help & Support", systemImage: "questionmark.circle")
-                        }
+                // More
+                Section {
+                    // Keep everything in SwiftUI NavigationStack.
+                    NavigationLink {
+                        // Hide tab bar while this destination is shown
+                        MyRentalsHostView()
+                            .background(TabBarHider(hidden: true))
+                            .navigationTitle("My Rentals")
+                            .navigationBarTitleDisplayMode(.inline)
+                            .onDisappear {
+                                // Restore tab bar when leaving
+                                if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                                   let window = scene.windows.first,
+                                   let tab = window.rootViewController as? UITabBarController {
+                                    tab.tabBar.isHidden = false
+                                }
+                            }
+                    } label: {
+                        Label("My Rentals", systemImage: "bag")
                     }
-                } else {
-                    // Show "More" even when logged out to match the screenshot layout
-                    Section {
-                        NavigationLink {
-                            MyRentalsHostView()
-                        } label: {
-                            Label("My Rentals", systemImage: "bag")
-                        }
 
-                        NavigationLink {
-                            WishlistPage()
-                        } label: {
-                            Label("Wishlist", systemImage: "heart")
-                        }
+                    NavigationLink {
+                        WishlistPage()
+                    } label: {
+                        Label("Wishlist", systemImage: "heart")
+                    }
 
-                        NavigationLink {
-                            PrivacySecurityPage()
-                        } label: {
-                            Label("Privacy & Security", systemImage: "lock.shield")
-                        }
+                    NavigationLink {
+                        PrivacySecurityPage()
+                    } label: {
+                        Label("Privacy & Security", systemImage: "lock.shield")
+                    }
 
-                        NavigationLink {
-                            HelpSupportPage()
-                        } label: {
-                            Label("Help & Support", systemImage: "questionmark.circle")
-                        }
+                    NavigationLink {
+                        HelpSupportPage()
+                    } label: {
+                        Label("Help & Support", systemImage: "questionmark.circle")
                     }
                 }
 
@@ -173,11 +189,10 @@ private struct ProfileRootView: View {
                     }
                 }
             }
-            .listStyle(.insetGrouped) // white rounded cards
-            .background(Color(.systemGroupedBackground)) // page background
+            .listStyle(.insetGrouped)
+            .background(Color(.systemGroupedBackground))
             .navigationTitle("Profile")
             .navigationBarTitleDisplayMode(.inline)
-            // IMPORTANT: do NOT hide the list’s content background; we want the grouped cards look.
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     if isLoggedIn {
@@ -207,11 +222,10 @@ private struct ProfileRootView: View {
                 )
             }
         }
-        .background(Color(.systemGroupedBackground)) // ensure hosting background matches
+        .background(Color(.systemGroupedBackground))
     }
 
     // MARK: - Auth helpers
-
     private func openSignIn() {
         guard let top = topViewController() else { return }
         let nibName = "SignViewController"
@@ -389,25 +403,6 @@ private struct EditProfileView: View {
 
 // MARK: - Placeholder pages
 
-private struct MyRentalsPage: View {
-    var body: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "bag")
-                .font(.system(size: 36))
-                .foregroundStyle(.secondary)
-            Text("My Rentals")
-                .font(.headline)
-            Text("Your rentals will appear here.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .padding(.top, 24)
-        .navigationTitle("My Rentals")
-        .navigationBarTitleDisplayMode(.inline)
-    }
-}
-
 private struct WishlistPage: View {
     var body: some View {
         VStack(spacing: 12) {
@@ -424,6 +419,7 @@ private struct WishlistPage: View {
         .padding(.top, 24)
         .navigationTitle("Wishlist")
         .navigationBarTitleDisplayMode(.inline)
+        .background(Color(.systemGroupedBackground))
     }
 }
 
@@ -441,6 +437,7 @@ private struct PrivacySecurityPage: View {
         }
         .navigationTitle("Privacy & Security")
         .navigationBarTitleDisplayMode(.inline)
+        .background(Color(.systemGroupedBackground))
     }
 }
 
@@ -458,6 +455,7 @@ private struct HelpSupportPage: View {
         }
         .navigationTitle("Help & Support")
         .navigationBarTitleDisplayMode(.inline)
+        .background(Color(.systemGroupedBackground))
     }
 }
 

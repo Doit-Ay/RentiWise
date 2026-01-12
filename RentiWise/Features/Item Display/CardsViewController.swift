@@ -36,7 +36,8 @@ final class CardsViewController: UIViewController {
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         stack.translatesAutoresizingMaskIntoConstraints = false
         stack.axis = .vertical
-        stack.spacing = 0 // spacing visually comes from CardView.contentInsets
+        // Ensure 16pt spacing between cards
+        stack.spacing = 16
 
         view.addSubview(scrollView)
         scrollView.addSubview(stack)
@@ -47,10 +48,10 @@ final class CardsViewController: UIViewController {
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
 
-            stack.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
+            stack.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor, constant: 16),
             stack.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
             stack.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
-            stack.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
+            stack.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor, constant: -16),
             stack.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor)
         ])
     }
@@ -69,18 +70,16 @@ final class CardsViewController: UIViewController {
             let priceText = (currencyFormatter.string(from: NSNumber(value: item.pricePerDay)) ?? "\(item.pricePerDay)") + " / day"
             card.configure(title: item.title, priceText: priceText, ratingText: item.ratingText, distanceText: item.distanceText)
 
-            // Adjust outer spacing if you want bigger gaps
-            card.contentInsets = NSDirectionalEdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16)
+            // Horizontal padding 16, no extra vertical padding so stack spacing stays exactly 16
+            card.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16)
 
             // Add Rent Now button as accessory or subview
             let rentButton = UIButton(type: .system)
             rentButton.setTitle("Rent Now", for: .normal)
             rentButton.addTarget(self, action: #selector(handleRentNow(_:)), for: .touchUpInside)
             if card.responds(to: Selector(("addArrangedAccessory:"))) {
-                // Using addArrangedAccessory if available
                 (card.perform(Selector(("addArrangedAccessory:")), with: rentButton))
             } else {
-                // fallback: add as subview to card.contentView
                 if let contentView = card.value(forKey: "contentView") as? UIView {
                     rentButton.translatesAutoresizingMaskIntoConstraints = false
                     contentView.addSubview(rentButton)
@@ -89,7 +88,6 @@ final class CardsViewController: UIViewController {
                         rentButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -16)
                     ])
                 } else {
-                    // fallback: add to card itself
                     rentButton.translatesAutoresizingMaskIntoConstraints = false
                     card.addSubview(rentButton)
                     NSLayoutConstraint.activate([
@@ -125,14 +123,8 @@ final class CardsViewController: UIViewController {
             Task {
                 do {
                     // PRIVATE bucket (signed URL)
-                    // Change "itemimages" to your real bucket name
                     let url = try await storage.signedURL(bucket: "itemimages", path: item.imagePath, expiresIn: 3600)
                     card.setImage(from: url)
-
-                    // PUBLIC bucket example (if your bucket is public and StorageURLBuilder is configured):
-                    // if let url = StorageURLBuilder.publicFileURL(for: item.imagePath) {
-                    //     card.setImage(from: url)
-                    // }
                 } catch {
                     // handle image error if needed
                 }

@@ -1,5 +1,5 @@
 //
-//  BorrowerTableViewCell.swift
+//  BorrowerTableViewCell
 //  RentiWise
 //
 //  Created by admin99 on 08/12/25.
@@ -38,6 +38,7 @@ class BorrowerTableViewCell: UITableViewCell {
         borrowerItemImage?.layer.cornerRadius = 12
 
         installCardBackgroundIfNeeded()
+        applyRequestStyleCardShadow()
     }
 
     private func installCardBackgroundIfNeeded() {
@@ -52,30 +53,37 @@ class BorrowerTableViewCell: UITableViewCell {
 
         // Rounded card that clips its content
         cardBackground.layer.cornerRadius = 16
-        cardBackground.clipsToBounds = true
-
-        // Optional soft shadow outside the card
-        if showsShadow {
-            cardBackground.layer.masksToBounds = false
-            cardBackground.layer.shadowColor = UIColor.black.cgColor
-            cardBackground.layer.shadowOpacity = 0.10
-            cardBackground.layer.shadowRadius = 6
-            cardBackground.layer.shadowOffset = CGSize(width: 0, height: 4)
-        } else {
-            cardBackground.layer.masksToBounds = true
-            cardBackground.layer.shadowOpacity = 0
-        }
+        cardBackground.clipsToBounds = false
 
         // Insert the card behind content
         contentView.insertSubview(cardBackground, at: 0)
 
-        let inset: CGFloat = 12
+        // 16pt insets so the card “floats” from the edges
+        let inset: CGFloat = 16
         NSLayoutConstraint.activate([
             cardBackground.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: inset),
             cardBackground.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -inset),
             cardBackground.topAnchor.constraint(equalTo: contentView.topAnchor, constant: inset),
             cardBackground.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -inset)
         ])
+    }
+
+    private func applyRequestStyleCardShadow() {
+        guard showsShadow else {
+            cardBackground.layer.masksToBounds = true
+            cardBackground.layer.shadowOpacity = 0
+            return
+        }
+        // Stronger, softer shadow to match Requests page
+        cardBackground.layer.masksToBounds = false
+        cardBackground.layer.shadowColor = UIColor.black.cgColor
+        cardBackground.layer.shadowOpacity = 0.22
+        cardBackground.layer.shadowRadius = 12
+        cardBackground.layer.shadowOffset = CGSize(width: 0, height: 6)
+
+        // Optional: rasterize for smoother scrolling
+        cardBackground.layer.shouldRasterize = true
+        cardBackground.layer.rasterizationScale = UIScreen.main.scale
     }
 
     override func layoutSubviews() {
@@ -101,6 +109,7 @@ class BorrowerTableViewCell: UITableViewCell {
 
         backgroundColor = .clear
         contentView.backgroundColor = .clear
+        cardBackground.backgroundColor = .systemBackground
     }
 
     // MARK: - Configure with full Item
@@ -133,6 +142,52 @@ class BorrowerTableViewCell: UITableViewCell {
 
         if let firstPath = lite.images.first,
            let url = StorageURLBuilder.publicFileURL(for: firstPath) {
+            setImage(from: url)
+        } else {
+            borrowerItemImage?.image = UIImage(systemName: "photo")
+            borrowerItemImage?.tintColor = .secondaryLabel
+            borrowerItemImage?.contentMode = .scaleAspectFit
+        }
+    }
+
+    // MARK: - Configure with RequestWithItem (borrower requests)
+    func configure(with request: RequestWithItem, currencyFormatter: NumberFormatter) {
+        // Title: prefer joined item title, fallback to item_id
+        borrowerItemName?.text = request.items?.title ?? request.item_id
+
+        // Price or date range
+        if let p = request.items?.price_per_day {
+            let amount = NSNumber(value: p)
+            borrowerItemRate?.text = (currencyFormatter.string(from: amount) ?? "\(p)") + " / day"
+        } else {
+            // No price available -> show date range
+            let sql = DateFormatter()
+            sql.calendar = Calendar(identifier: .gregorian)
+            sql.timeZone = TimeZone(secondsFromGMT: 0)
+            sql.dateFormat = "yyyy-MM-dd"
+
+            let display = DateFormatter()
+            display.calendar = Calendar(identifier: .gregorian)
+            display.timeZone = .current
+            display.dateFormat = "d MMM yyyy"
+
+            if let s = sql.date(from: request.start_date),
+               let e = sql.date(from: request.end_date) {
+                borrowerItemRate?.text = "\(display.string(from: s)) — \(display.string(from: e))"
+            } else {
+                borrowerItemRate?.text = "—"
+            }
+        }
+
+        // Status: use the ownerName label slot for status display
+        borrowerItemOwnerName?.text = request.status.capitalized
+
+        // Distance placeholder
+        borrowerItemDistance?.text = "1.4 km"
+
+        // Image: from joined item images
+        if let path = request.items?.images.first,
+           let url = StorageURLBuilder.publicFileURL(for: path) {
             setImage(from: url)
         } else {
             borrowerItemImage?.image = UIImage(systemName: "photo")

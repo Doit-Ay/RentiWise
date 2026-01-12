@@ -40,7 +40,23 @@ class DashboardLenderRequestViewController: UIViewController {
     @IBOutlet weak var feerentLabel: UILabel!
     @IBOutlet weak var secRateLabel: UILabel!
     @IBOutlet weak var totalLabel: UILabel!
+
+    // Buttons
+    @IBOutlet weak var acceptButton: UIButton!   // CONNECT THIS IN IB
     @IBOutlet weak var denyButton: UIButton!
+    @IBOutlet weak var denybutton: UIButton!     // if this is a duplicate, keep it connected; else you can remove it
+
+    // Cache fetched deposit so we don’t refetch repeatedly
+    private var depositAmount: Double?
+
+    // Programmatic status row (shown when status != pending)
+    private var statusRowContainer: UIStackView?
+    private var statusValueLabel: UILabel?
+    private var changeStatusButton: UIButton?
+
+    // White background bar behind the status row
+    private var statusBackgroundView: UIView?
+    private var statusBackgroundBottomConstraint: NSLayoutConstraint?
 
     private let displayDateFormatter: DateFormatter = {
         let df = DateFormatter()
@@ -81,7 +97,88 @@ class DashboardLenderRequestViewController: UIViewController {
         prodimage?.tintColor = .secondaryLabel
         prodimage?.contentMode = .scaleAspectFit
 
+        // Prepare status row (hidden by default) and its background
+        ensureStatusRow()
+
         applyRequestToUI()
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        // Keep the status background above other content
+        if let bg = statusBackgroundView {
+            view.bringSubviewToFront(bg)
+        }
+    }
+
+    private func ensureStatusRow() {
+        guard statusRowContainer == nil else { return }
+
+        // Build inner stack: [ "Status: <value>", spacer, Change ]
+        let label = UILabel()
+        label.font = .systemFont(ofSize: 16, weight: .semibold)
+        label.textColor = .label
+
+        let change = UIButton(type: .system)
+        change.setTitle("Change", for: .normal)
+        change.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
+        change.addTarget(self, action: #selector(didTapChangeStatus), for: .touchUpInside)
+
+        let stack = UIStackView(arrangedSubviews: [label, UIView(), change])
+        stack.axis = .horizontal
+        stack.alignment = .center
+        stack.spacing = 8
+        stack.translatesAutoresizingMaskIntoConstraints = false
+
+        // Background container pinned to very bottom (not safe area), full width, white bg
+        let bg = UIView()
+        bg.translatesAutoresizingMaskIntoConstraints = false
+        bg.backgroundColor = .white // starts from bottom edge of screen
+        // Rounded top corners like a bottom bar (optional)
+        if #available(iOS 11.0, *) {
+            bg.layer.cornerRadius = 16
+            bg.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
+            bg.layer.masksToBounds = true
+        }
+
+        // Always host in the main view so it sits at the bottom of the screen
+        let host = view!
+        host.addSubview(bg)
+        bg.addSubview(stack)
+
+        // Constrain background to bottom edges (view.bottomAnchor, not safe area)
+        let leading = bg.leadingAnchor.constraint(equalTo: host.leadingAnchor)
+        let trailing = bg.trailingAnchor.constraint(equalTo: host.trailingAnchor)
+        let bottom = bg.bottomAnchor.constraint(equalTo: host.bottomAnchor) // <- to screen bottom
+        NSLayoutConstraint.activate([leading, trailing, bottom])
+
+        // Give the bar a minimum height so it feels like a bottom section
+        let minHeight = bg.heightAnchor.constraint(greaterThanOrEqualToConstant: 64)
+        minHeight.priority = .required
+
+        // Add content insets inside bg
+        let topInset: CGFloat = 14
+        let bottomInset: CGFloat = 28 // push content up a bit for visibility
+        NSLayoutConstraint.activate([
+            minHeight,
+            stack.leadingAnchor.constraint(equalTo: bg.leadingAnchor, constant: 16),
+            stack.trailingAnchor.constraint(equalTo: bg.trailingAnchor, constant: -16),
+            stack.topAnchor.constraint(equalTo: bg.topAnchor, constant: topInset),
+            stack.bottomAnchor.constraint(equalTo: bg.bottomAnchor, constant: -bottomInset)
+        ])
+
+        // Ensure it sits above other content visually
+        host.bringSubviewToFront(bg)
+
+        // Initially hidden until we have a non-pending status
+        bg.isHidden = true
+        stack.isHidden = true
+
+        statusRowContainer = stack
+        statusValueLabel = label
+        changeStatusButton = change
+        statusBackgroundView = bg
+        statusBackgroundBottomConstraint = bottom
     }
 
     private func applyRequestToUI() {
@@ -97,6 +194,7 @@ class DashboardLenderRequestViewController: UIViewController {
             feerentLabel?.text = ""
             secRateLabel?.text = ""
             totalLabel?.text = ""
+            updateButtonsAndStatusUI(status: nil)
             return
         }
 
@@ -110,10 +208,12 @@ class DashboardLenderRequestViewController: UIViewController {
         let startDate = sqlDateFormatter.date(from: req.start_date)
         let endDate = sqlDateFormatter.date(from: req.end_date)
 
+        var days: Int?
         if let s = startDate, let e = endDate {
             datelabel?.text = "\(displayDateFormatter.string(from: s)) — \(displayDateFormatter.string(from: e))"
-            let days = max(1, Int(ceil(e.timeIntervalSince(s) / 86400.0)))
-            numberodDaysLabel?.text = "\(days) day\(days == 1 ? "" : "s")"
+            let d = max(1, Int(ceil(e.timeIntervalSince(s) / 86400.0)))
+            days = d
+            numberodDaysLabel?.text = "\(d) day\(d == 1 ? "" : "s")"
         } else {
             datelabel?.text = "—"
             numberodDaysLabel?.text = "—"
@@ -134,8 +234,8 @@ class DashboardLenderRequestViewController: UIViewController {
             feerentLabel?.text = ""
         }
 
-        // Security/total not part of requests schema; display status here for now
-        totalLabel?.text = req.status.capitalized
+        // Owner name: fetch from users, fallback to profiles
+        resolveOwnerName(for: req.owner_id)
 
         // Image from joined item
         if let path = req.items?.images.first,
@@ -150,13 +250,132 @@ class DashboardLenderRequestViewController: UIViewController {
         } else {
             prodimage?.image = UIImage(systemName: "photo")
             prodimage?.tintColor = .secondaryLabel
-            prodimage?.contentMode = .scaleAspectFit
+            self.prodimage?.contentMode = .scaleAspectFit
         }
 
-        // Owner placeholders (fill later if needed)
-        ownNameLabel?.text = "Owner"
-        ownRatingLabel?.text = "★ 4.7"
-        ownDistLabel?.text = "2.3 km"
+        // Owner placeholders (ratings/distance can be refined later)
+        if ownRatingLabel?.text?.isEmpty ?? true { ownRatingLabel?.text = "★ 4.7" }
+        if ownDistLabel?.text?.isEmpty ?? true { ownDistLabel?.text = "2.3 km" }
+
+        // Pricing: need deposit_amount from items; fetch if we don’t have it yet
+        computeAndDisplayTotals(days: days, pricePerDay: req.items?.price_per_day, itemId: req.item_id)
+
+        // Buttons vs status row
+        updateButtonsAndStatusUI(status: req.status)
+    }
+
+    private func updateButtonsAndStatusUI(status: String?) {
+        let current = (status ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let isPending = current.isEmpty || current == "pending"
+
+        // Accept/Deny buttons visible only when pending
+        acceptButton?.isHidden = !isPending
+        denyButton?.isHidden = !isPending
+        denybutton?.isHidden = !isPending // keep in sync if this is wired to a second button
+
+        // Status row + background visible only when not pending
+        statusRowContainer?.isHidden = isPending
+        statusBackgroundView?.isHidden = isPending
+
+        if !isPending {
+            let display = current.capitalized.isEmpty ? "—" : current.capitalized
+            statusValueLabel?.text = "Status: \(display)"
+        }
+    }
+
+    // MARK: - Owner name resolution
+
+    private func resolveOwnerName(for ownerId: String) {
+        Task {
+            // Try users table first
+            if let name = try? await fetchName(from: "users", ownerId: ownerId), !name.isEmpty {
+                await MainActor.run { self.ownNameLabel?.text = capitalizingFirstLetter(name) }
+                return
+            }
+            // Fallback to profiles
+            if let name = try? await fetchName(from: "profiles", ownerId: ownerId), !name.isEmpty {
+                await MainActor.run { self.ownNameLabel?.text = capitalizingFirstLetter(name) }
+                return
+            }
+            await MainActor.run { self.ownNameLabel?.text = "Owner" }
+        }
+    }
+
+    private func fetchName(from table: String, ownerId: String) async throws -> String? {
+        struct NameDTO: Decodable { let full_name: String? }
+        let response = try await SupabaseManager.shared.client
+            .from(table)
+            .select("full_name")
+            .eq("id", value: ownerId)
+            .single()
+            .execute()
+
+        if let data = response.data as? Data {
+            let dto = try JSONDecoder().decode(NameDTO.self, from: data)
+            return dto.full_name
+        }
+        return nil
+    }
+
+    private func capitalizingFirstLetter(_ s: String) -> String {
+        guard let first = s.unicodeScalars.first else { return s }
+        let firstChar = String(first).uppercased()
+        let remainder = String(s.unicodeScalars.dropFirst())
+        return firstChar + remainder
+    }
+
+    // MARK: - Pricing
+
+    private func computeAndDisplayTotals(days: Int?, pricePerDay: Double?, itemId: String) {
+        // If we already have deposit and needed inputs, compute immediately
+        if let p = pricePerDay, let d = days, let deposit = depositAmount {
+            let rentalFee = Double(d) * p
+            let total = rentalFee + deposit
+            secRateLabel?.text = currencyFormatter.string(from: NSNumber(value: deposit))
+            totalLabel?.text = currencyFormatter.string(from: NSNumber(value: total))
+            return
+        }
+
+        // Otherwise fetch deposit if missing, then compute
+        Task {
+            if depositAmount == nil {
+                do {
+                    struct DepositDTO: Decodable { let deposit_amount: Double }
+                    let response = try await SupabaseManager.shared.client
+                        .from("items")
+                        .select("deposit_amount")
+                        .eq("id", value: itemId)
+                        .single()
+                        .execute()
+
+                    if let data = response.data as? Data {
+                        let dto = try JSONDecoder().decode(DepositDTO.self, from: data)
+                        self.depositAmount = dto.deposit_amount
+                    }
+                } catch {
+                    // If fetch fails, assume zero deposit
+                    self.depositAmount = 0
+                }
+            }
+
+            await MainActor.run { [weak self] in
+                guard let self = self else { return }
+                let deposit = self.depositAmount ?? 0
+                if let d = days, let p = pricePerDay {
+                    let rentalFee = Double(d) * p
+                    let total = rentalFee + deposit
+                    self.secRateLabel?.text = self.currencyFormatter.string(from: NSNumber(value: deposit))
+                    self.totalLabel?.text = self.currencyFormatter.string(from: NSNumber(value: total))
+                } else {
+                    // Still show deposit if we have it
+                    self.secRateLabel?.text = self.currencyFormatter.string(from: NSNumber(value: deposit))
+                    // If we can’t compute total, leave it blank
+                    if self.totalLabel?.text?.isEmpty ?? true {
+                        self.totalLabel?.text = nil
+                    }
+                }
+            }
+        }
     }
 
     // MARK: - Actions: Accept / Deny
@@ -171,9 +390,39 @@ class DashboardLenderRequestViewController: UIViewController {
         Task { await updateStatus(to: "denied") }
     }
 
+    @objc private func didTapChangeStatus() {
+        guard let current = request?.status.lowercased() else { return }
+
+        let ac = UIAlertController(title: "Change Status", message: "Select a new status", preferredStyle: .actionSheet)
+
+        ac.addAction(UIAlertAction(title: "Accepted", style: .default, handler: { [weak self] _ in
+            guard let self else { return }
+            if current != "accepted" {
+                Task { await self.updateStatus(to: "accepted") }
+            }
+        }))
+        ac.addAction(UIAlertAction(title: "Denied", style: .default, handler: { [weak self] _ in
+            guard let self else { return }
+            if current != "denied" {
+                Task { await self.updateStatus(to: "denied") }
+            }
+        }))
+        ac.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+
+        if let pop = ac.popoverPresentationController, let btn = changeStatusButton {
+            pop.sourceView = btn
+            pop.sourceRect = btn.bounds
+        }
+        present(ac, animated: true)
+    }
+
     private func setButtonsEnabled(_ enabled: Bool) {
         view.isUserInteractionEnabled = enabled
+        acceptButton?.alpha = enabled ? 1.0 : 0.6
         denyButton?.alpha = enabled ? 1.0 : 0.6
+        denybutton?.alpha = enabled ? 1.0 : 0.6
+        changeStatusButton?.isEnabled = enabled
+        changeStatusButton?.alpha = enabled ? 1.0 : 0.6
     }
 
     private func updateStatus(to newStatus: String) async {
@@ -193,23 +442,12 @@ class DashboardLenderRequestViewController: UIViewController {
             self.request = current
 
             await MainActor.run {
-                self.totalLabel?.text = newStatus.capitalized
+                // Update buttons/status row visibility
+                self.updateButtonsAndStatusUI(status: current.status)
             }
 
             // Tell LenderView to refresh Requests
             NotificationCenter.default.post(name: Notification.Name("requestsShouldRefresh"), object: nil)
-
-            // Navigate back to Dashboard → Lender → Requests
-            await MainActor.run {
-                // If presented modally, dismiss; else pop
-                if let presenting = self.presentingViewController, self.navigationController == nil {
-                    self.dismiss(animated: true) {
-                        // No-op; Dashboard should handle showing correct segment
-                    }
-                } else if let nav = self.navigationController {
-                    nav.popViewController(animated: true)
-                }
-            }
         } catch {
             await MainActor.run {
                 let alert = UIAlertController(title: "Update Failed", message: error.localizedDescription, preferredStyle: .alert)

@@ -152,6 +152,8 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
         tableView.contentInset = UIEdgeInsets(top: 16, left: 0, bottom: 16, right: 0)
         tableView.rowHeight = 140
         tableView.estimatedRowHeight = 140
+        // Important: do not clip shadows
+        tableView.clipsToBounds = false
 
         tableView.register(UINib(nibName: "LenderListingTableViewCell", bundle: nil), forCellReuseIdentifier: "Listing")
         tableView.register(UINib(nibName: "LenderHistoryTableViewCell", bundle: nil), forCellReuseIdentifier: "History")
@@ -387,3 +389,4 @@ extension DashboardViewController: UITableViewDelegate {
         }
     }
 }
+

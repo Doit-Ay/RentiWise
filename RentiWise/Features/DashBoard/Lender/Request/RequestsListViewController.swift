@@ -13,6 +13,11 @@ final class RequestsListViewController: UIViewController {
     private let tableView = UITableView(frame: .zero, style: .plain)
     private var rows: [RequestWithItem] = []
 
+    // Auto-refresh
+    private var refreshTask: Task<Void, Never>?
+    private let refreshInterval: Duration = .seconds(12)
+    private var refreshObserver: NSObjectProtocol?
+
     private let currencyFormatter: NumberFormatter = {
         let f = NumberFormatter()
         f.numberStyle = .currency
@@ -30,6 +35,56 @@ final class RequestsListViewController: UIViewController {
 
         setupTable()
         Task { await loadRequests() }
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        // Start auto-refresh while visible
+        startAutoRefresh()
+        // Observe external refresh trigger (e.g., after Accept/Deny elsewhere)
+        if refreshObserver == nil {
+            refreshObserver = NotificationCenter.default.addObserver(
+                forName: Notification.Name("requestsShouldRefresh"),
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                guard let self else { return }
+                Task { await self.loadRequests() }
+            }
+        }
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        // Stop auto-refresh when leaving
+        stopAutoRefresh()
+    }
+
+    deinit {
+        stopAutoRefresh()
+        if let obs = refreshObserver {
+            NotificationCenter.default.removeObserver(obs)
+            refreshObserver = nil
+        }
+    }
+
+    private func startAutoRefresh() {
+        stopAutoRefresh()
+        refreshTask = Task { [weak self] in
+            guard let self else { return }
+            // Immediate refresh on start to feel responsive
+            await self.loadRequests()
+            while !Task.isCancelled {
+                try? await Task.sleep(for: refreshInterval)
+                if Task.isCancelled { break }
+                await self.loadRequests()
+            }
+        }
+    }
+
+    private func stopAutoRefresh() {
+        refreshTask?.cancel()
+        refreshTask = nil
     }
 
     // MARK: - Table setup
@@ -211,4 +266,3 @@ extension RequestsListViewController: UITableViewDelegate {
         navigationController?.pushViewController(detail, animated: true)
     }
 }
-

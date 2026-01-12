@@ -13,7 +13,7 @@ final class LenderListingTableViewCell: UITableViewCell {
     @IBOutlet weak var itemNameListing: UILabel!
     @IBOutlet weak var itemRateListing: UILabel!
     @IBOutlet weak var itemRatingListing: UILabel!
-
+    @IBOutlet weak var listingcard: UIView!
     // Simple in-flight loader task to avoid image flicker when reused
     private var imageLoadTask: URLSessionDataTask?
 
@@ -52,8 +52,8 @@ final class LenderListingTableViewCell: UITableViewCell {
         // Insert the background at the back so existing outlets remain visible above it
         contentView.insertSubview(cardBackground, at: 0)
 
-        // Inset the card within the cell for breathing space (tweak to taste)
-        let inset: CGFloat = 12
+        // Use 16pt inset around the card so rows have 16pt spacing between them
+        let inset: CGFloat = 16
         NSLayoutConstraint.activate([
             cardBackground.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: inset),
             cardBackground.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -inset),
@@ -64,22 +64,22 @@ final class LenderListingTableViewCell: UITableViewCell {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        // Apply strong, clean glass like other frosted cards in the app
+        // Make the glass “whiter” and the shadow deeper so it pops from the background
         cardBackground.applyGlassEffect(
             cornerRadius: 16,
             style: .systemThickMaterial,
             addsVibrancy: false,
             showsShadow: true,
-            borderAlpha: 0.30,
+            borderAlpha: 0.38,
             tintColorOverride: .white,
-            tintAlpha: 0.18,
+            tintAlpha: 0.24,
             showsHighlight: true,
-            highlightAlpha: 0.16
+            highlightAlpha: 0.20
         )
-        // Slightly softer shadow to match the rest of the UI
-        cardBackground.layer.shadowOpacity = 0.12
-        cardBackground.layer.shadowRadius = 8
-        cardBackground.layer.shadowOffset = CGSize(width: 0, height: 4)
+        cardBackground.layer.shadowColor = UIColor.black.cgColor
+        cardBackground.layer.shadowOpacity = 0.18
+        cardBackground.layer.shadowRadius = 12
+        cardBackground.layer.shadowOffset = CGSize(width: 0, height: 8)
     }
 
     override func prepareForReuse() {
@@ -121,10 +121,8 @@ final class LenderListingTableViewCell: UITableViewCell {
 
     // MARK: - Lightweight async image loading
     private func setImage(from url: URL) {
-        // Cancel any previous load
         imageLoadTask?.cancel()
 
-        // Basic in-memory cache by URL
         if let cached = ImageCache.shared.image(forKey: url.absoluteString) {
             itemImageListing.image = cached
             itemImageListing.contentMode = .scaleAspectFill
@@ -140,7 +138,6 @@ final class LenderListingTableViewCell: UITableViewCell {
             ImageCache.shared.setImage(image, forKey: url.absoluteString)
 
             DispatchQueue.main.async {
-                // Ensure the cell hasn’t been reused for another image
                 self.itemImageListing.image = image
                 self.itemImageListing.contentMode = .scaleAspectFill
             }

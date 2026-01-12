@@ -32,31 +32,35 @@ final class LenderRequestTableViewCell: UITableViewCell {
         itemImageRequest?.clipsToBounds = true
         itemImageRequest?.layer.cornerRadius = 12
 
-        // Card setup: clear background; glass effect supplies the surface/shadow
-        itemcardview?.layer.cornerRadius = 16
-        itemcardview?.layer.masksToBounds = false
-        itemcardview?.backgroundColor = .clear
+        // Card setup: solid surface + rounded corners + strong shadow
+        configureCardAppearance()
     }
 
     override func layoutSubviews() {
         super.layoutSubviews()
+        // Keep shadow path updated for performance (matches current bounds + corner radius)
+        if let card = itemcardview {
+            card.layer.shadowPath = UIBezierPath(roundedRect: card.bounds, cornerRadius: card.layer.cornerRadius).cgPath
+        }
+    }
 
-        // Strong, clean glass like CategoryItemCell, with a bit more contrast on grouped bg
-        itemcardview?.applyGlassEffect(
-            cornerRadius: 16,
-            style: .systemThickMaterial,
-            addsVibrancy: false,
-            showsShadow: true,
-            borderAlpha: 0.30,
-            tintColorOverride: .white,
-            tintAlpha: 0.18,     // slightly stronger than default for definition
-            showsHighlight: true,
-            highlightAlpha: 0.16 // subtle specular highlight
-        )
-        // Slightly softer shadow like your category cards
-        itemcardview?.layer.shadowOpacity = 0.12
-        itemcardview?.layer.shadowRadius = 8
-        itemcardview?.layer.shadowOffset = CGSize(width: 0, height: 4)
+    private func configureCardAppearance() {
+        guard let card = itemcardview else { return }
+
+        // Solid surface so shadow reads clearly (use .white for max contrast if preferred)
+        card.backgroundColor = .systemBackground
+        card.layer.cornerRadius = 16
+        card.layer.masksToBounds = false
+
+        // Stronger, softer shadow to pop from grouped bg
+        card.layer.shadowColor = UIColor.black.cgColor
+        card.layer.shadowOpacity = 0.22   // tweak 0.20–0.26 for taste
+        card.layer.shadowRadius = 12      // blur radius; higher = softer
+        card.layer.shadowOffset = CGSize(width: 0, height: 6)
+
+        // Optional: rasterize for scrolling performance (be mindful with dynamic resizing)
+        card.layer.shouldRasterize = true
+        card.layer.rasterizationScale = UIScreen.main.scale
     }
 
     override func prepareForReuse() {
@@ -71,7 +75,7 @@ final class LenderRequestTableViewCell: UITableViewCell {
         // Keep backgrounds consistent
         backgroundColor = .clear
         contentView.backgroundColor = .clear
-        itemcardview?.backgroundColor = .clear
+        itemcardview?.backgroundColor = .systemBackground
     }
 
     // MARK: - Configure with public.requests row
@@ -116,4 +120,3 @@ final class LenderRequestTableViewCell: UITableViewCell {
         imageLoadTask?.resume()
     }
 }
-

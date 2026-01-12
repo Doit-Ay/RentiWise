@@ -16,7 +16,7 @@ final class MyRentalsViewController: UIViewController {
 
     // Top row containing a search bar (left, expands) and a Filter button (right)
     private let topBar = UIView()
-    private let searchBar = UISearchBar(frame: .zero)
+    private let searchBar = UISearchBar()
     private let filterButton = UIButton(type: .system)
 
     // MARK: - Data
@@ -30,36 +30,50 @@ final class MyRentalsViewController: UIViewController {
     private enum StatusFilter: String, CaseIterable {
         case all = "All"
         case pending = "Pending"
-        case accepted = "Accepted"
-
-        static func from(raw: String) -> StatusFilter {
-            let l = raw.lowercased()
-            switch l {
-            case "pending": return .pending
-            case "accepted": return .accepted
-            default: return .all
-            }
-        }
+        case approved = "Approved"
     }
 
-    // Currency for BorrowerTableViewCell
+    // Currency for price text (rounded ₹ like screenshot)
     private let currencyFormatter: NumberFormatter = {
         let f = NumberFormatter()
         f.numberStyle = .currency
-        f.minimumFractionDigits = 2
-        f.maximumFractionDigits = 2
+        f.minimumFractionDigits = 0
+        f.maximumFractionDigits = 0
         return f
+    }()
+
+    // Date formatters
+    private lazy var sqlDateFormatter: DateFormatter = {
+        let df = DateFormatter()
+        df.calendar = Calendar(identifier: .gregorian)
+        df.timeZone = TimeZone(secondsFromGMT: 0)
+        df.dateFormat = "yyyy-MM-dd"
+        return df
+    }()
+    private lazy var displayDateFormatter: DateFormatter = {
+        let df = DateFormatter()
+        df.calendar = Calendar(identifier: .gregorian)
+        df.timeZone = .current
+        df.dateFormat = "d MMM yyyy"
+        return df
     }()
 
     override func viewDidLoad() {
         super.viewDidLoad()
 
+        // Ensure this VC hides the tab bar when pushed (navigation stack)
+        hidesBottomBarWhenPushed = true
+
+        // Title (plural)
         title = "My Rentals"
+
+        // Backgrounds
         view.backgroundColor = .systemGroupedBackground
-        navigationController?.navigationBar.prefersLargeTitles = true
-        navigationItem.largeTitleDisplayMode = .always
-        
-        navigationController?.navigationBar.isTranslucent = false
+
+        // Nav bar appearance and visibility (systemGroupedBackground)
+        navigationItem.largeTitleDisplayMode = .never
+        navigationController?.navigationBar.prefersLargeTitles = false
+
         let appearance = UINavigationBarAppearance()
         appearance.configureWithOpaqueBackground()
         appearance.backgroundColor = .systemGroupedBackground
@@ -67,6 +81,13 @@ final class MyRentalsViewController: UIViewController {
         navigationController?.navigationBar.standardAppearance = appearance
         navigationController?.navigationBar.scrollEdgeAppearance = appearance
         navigationController?.navigationBar.compactAppearance = appearance
+        navigationController?.navigationBar.isTranslucent = false
+        navigationController?.navigationBar.barTintColor = .systemGroupedBackground
+        navigationController?.navigationBar.backgroundColor = .systemGroupedBackground
+        navigationController?.setNavigationBarHidden(false, animated: false)
+
+        // Right bar "Add" action (placeholder)
+        navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(didTapAdd))
 
         setupTopBar()
         setupTable()
@@ -76,8 +97,27 @@ final class MyRentalsViewController: UIViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        // Make sure nav bar is visible and title is set, and re-apply opaque appearance defensively
         navigationController?.setNavigationBarHidden(false, animated: false)
         title = "My Rentals"
+
+        let appearance = UINavigationBarAppearance()
+        appearance.configureWithOpaqueBackground()
+        appearance.backgroundColor = .systemGroupedBackground
+        appearance.titleTextAttributes = [.foregroundColor: UIColor.label]
+        navigationController?.navigationBar.standardAppearance = appearance
+        navigationController?.navigationBar.scrollEdgeAppearance = appearance
+        navigationController?.navigationBar.compactAppearance = appearance
+        navigationController?.navigationBar.isTranslucent = false
+        navigationController?.navigationBar.barTintColor = .systemGroupedBackground
+        navigationController?.navigationBar.backgroundColor = .systemGroupedBackground
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        // Keep bottom insets zero so the table reaches the very bottom
+        tableView.contentInset.bottom = 0
+        tableView.verticalScrollIndicatorInsets.bottom = 0
     }
 
     // MARK: - UI Setup
@@ -86,104 +126,109 @@ final class MyRentalsViewController: UIViewController {
         topBar.backgroundColor = .systemGroupedBackground
         view.addSubview(topBar)
 
-        // Search bar configuration
+        // Search bar
         searchBar.translatesAutoresizingMaskIntoConstraints = false
-        searchBar.placeholder = "Search by item title"
+        searchBar.placeholder = "Search rentals"
         searchBar.searchBarStyle = .minimal
         searchBar.delegate = self
         searchBar.autocapitalizationType = .none
         searchBar.autocorrectionType = .no
         searchBar.returnKeyType = .search
+        if #available(iOS 13.0, *) {
+            let tf = searchBar.searchTextField
+            tf.backgroundColor = .secondarySystemBackground
+            tf.clearButtonMode = .whileEditing
+        }
 
-        // Filter button on the right
+        // Filter button (circular icon)
         filterButton.translatesAutoresizingMaskIntoConstraints = false
-        filterButton.setTitle("Filter: All", for: .normal)
-        filterButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
-        filterButton.setTitleColor(UIColor(red: 112/255, green: 167/255, blue: 180/255, alpha: 1.0), for: .normal)
+        filterButton.setImage(UIImage(systemName: "line.3.horizontal.decrease.circle"), for: .normal)
+        filterButton.tintColor = UIColor.label
+        filterButton.backgroundColor = UIColor.secondarySystemBackground
+        filterButton.layer.cornerRadius = 20
+        filterButton.layer.masksToBounds = true
+        filterButton.accessibilityLabel = "Filter rentals"
         filterButton.addTarget(self, action: #selector(didTapFilter), for: .touchUpInside)
 
         topBar.addSubview(searchBar)
         topBar.addSubview(filterButton)
 
-        // Layout: search bar fills left, filter button pinned right; vertical centering
-        let topBarHeight: CGFloat = 50
         NSLayoutConstraint.activate([
             topBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             topBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             topBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            topBar.heightAnchor.constraint(equalToConstant: topBarHeight),
+            topBar.heightAnchor.constraint(equalToConstant: 60),
 
             filterButton.trailingAnchor.constraint(equalTo: topBar.trailingAnchor, constant: -16),
             filterButton.centerYAnchor.constraint(equalTo: topBar.centerYAnchor),
+            filterButton.widthAnchor.constraint(equalToConstant: 40),
+            filterButton.heightAnchor.constraint(equalToConstant: 40),
 
-            searchBar.leadingAnchor.constraint(equalTo: topBar.leadingAnchor, constant: 8),
-            searchBar.trailingAnchor.constraint(equalTo: filterButton.leadingAnchor, constant: -8),
+            searchBar.leadingAnchor.constraint(equalTo: topBar.leadingAnchor, constant: 16),
+            searchBar.trailingAnchor.constraint(equalTo: filterButton.leadingAnchor, constant: -10),
             searchBar.centerYAnchor.constraint(equalTo: topBar.centerYAnchor),
             searchBar.heightAnchor.constraint(equalToConstant: 36)
         ])
 
-        // Table below top bar
         tableView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(tableView)
         NSLayoutConstraint.activate([
             tableView.topAnchor.constraint(equalTo: topBar.bottomAnchor),
             tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            // Pin to the very bottom of the view so it fills the screen
             tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
     }
 
     private func setupTable() {
-        // Match Lender (RequestsList) look
+        // Card list look
         tableView.backgroundColor = .systemGroupedBackground
         tableView.separatorStyle = .none
-        tableView.rowHeight = 150
-        tableView.estimatedRowHeight = 150
-        tableView.contentInset = .zero
-        tableView.scrollIndicatorInsets = .zero
-
+        tableView.rowHeight = UITableView.automaticDimension
+        tableView.estimatedRowHeight = 140
         tableView.sectionHeaderHeight = .leastNormalMagnitude
         tableView.sectionFooterHeight = .leastNormalMagnitude
         tableView.estimatedSectionHeaderHeight = 0
         tableView.estimatedSectionFooterHeight = 0
 
-        // Register the Borrower cell from nib if available; else expect storyboard registration
-        if Bundle.main.path(forResource: "BorrowerTableViewCell", ofType: "nib") != nil ||
-            Bundle.main.path(forResource: "BorrowerTableViewCell", ofType: "xib") != nil {
-            tableView.register(UINib(nibName: "BorrowerTableViewCell", bundle: nil), forCellReuseIdentifier: "Borrower")
-        }
+        tableView.register(UINib(nibName: "BorrowerTableViewCell", bundle: nil), forCellReuseIdentifier: "Borrower")
 
         tableView.dataSource = self
         tableView.delegate = self
 
+        // Let content extend to bottom; manage insets manually
+        if #available(iOS 11.0, *) {
+            tableView.contentInsetAdjustmentBehavior = .never
+        }
+
+        // Top padding for breathing room below the topBar; zero bottom so it reaches the end
+        tableView.contentInset = UIEdgeInsets(top: 70, left: 0, bottom: 0, right: 0)
+        tableView.verticalScrollIndicatorInsets = UIEdgeInsets(top: 70, left: 0, bottom: 0, right: 0)
+
+        // Explicitly zero any extra controller safe-area bottom inset
+        self.additionalSafeAreaInsets.bottom = 0
+
         refresh.addTarget(self, action: #selector(didPullToRefresh), for: .valueChanged)
         tableView.refreshControl = refresh
 
-        if let header = tableView.tableHeaderView {
-            header.backgroundColor = .systemGroupedBackground
-        }
-        let footer = UIView(frame: .zero)
-        footer.backgroundColor = .systemGroupedBackground
-        tableView.tableFooterView = footer
+        tableView.tableFooterView = UIView(frame: .zero)
     }
 
     // MARK: - Actions
+    @objc private func didTapAdd() {
+        let a = UIAlertController(title: "Add Listing", message: "This will open the add listing flow.", preferredStyle: .alert)
+        a.addAction(UIAlertAction(title: "OK", style: .default))
+        present(a, animated: true)
+    }
+
     @objc private func didTapFilter() {
-        let ac = UIAlertController(title: "Filter", message: nil, preferredStyle: .actionSheet)
-
-        ac.addAction(UIAlertAction(title: StatusFilter.all.rawValue, style: .default, handler: { [weak self] _ in
-            self?.currentStatus = .all
-            self?.filterButton.setTitle("Filter: All", for: .normal)
-        }))
-        ac.addAction(UIAlertAction(title: StatusFilter.accepted.rawValue, style: .default, handler: { [weak self] _ in
-            self?.currentStatus = .accepted
-            self?.filterButton.setTitle("Filter: Accepted", for: .normal)
-        }))
-        ac.addAction(UIAlertAction(title: StatusFilter.pending.rawValue, style: .default, handler: { [weak self] _ in
-            self?.currentStatus = .pending
-            self?.filterButton.setTitle("Filter: Pending", for: .normal)
-        }))
-
+        let ac = UIAlertController(title: "Filter rentals", message: nil, preferredStyle: .actionSheet)
+        for status in [StatusFilter.all, .approved, .pending] {
+            ac.addAction(UIAlertAction(title: status.rawValue, style: .default, handler: { [weak self] _ in
+                self?.currentStatus = status
+            }))
+        }
         ac.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         if let pop = ac.popoverPresentationController {
             pop.sourceView = filterButton
@@ -203,15 +248,16 @@ final class MyRentalsViewController: UIViewController {
             switch self.currentStatus {
             case .all: return true
             case .pending: return req.status.lowercased() == "pending"
-            case .accepted: return req.status.lowercased() == "accepted"
+            case .approved: return req.status.lowercased() == "approved"
             }
         }
 
-        let query = currentQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let q = currentQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let textFilter: ((RequestWithItem) -> Bool) = { req in
-            guard !query.isEmpty else { return true }
+            guard !q.isEmpty else { return true }
             let title = req.items?.title.lowercased() ?? ""
-            return title.contains(query)
+            let id = req.item_id.lowercased()
+            return title.contains(q) || id.contains(q)
         }
 
         visibleRequests = allRequests.filter { statusFilter($0) && textFilter($0) }
@@ -221,21 +267,47 @@ final class MyRentalsViewController: UIViewController {
 
     private func updateEmptyStateIfNeeded() {
         if visibleRequests.isEmpty {
-            let label = UILabel()
-            label.textAlignment = .center
-            label.textColor = .secondaryLabel
-            label.numberOfLines = 0
-            label.font = .systemFont(ofSize: 16, weight: .medium)
+            let container = UIStackView()
+            container.axis = .vertical
+            container.alignment = .center
+            container.spacing = 10
 
-            var base = "No rentals found"
-            if currentStatus != .all {
-                base = "No \(currentStatus.rawValue) rentals"
-            }
-            if !currentQuery.isEmpty {
-                base += " for “\(currentQuery)”"
-            }
-            label.text = base
-            tableView.backgroundView = label
+            let icon = UIImageView(image: UIImage(systemName: "bag"))
+            icon.tintColor = .secondaryLabel
+            icon.contentMode = .scaleAspectFit
+            icon.translatesAutoresizingMaskIntoConstraints = false
+            icon.widthAnchor.constraint(equalToConstant: 36).isActive = true
+            icon.heightAnchor.constraint(equalToConstant: 36).isActive = true
+
+            let title = UILabel()
+            title.text = "No rentals yet"
+            title.font = .systemFont(ofSize: 17, weight: .semibold)
+            title.textColor = .label
+
+            let subtitle = UILabel()
+            subtitle.text = "Add your first item to start renting."
+            subtitle.font = .systemFont(ofSize: 14)
+            subtitle.textColor = .secondaryLabel
+
+            let add = UIButton(type: .system)
+            add.setTitle("Add Listing", for: .normal)
+            add.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
+            add.addTarget(self, action: #selector(didTapAdd), for: .touchUpInside)
+
+            container.addArrangedSubview(icon)
+            container.addArrangedSubview(title)
+            container.addArrangedSubview(subtitle)
+            container.addArrangedSubview(add)
+
+            let host = UIView()
+            host.addSubview(container)
+            container.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                container.centerXAnchor.constraint(equalTo: host.centerXAnchor),
+                container.centerYAnchor.constraint(equalTo: host.centerYAnchor)
+            ])
+
+            tableView.backgroundView = host
         } else {
             tableView.backgroundView = nil
         }
@@ -247,7 +319,7 @@ final class MyRentalsViewController: UIViewController {
             spinner.startAnimating()
             navigationItem.rightBarButtonItem = UIBarButtonItem(customView: spinner)
         } else {
-            navigationItem.rightBarButtonItem = nil
+            navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(didTapAdd))
         }
     }
 
@@ -258,22 +330,14 @@ final class MyRentalsViewController: UIViewController {
     }
 
     private func selectClause() -> String {
-        // Join items(...) so we can render BorrowerTableViewCell from ItemLite
-        return """
+        """
         id,item_id,owner_id,borrower_id,start_date,end_date,pickup_time,status,created_at,
         items(id,title,images,price_per_day)
         """
     }
 
-    private func orderClauseAscending() -> Bool { false } // newest first
+    private func orderClauseAscending() -> Bool { false }
 
-    private func updateOwnerLabel(for cell: BorrowerTableViewCell, with req: RequestWithItem) {
-        // Owner label: show "Owner • Status" (removed "From:")
-        let status = req.status.capitalized
-        cell.borrowerItemOwnerName?.text = "Owner • \(status)"
-    }
-
-    // MARK: - Fetch
     private func loadData(showSpinner: Bool) async {
         if showSpinner { showLoadingInNav(true) }
         defer {
@@ -319,83 +383,37 @@ final class MyRentalsViewController: UIViewController {
 
 // MARK: - UITableViewDataSource
 extension MyRentalsViewController: UITableViewDataSource {
-    func numberOfSections(in tableView: UITableView) -> Int { 1 }
-    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { visibleRequests.count }
+    func numberOfSections(in tableView: UITableView) -> Int { visibleRequests.count }
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { 1 }
 
     func tableView(_ tableView: UITableView,
                    cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let req = visibleRequests[indexPath.row]
-
-        guard let cell = tableView.dequeueReusableCell(withIdentifier: "Borrower") as? BorrowerTableViewCell ??
-                tableView.dequeueReusableCell(withIdentifier: "Borrower", for: indexPath) as? BorrowerTableViewCell else {
-            // Fallback temporary cell
-            let fallback = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
-            fallback.textLabel?.text = req.items?.title ?? req.item_id
-            fallback.detailTextLabel?.text = req.status.capitalized
-            fallback.backgroundColor = .clear
-            fallback.contentView.backgroundColor = .clear
-            return fallback
-        }
-
-        if let lite = req.items {
-            cell.configure(with: lite, currencyFormatter: currencyFormatter)
-        } else {
-            // If join failed, show minimal info
-            cell.borrowerItemName?.text = req.item_id
-            cell.borrowerItemRate?.text = ""
-            cell.borrowerItemImage?.image = UIImage(systemName: "photo")
-            cell.borrowerItemImage?.tintColor = .secondaryLabel
-            cell.borrowerItemImage?.contentMode = .scaleAspectFit
-        }
-
-        updateOwnerLabel(for: cell, with: req)
-
+        let req = visibleRequests[indexPath.section]
+        let cell = tableView.dequeueReusableCell(withIdentifier: "Borrower", for: indexPath) as! BorrowerTableViewCell
+        cell.configure(with: req, currencyFormatter: currencyFormatter)
         cell.backgroundColor = .clear
         cell.contentView.backgroundColor = .clear
-
         return cell
     }
 }
 
 // MARK: - UITableViewDelegate
 extension MyRentalsViewController: UITableViewDelegate {
-    // Spacing between cards using section footers (match Lender)
-    func tableView(_ tableView: UITableView, heightForFooterInSection section: Int) -> CGFloat { 0 }
-    func tableView(_ tableView: UITableView, viewForFooterInSection section: Int) -> UIView? { nil }
-    
-    func tableView(_ tableView: UITableView, heightForHeaderInSection section: Int) -> CGFloat { 0 }
-    func tableView(_ tableView: UITableView, viewForHeaderInSection section: Int) -> UIView? { nil }
-    
-    func tableView(_ tableView: UITableView, trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
-        let cancel = UIContextualAction(style: .destructive, title: "Cancel") { [weak self] _, _, completion in
-            guard let self else { completion(false); return }
-            // Remove from data sources
-            let removed = self.visibleRequests.remove(at: indexPath.row)
-            if let idx = self.allRequests.firstIndex(where: { $0.id == removed.id }) {
-                self.allRequests.remove(at: idx)
-            }
-            // Update table by deleting the row
-            tableView.performBatchUpdates({
-                tableView.deleteRows(at: [indexPath], with: .automatic)
-            }, completion: { _ in
-                self.updateEmptyStateIfNeeded()
-            })
-            completion(true)
-        }
-        cancel.backgroundColor = .systemRed
-        let config = UISwipeActionsConfiguration(actions: [cancel])
-        config.performsFirstActionWithFullSwipe = true
-        return config
+    // Keep your 125pt spacing between cards via section footer
+    func tableView(_ tableView: UITableView, heightForFooterInSection section: Int) -> CGFloat { 125 }
+    func tableView(_ tableView: UITableView, viewForFooterInSection section: Int) -> UIView? {
+        let v = UIView()
+        v.backgroundColor = .clear
+        return v
     }
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
 
-        // Navigate to BookingApprovalViewController when a card is tapped
         let nibName = "BookingApprovalViewController"
         let bookingVC: BookingApprovalViewController
         if Bundle.main.path(forResource: nibName, ofType: "nib") != nil ||
-            Bundle.main.path(forResource: nibName, ofType: "xib") != nil {
+            Bundle.main.path(forResource: "BookingApprovalViewController", ofType: "xib") != nil {
             bookingVC = BookingApprovalViewController(nibName: nibName, bundle: nil)
         } else {
             bookingVC = BookingApprovalViewController()

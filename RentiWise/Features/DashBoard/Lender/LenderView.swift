@@ -128,6 +128,8 @@ final class LenderView: UIView {
         tableView.separatorStyle = .none
         tableView.backgroundColor = .secondarySystemBackground
         tableView.contentInsetAdjustmentBehavior = .always
+        // Important: do not clip shadows from cells’ internal cards
+        tableView.clipsToBounds = false
 
         // Register your cell nibs
         tableView.register(UINib(nibName: "LenderListingTableViewCell", bundle: nil), forCellReuseIdentifier: "Listing")
@@ -413,9 +415,9 @@ extension LenderView: UITableViewDataSource {
             }
             let item = myItems[indexPath.section]
             cell.configure(with: item, currencyFormatter: currencyFormatter)
-            // Ensure background consistency for listing card sections
-            cell.backgroundColor = .secondarySystemBackground
-            cell.contentView.backgroundColor = .secondarySystemBackground
+            // Important: keep clear so the internal glass card shows its shadow
+            cell.backgroundColor = .clear
+            cell.contentView.backgroundColor = .clear
             return cell
 
         case 1:
