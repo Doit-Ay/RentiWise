@@ -56,14 +56,14 @@
                                 <color key="textColor" systemColor="secondaryLabelColor"/>
                                 <nil key="highlightedColor"/>
                             </label>
-                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="From:" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="rUU-0H-fuo">
-                                <rect key="frame" x="152" y="104.66666666666667" width="40" height="18"/>
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Status:" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="rUU-0H-fuo">
+                                <rect key="frame" x="152" y="102.66666666666667" width="48.333333333333343" height="18"/>
                                 <fontDescription key="fontDescription" type="system" pointSize="15"/>
                                 <nil key="textColor"/>
                                 <nil key="highlightedColor"/>
                             </label>
                             <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Owner Name" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="iPL-bE-awM">
-                                <rect key="frame" x="197" y="104.66666666666667" width="90" height="18"/>
+                                <rect key="frame" x="205.33333333333334" y="102.66666666666667" width="90.000000000000028" height="18"/>
                                 <fontDescription key="fontDescription" type="system" pointSize="15"/>
                                 <nil key="textColor"/>
                                 <nil key="highlightedColor"/>
@@ -76,7 +76,7 @@
                             <constraint firstItem="Ca5-8z-0cC" firstAttribute="centerY" secondItem="qcC-hm-H3Y" secondAttribute="centerY" id="Bn2-6c-d7D"/>
                             <constraint firstAttribute="bottom" secondItem="Vdk-KL-Uh4" secondAttribute="bottom" constant="18" id="CNd-hq-1vR"/>
                             <constraint firstItem="Ca5-8z-0cC" firstAttribute="leading" secondItem="qcC-hm-H3Y" secondAttribute="trailing" constant="5" id="GsC-g0-DWM"/>
-                            <constraint firstItem="rUU-0H-fuo" firstAttribute="top" secondItem="qcC-hm-H3Y" secondAttribute="bottom" constant="16" id="HsM-nr-vZR"/>
+                            <constraint firstItem="rUU-0H-fuo" firstAttribute="top" secondItem="qcC-hm-H3Y" secondAttribute="bottom" constant="14" id="HsM-nr-vZR"/>
                             <constraint firstItem="qcC-hm-H3Y" firstAttribute="leading" secondItem="9bG-v1-wLB" secondAttribute="leading" id="JpG-wG-i3v"/>
                             <constraint firstItem="9bG-v1-wLB" firstAttribute="top" secondItem="Xax-rr-LFy" secondAttribute="bottom" constant="8" id="MYl-BH-FpW"/>
                             <constraint firstItem="Vdk-KL-Uh4" firstAttribute="top" secondItem="v7P-Fa-O1x" secondAttribute="top" constant="18" id="Nmp-yZ-vz5"/>

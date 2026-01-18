@@ -309,10 +309,10 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
             let client = SupabaseManager.shared.client
             // Get current session/user
             if let session = try? await client.auth.session, let userId = session.user.id.uuidString as String? {
-                // Try to read full_name from users table
+                // Try to read full_name from user_profiles (public view)
                 do {
                     let response = try await client
-                        .from("users")
+                        .from("user_profiles")
                         .select("full_name")
                         .eq("id", value: userId)
                         .single()
@@ -420,14 +420,13 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         do {
             let client = SupabaseManager.shared.client
             let response = try await client
-                .from("users")
+                .from("user_profiles")
                 .select("id,full_name,profile_photo_url")
                 .eq("id", value: ownerId)
                 .single()
                 .execute()
 
-            let data = response.data
-            guard let data = data as? Data else {
+            guard let data = response.data as? Data else {
                 await MainActor.run { [weak self] in
                     self?.renderOwner(fullName: nil, avatarURLString: nil)
                 }

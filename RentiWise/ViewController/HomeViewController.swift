@@ -188,6 +188,7 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
 
     // Private containers for round glass buttons in the header
     private var notificationContainer: UIView?
+
     private var addItemContainer: UIView?
 
     // MARK: - Manage Listings state
@@ -223,6 +224,9 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
         // Make the surrounding area transparent so only tiles are visible
         collectionView.backgroundColor = .clear
 
+        // Style the search bar for a modern rounded look
+        styleSearchBar()
+
         setupProductTap()
         setupFeaturedItemTaps()
 
@@ -255,6 +259,9 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
+
+        // Keep the rounded background sized to the search bar's current bounds
+        layoutSearchBarRounded()
 
         // After we know bounds, set initial image once (no animation)
         if !didSetInitialHomeImageAfterLayout {
@@ -296,6 +303,68 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
     override func viewSafeAreaInsetsDidChange() {
         super.viewSafeAreaInsetsDidChange()
         collectionView.setCollectionViewLayout(generateHorizontalFourUpLayout(), animated: false)
+        layoutSearchBarRounded()
+    }
+
+    // MARK: - Search bar styling
+    private func styleSearchBar() {
+        guard let sb = searchBar else { return }
+
+        sb.searchBarStyle = .minimal
+        sb.isTranslucent = true
+        sb.backgroundColor = .clear
+        sb.setBackgroundImage(UIImage(), for: .any, barMetrics: .default)
+        sb.setSearchFieldBackgroundImage(UIImage(), for: .normal)
+
+        // Access searchTextField for deeper styling (iOS 13+)
+        let tf = sb.searchTextField
+        tf.backgroundColor = UIColor.secondarySystemBackground.withAlphaComponent(0.85)
+        tf.textColor = .label
+        tf.tintColor = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0) // brand teal cursor
+        tf.clearButtonMode = .whileEditing
+        tf.borderStyle = .none
+        tf.layer.masksToBounds = false
+        // Corner radius will be set in layoutSearchBarRounded() so it adapts to height
+        tf.leftView?.tintColor = .tertiaryLabel
+
+        // Placeholder with subtle color
+        let placeholder = tf.placeholder ?? "Search items"
+        tf.attributedPlaceholder = NSAttributedString(
+            string: placeholder,
+            attributes: [.foregroundColor: UIColor.secondaryLabel]
+        )
+
+        // Add subtle shadow to lift the pill
+        tf.layer.shadowColor = UIColor.black.cgColor
+        tf.layer.shadowOpacity = 0.08
+        tf.layer.shadowRadius = 6
+        tf.layer.shadowOffset = CGSize(width: 0, height: 3)
+
+        // Content insets for text for a comfortable left/right padding
+        // UISearchTextField doesn’t expose direct text insets; we can nudge using a transparent left/right view
+        let pad: CGFloat = 4
+        let leftPadView = UIView(frame: CGRect(x: 0, y: 0, width: pad, height: 1))
+        leftPadView.isUserInteractionEnabled = false
+        tf.leftView = leftPadView
+        tf.leftViewMode = .always
+
+        // Keep the search icon visible but shift via leftView? The system uses a magnifier as left view.
+        // If you want the default icon + padding, comment out the leftPad override above.
+
+        // Cancel button tint to match brand
+        sb.tintColor = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0)
+    }
+
+    private func layoutSearchBarRounded() {
+        guard let sb = searchBar else { return }
+        let tf = sb.searchTextField
+        // Corner radius based on current height for a pill shape
+        let h = tf.bounds.height > 0 ? tf.bounds.height : 36
+        tf.layer.cornerRadius = h / 2
+
+        // Optional thin border for definition on light backgrounds
+        tf.layer.borderWidth = 0.5
+        tf.layer.borderColor = UIColor.separator.withAlphaComponent(0.5).cgColor
     }
 
     // MARK: - Product tap setup
@@ -310,6 +379,7 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
     }
 
     private func setupFeaturedItemTaps() {
+        // Image taps
         let tap1 = UITapGestureRecognizer(target: self, action: #selector(didTapFeatured1))
         item1Image?.isUserInteractionEnabled = true
         item1Image?.addGestureRecognizer(tap1)
@@ -325,6 +395,23 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
         let tap4 = UITapGestureRecognizer(target: self, action: #selector(didTapFeatured4))
         item4Image?.isUserInteractionEnabled = true
         item4Image?.addGestureRecognizer(tap4)
+
+        // Card taps (make entire card tappable)
+        let cardTap1 = UITapGestureRecognizer(target: self, action: #selector(didTapFeatured1))
+        item1CardView?.isUserInteractionEnabled = true
+        item1CardView?.addGestureRecognizer(cardTap1)
+
+        let cardTap2 = UITapGestureRecognizer(target: self, action: #selector(didTapFeatured2))
+        item2CardView?.isUserInteractionEnabled = true
+        item2CardView?.addGestureRecognizer(cardTap2)
+
+        let cardTap3 = UITapGestureRecognizer(target: self, action: #selector(didTapFeatured3))
+        item3CardView?.isUserInteractionEnabled = true
+        item3CardView?.addGestureRecognizer(cardTap3)
+
+        let cardTap4 = UITapGestureRecognizer(target: self, action: #selector(didTapFeatured4))
+        item4CardView?.isUserInteractionEnabled = true
+        item4CardView?.addGestureRecognizer(cardTap4)
     }
 
     @objc private func didTapFeatured1() { openFeatured(at: 0) }
@@ -1041,20 +1128,18 @@ private extension HomeViewController {
         return firstChar + remainder
     }
 
-    // Fetch owner display name using users.full_name, fallback to profiles.full_name
+    // Fetch owner display name via public.user_profiles; fallback to profiles if you still maintain it.
     func resolveOwnerName(for ownerId: String, slotIndex: Int) {
         Task {
-            struct NameDTO: Decodable { let full_name: String? }
-
-            // Try users table first
-            if let usersName = try? await fetchName(from: "users", ownerId: ownerId) {
-                await applyOwnerName(usersName, toSlotAt: slotIndex)
+            // Try user_profiles view first (publicly readable)
+            if let name = try? await fetchName(from: "user_profiles", ownerId: ownerId), !name.isEmpty {
+                await applyOwnerName(name, toSlotAt: slotIndex)
                 return
             }
 
-            // Fallback to profiles table
-            if let profilesName = try? await fetchName(from: "profiles", ownerId: ownerId) {
-                await applyOwnerName(profilesName, toSlotAt: slotIndex)
+            // Optional fallback: legacy profiles table if present
+            if let name = try? await fetchName(from: "profiles", ownerId: ownerId), !name.isEmpty {
+                await applyOwnerName(name, toSlotAt: slotIndex)
                 return
             }
 
@@ -1074,7 +1159,7 @@ private extension HomeViewController {
 
         if let data = response.data as? Data {
             let dto = try JSONDecoder().decode(NameDTO.self, from: data)
-            if let n = dto.full_name, !n.isEmpty { return n }
+            return dto.full_name
         }
         return nil
     }
@@ -1468,16 +1553,16 @@ private extension HomeViewController {
         }
 
         Task {
-            // Try users first
-            if let n = try? await fetchName(from: "users", ownerId: ownerId), !n.isEmpty {
-                let display = capitalizingFirstLetter(n)
+            // Try user_profiles first (publicly readable)
+            if let name = try? await fetchName(from: "user_profiles", ownerId: ownerId), !name.isEmpty {
+                let display = capitalizingFirstLetter(name)
                 ownerNameCache[ownerId] = display
                 completion(display)
                 return
             }
-            // Fallback profiles
-            if let n = try? await fetchName(from: "profiles", ownerId: ownerId), !n.isEmpty {
-                let display = capitalizingFirstLetter(n)
+            // Optional fallback profiles
+            if let name = try? await fetchName(from: "profiles", ownerId: ownerId), !name.isEmpty {
+                let display = capitalizingFirstLetter(name)
                 ownerNameCache[ownerId] = display
                 completion(display)
                 return
@@ -1725,3 +1810,28 @@ private final class TrendingItemCell: UICollectionViewCell {
         }
     }
 }
+
+// MARK: - Featured Rent button actions
+extension HomeViewController {
+
+    @IBAction func rentButton1Tapped(_ sender: UIButton) {
+        guard featuredItems.indices.contains(0) else { return }
+        openItem(featuredItems[0])
+    }
+
+    @IBAction func rentButton2Tapped(_ sender: UIButton) {
+        guard featuredItems.indices.contains(1) else { return }
+        openItem(featuredItems[1])
+    }
+
+    @IBAction func rentButton3Tapped(_ sender: UIButton) {
+        guard featuredItems.indices.contains(2) else { return }
+        openItem(featuredItems[2])
+    }
+
+    @IBAction func rentButton4Tapped(_ sender: UIButton) {
+        guard featuredItems.indices.contains(3) else { return }
+        openItem(featuredItems[3])
+    }
+}
+

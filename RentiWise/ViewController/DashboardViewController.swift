@@ -150,8 +150,8 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
         tableView.separatorStyle = .none
         tableView.backgroundColor = .systemGroupedBackground
         tableView.contentInset = UIEdgeInsets(top: 16, left: 0, bottom: 16, right: 0)
-        tableView.rowHeight = 140
-        tableView.estimatedRowHeight = 140
+        tableView.rowHeight = 130
+        tableView.estimatedRowHeight = 130
         // Important: do not clip shadows
         tableView.clipsToBounds = false
 

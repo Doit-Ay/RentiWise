@@ -233,7 +233,7 @@ class RequestViewController: UIViewController {
         recalculatePricing()
     }
     
-    // Unify with ProductViewController behavior: try users first, then profiles; handle http vs storage; fallback to initials.
+    // Unify with ProductViewController behavior: try user_profiles first, then profiles; handle http vs storage; fallback to initials.
     private func urlForAvatarPath(_ path: String) -> URL? {
         if path.lowercased().hasPrefix("http://") || path.lowercased().hasPrefix("https://") {
             return URL(string: path)
@@ -311,11 +311,6 @@ class RequestViewController: UIViewController {
     }
     
     private func fetchAndDisplayOwnerUnified(for ownerId: String) async {
-        struct UsersDTO: Decodable {
-            let id: String
-            let full_name: String?
-            let profile_photo_url: String?
-        }
         struct ProfilesDTO: Decodable {
             let full_name: String?
             let avatar_url: String?
@@ -325,19 +320,26 @@ class RequestViewController: UIViewController {
         
         do {
             let client = SupabaseManager.shared.client
+            // Read from public view so it works for logged out users
             if let usersData = try? await client
-                .from("users")
+                .from("user_profiles")
                 .select("id,full_name,profile_photo_url")
                 .eq("id", value: ownerId)
                 .single()
                 .execute()
                 .data as? Data {
                 
+                struct UsersDTO: Decodable {
+                    let id: String
+                    let full_name: String?
+                    let profile_photo_url: String?
+                }
                 let dto = try JSONDecoder().decode(UsersDTO.self, from: usersData)
                 renderOwner(fullName: dto.full_name, avatarURLString: dto.profile_photo_url)
                 return
             }
             
+            // Optional fallback if you still maintain a separate profiles table
             if let profilesData = try? await client
                 .from("profiles")
                 .select("full_name,avatar_url,rating,distance_km")
@@ -783,3 +785,4 @@ extension UIImageView {
         task.resume()
     }
 }
+

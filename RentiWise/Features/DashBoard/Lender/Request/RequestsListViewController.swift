@@ -92,8 +92,8 @@ final class RequestsListViewController: UIViewController {
         tableView.translatesAutoresizingMaskIntoConstraints = false
         tableView.backgroundColor = .systemGroupedBackground
         tableView.separatorStyle = .none
-        tableView.rowHeight = 140
-        tableView.estimatedRowHeight = 140
+        tableView.rowHeight = 130
+        tableView.estimatedRowHeight = 130
         tableView.dataSource = self
         tableView.delegate = self
         tableView.contentInset = UIEdgeInsets(top: 16, left: 0, bottom: 16, right: 0) // nice breathing space

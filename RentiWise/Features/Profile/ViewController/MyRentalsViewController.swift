@@ -29,8 +29,8 @@ final class MyRentalsViewController: UIViewController {
 
     private enum StatusFilter: String, CaseIterable {
         case all = "All"
+        case accepted = "Accepted"
         case pending = "Pending"
-        case approved = "Approved"
     }
 
     // Currency for price text (rounded ₹ like screenshot)
@@ -57,6 +57,9 @@ final class MyRentalsViewController: UIViewController {
         df.dateFormat = "d MMM yyyy"
         return df
     }()
+
+    // MARK: - Tab bar visibility management (for SwiftUI-hosted path)
+    private var didHideTabBarManually = false
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -111,6 +114,15 @@ final class MyRentalsViewController: UIViewController {
         navigationController?.navigationBar.isTranslucent = false
         navigationController?.navigationBar.barTintColor = .systemGroupedBackground
         navigationController?.navigationBar.backgroundColor = .systemGroupedBackground
+
+        // Hide tab bar if this VC is hosted via SwiftUI path where there is no nav stack under the tab
+        ensureTabBarHiddenIfNeeded()
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        // Restore tab bar only if we hid it here
+        restoreTabBarIfNeeded()
     }
 
     override func viewDidLayoutSubviews() {
@@ -134,19 +146,41 @@ final class MyRentalsViewController: UIViewController {
         searchBar.autocapitalizationType = .none
         searchBar.autocorrectionType = .no
         searchBar.returnKeyType = .search
+
+        // Remove default background/chrome so our custom white field looks clean
+        searchBar.setBackgroundImage(UIImage(), for: .any, barMetrics: .default)
+        searchBar.backgroundImage = UIImage()
+        searchBar.backgroundColor = .clear
+
         if #available(iOS 13.0, *) {
             let tf = searchBar.searchTextField
-            tf.backgroundColor = .secondarySystemBackground
+            // White field
+            tf.backgroundColor = .white
+            // Subtle border and rounding
+            tf.layer.borderWidth = 1
+            tf.layer.borderColor = UIColor.separator.cgColor
+            tf.layer.cornerRadius = 10
+            tf.layer.masksToBounds = true
+            tf.textColor = .label
             tf.clearButtonMode = .whileEditing
+            tf.attributedPlaceholder = NSAttributedString(
+                string: searchBar.placeholder ?? "Search rentals",
+                attributes: [.foregroundColor: UIColor.secondaryLabel]
+            )
         }
 
-        // Filter button (circular icon)
+        // Filter button (round, white background)
         filterButton.translatesAutoresizingMaskIntoConstraints = false
         filterButton.setImage(UIImage(systemName: "line.3.horizontal.decrease.circle"), for: .normal)
         filterButton.tintColor = UIColor.label
-        filterButton.backgroundColor = UIColor.secondarySystemBackground
+        filterButton.backgroundColor = .white
         filterButton.layer.cornerRadius = 20
-        filterButton.layer.masksToBounds = true
+        filterButton.layer.masksToBounds = false
+        // Optional: soft shadow so the white circle stands out
+        filterButton.layer.shadowOpacity = 0.10
+        filterButton.layer.shadowRadius = 4
+        filterButton.layer.shadowOffset = CGSize(width: 0, height: 2)
+
         filterButton.accessibilityLabel = "Filter rentals"
         filterButton.addTarget(self, action: #selector(didTapFilter), for: .touchUpInside)
 
@@ -224,7 +258,8 @@ final class MyRentalsViewController: UIViewController {
 
     @objc private func didTapFilter() {
         let ac = UIAlertController(title: "Filter rentals", message: nil, preferredStyle: .actionSheet)
-        for status in [StatusFilter.all, .approved, .pending] {
+        // Present in order: All, Accepted, Pending
+        for status in [StatusFilter.all, .accepted, .pending] {
             ac.addAction(UIAlertAction(title: status.rawValue, style: .default, handler: { [weak self] _ in
                 self?.currentStatus = status
             }))
@@ -248,7 +283,10 @@ final class MyRentalsViewController: UIViewController {
             switch self.currentStatus {
             case .all: return true
             case .pending: return req.status.lowercased() == "pending"
-            case .approved: return req.status.lowercased() == "approved"
+            case .accepted:
+                // Treat either "accepted" or "approved" as Accepted
+                let s = req.status.lowercased()
+                return s == "accepted" || s == "approved"
             }
         }
 
@@ -379,6 +417,36 @@ final class MyRentalsViewController: UIViewController {
             }
         }
     }
+
+    // MARK: - Tab bar visibility helpers
+    private func ensureTabBarHiddenIfNeeded() {
+        guard let tab = findTabBarController() else { return }
+        if !tab.tabBar.isHidden {
+            tab.tabBar.isHidden = true
+            didHideTabBarManually = true
+        }
+    }
+
+    private func restoreTabBarIfNeeded() {
+        guard didHideTabBarManually, let tab = findTabBarController() else { return }
+        tab.tabBar.isHidden = false
+        didHideTabBarManually = false
+    }
+
+    private func findTabBarController() -> UITabBarController? {
+        var parentVC: UIViewController? = self
+        while let current = parentVC {
+            if let tab = current as? UITabBarController { return tab }
+            if let tab = current.tabBarController { return tab }
+            parentVC = current.parent ?? current.presentingViewController ?? current.navigationController
+        }
+        if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let window = scene.windows.first,
+           let tab = window.rootViewController as? UITabBarController {
+            return tab
+        }
+        return nil
+    }
 }
 
 // MARK: - UITableViewDataSource
@@ -421,6 +489,11 @@ extension MyRentalsViewController: UITableViewDelegate {
 
         bookingVC.title = "Booking Approval"
         bookingVC.hidesBottomBarWhenPushed = true
+
+        // Inject the selected request so the VC can map status/dates
+        let selected = visibleRequests[indexPath.section]
+        bookingVC.request = selected
+
         navigationController?.setNavigationBarHidden(false, animated: true)
         navigationController?.pushViewController(bookingVC, animated: true)
     }
