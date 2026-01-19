@@ -78,6 +78,17 @@ private struct TabBarHider: UIViewControllerRepresentable {
     }
 }
 
+// Bridge to present SupportChatViewController inside SwiftUI (push style)
+private struct SupportChatHost: UIViewControllerRepresentable {
+    func makeUIViewController(context: Context) -> SupportChatViewController {
+        let vc = SupportChatViewController()
+        vc.title = "Support"
+        // If you need any initial configuration, do it here.
+        return vc
+    }
+    func updateUIViewController(_ uiViewController: SupportChatViewController, context: Context) {}
+}
+
 // MARK: - SwiftUI Profile
 
 private struct ProfileRootView: View {
@@ -163,10 +174,21 @@ private struct ProfileRootView: View {
                         Label("Privacy & Security", systemImage: "lock.shield")
                     }
 
+                    // Contact Us now routes to SupportChatViewController
                     NavigationLink {
-                        HelpSupportPage()
+                        SupportChatHost()
+                            .navigationTitle("Support")
+                            .navigationBarTitleDisplayMode(.inline)
+                            .background(TabBarHider(hidden: true))
+                            .onDisappear {
+                                if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                                   let window = scene.windows.first,
+                                   let tab = window.rootViewController as? UITabBarController {
+                                    tab.tabBar.isHidden = false
+                                }
+                            }
                     } label: {
-                        Label("Help & Support", systemImage: "questionmark.circle")
+                        Label("Contact Us", systemImage: "message")
                     }
                 }
 
@@ -449,7 +471,7 @@ private struct HelpSupportPage: View {
                 NavigationLink("Getting Started") { Text("Getting Started") }
             }
             Section("Support") {
-                NavigationLink("Contact Us") { Text("Contact Us") }
+                // Replaced Contact Us with SupportChatHost in ProfileRootView section above.
                 NavigationLink("Report a Problem") { Text("Report a Problem") }
             }
         }
@@ -458,4 +480,3 @@ private struct HelpSupportPage: View {
         .background(Color(.systemGroupedBackground))
     }
 }
-

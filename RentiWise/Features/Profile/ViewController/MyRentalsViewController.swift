@@ -1,4 +1,3 @@
-//
 //  MyRentalsViewController.swift
 //  RentiWise
 //
@@ -361,12 +360,6 @@ final class MyRentalsViewController: UIViewController {
         }
     }
 
-    private func presentError(_ message: String) {
-        let a = UIAlertController(title: "Error", message: message, preferredStyle: .alert)
-        a.addAction(UIAlertAction(title: "OK", style: .default))
-        present(a, animated: true)
-    }
-
     private func selectClause() -> String {
         """
         id,item_id,owner_id,borrower_id,start_date,end_date,pickup_time,status,created_at,
@@ -416,6 +409,13 @@ final class MyRentalsViewController: UIViewController {
                 self.applySearchAndFilters()
             }
         }
+    }
+
+    // MARK: - Simple alert helper (fix for missing presentError)
+    private func presentError(_ message: String) {
+        let a = UIAlertController(title: "Error", message: message, preferredStyle: .alert)
+        a.addAction(UIAlertAction(title: "OK", style: .default))
+        present(a, animated: true)
     }
 
     // MARK: - Tab bar visibility helpers
@@ -493,6 +493,11 @@ extension MyRentalsViewController: UITableViewDelegate {
         // Inject the selected request so the VC can map status/dates
         let selected = visibleRequests[indexPath.section]
         bookingVC.request = selected
+
+        // Force-hide the tab bar right before pushing, to cover all hosting cases
+        if let tab = self.tabBarController ?? self.findTabBarController() {
+            tab.tabBar.isHidden = true
+        }
 
         navigationController?.setNavigationBarHidden(false, animated: true)
         navigationController?.pushViewController(bookingVC, animated: true)

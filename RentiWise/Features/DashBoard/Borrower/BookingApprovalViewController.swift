@@ -246,6 +246,12 @@ class BookingApprovalViewController: UIViewController {
         // If we’re not pushed in a nav that hides the tab bar, hide tab bar manually (covers SwiftUI-hosted path)
         ensureTabBarHiddenIfNeeded()
 
+        // Extra defensive: if we can find a tab bar controller, force hide its tab bar
+        if let tab = findTabBarController() {
+            tab.tabBar.isHidden = true
+            didHideTabBarManually = true
+        }
+
         updateDatesUI()
 
         if approvalObserver == nil {
@@ -269,12 +275,25 @@ class BookingApprovalViewController: UIViewController {
             await refreshPaymentFromDB()
         }
     }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        // Re-assert hiding in case a parent made it visible during transition
+        ensureTabBarHiddenIfNeeded()
+        if let tab = findTabBarController() {
+            tab.tabBar.isHidden = true
+            didHideTabBarManually = true
+        }
+    }
     
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
 
-        // If we hid the tab bar manually for this screen, restore it when leaving
-        restoreTabBarIfNeeded()
+        // Only restore the tab bar if this screen is actually leaving (popped/dismissed),
+        // not when presenting another controller (like Chat) over it.
+        if isMovingFromParent || isBeingDismissed {
+            restoreTabBarIfNeeded()
+        }
 
         if let token = approvalObserver {
             NotificationCenter.default.removeObserver(token)
@@ -338,12 +357,41 @@ class BookingApprovalViewController: UIViewController {
     }
 
     @objc private func openChat() {
-        let chatVC = ChatViewController(nibName: "ChatViewController", bundle: nil)
-        if let nav = self.navigationController {
-            nav.pushViewController(chatVC, animated: true)
-        } else {
-            chatVC.modalPresentationStyle = .fullScreen
-            self.present(chatVC, animated: true)
+        guard let req = self.request else { return }
+
+        Task {
+            // Resolve current user
+            let currentUserId = await SupabaseManager.shared.currentUserId()
+            let borrower = req.borrower_id
+            let owner = req.owner_id
+
+            // Decide the "other" party
+            let otherUserId: String
+            if let me = currentUserId {
+                if me == borrower {
+                    otherUserId = owner
+                } else if me == owner {
+                    otherUserId = borrower
+                } else {
+                    otherUserId = owner
+                }
+            } else {
+                otherUserId = owner
+            }
+
+            // Instantiate the new chat thread controller
+            let chatVC = ChatThreadViewController()
+            chatVC.otherUserId = otherUserId
+            chatVC.itemId = req.item_id
+            chatVC.title = "Chat"
+
+            // Present inside its own navigation controller, full screen, to guarantee no tab bar
+            let nav = UINavigationController(rootViewController: chatVC)
+            nav.modalPresentationStyle = .fullScreen
+
+            await MainActor.run {
+                self.present(nav, animated: true)
+            }
         }
     }
 
@@ -944,4 +992,3 @@ extension UIView {
         self.layer.masksToBounds = true
     }
 }
-
