@@ -253,9 +253,21 @@ class DashboardLenderRequestViewController: UIViewController {
             self.prodimage?.contentMode = .scaleAspectFit
         }
 
-        // Owner placeholders (ratings/distance can be refined later)
+        // Owner placeholders (ratings can be refined later)
         if ownRatingLabel?.text?.isEmpty ?? true { ownRatingLabel?.text = "★ 4.7" }
-        if ownDistLabel?.text?.isEmpty ?? true { ownDistLabel?.text = "2.3 km" }
+        
+        // Calculate real distance asynchronously
+        ownDistLabel?.text = "Calculating..."
+        Task { [weak self] in
+            guard let self = self else { return }
+            let distanceText = await DistanceService.shared.calculateDistanceToItem(
+                itemLatitude: req.items?.latitude,
+                itemLongitude: req.items?.longitude
+            )
+            await MainActor.run {
+                self.ownDistLabel?.text = distanceText
+            }
+        }
 
         // Pricing: need deposit_amount from items; fetch if we don’t have it yet
         computeAndDisplayTotals(days: days, pricePerDay: req.items?.price_per_day, itemId: req.item_id)

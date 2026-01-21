@@ -178,8 +178,18 @@ class RequestSentPageViewController: UIViewController {
         if ownerstarRating?.text?.isEmpty ?? true {
             ownerstarRating?.text = "★ 4.5"
         }
-        if ownerDistanceLabel?.text?.isEmpty ?? true {
-            ownerDistanceLabel?.text = "2.3 km"
+        
+        // Calculate real distance asynchronously
+        ownerDistanceLabel?.text = "Calculating..."
+        Task { [weak self] in
+            guard let self = self else { return }
+            let distanceText = await DistanceService.shared.calculateDistanceToItem(
+                itemLatitude: self.item?.latitude,
+                itemLongitude: self.item?.longitude
+            )
+            await MainActor.run {
+                self.ownerDistanceLabel?.text = distanceText
+            }
         }
     }
     
@@ -437,8 +447,19 @@ private extension RequestSentPageViewController {
         }
         if let d = distanceKm {
             ownerDistanceLabel?.text = String(format: "%.1f km", d)
-        } else if ownerDistanceLabel?.text?.isEmpty ?? true {
-            ownerDistanceLabel?.text = "2.3 km"
+        } else {
+            // Calculate real distance asynchronously if not provided from DB
+            ownerDistanceLabel?.text = "Calculating..."
+            Task { [weak self] in
+                guard let self = self else { return }
+                let distanceText = await DistanceService.shared.calculateDistanceToItem(
+                    itemLatitude: self.item?.latitude,
+                    itemLongitude: self.item?.longitude
+                )
+                await MainActor.run {
+                    self.ownerDistanceLabel?.text = distanceText
+                }
+            }
         }
         
         if let avatar = avatarURLString, !avatar.isEmpty, let url = urlForAvatarPath(avatar) {

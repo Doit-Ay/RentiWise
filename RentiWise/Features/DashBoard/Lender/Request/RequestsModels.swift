@@ -27,5 +27,9 @@ public struct ItemLite: Codable {
     public let title: String
     public let images: [String]
     public let price_per_day: Double
-    public let category: String?    // ADD THIS
+    public let category: String?
+    
+    // Location coordinates for distance calculation
+    public let latitude: Double?
+    public let longitude: Double?
 }

@@ -1074,7 +1074,17 @@ private extension HomeViewController {
         // Rating: yellow star + normal text
         ratingLabel?.attributedText = makeYellowStarRatingText(valueText: "4.5", reviewsText: "(23)")
 
-        distanceLabel?.text = "2.3 km"
+        // Calculate real distance asynchronously
+        distanceLabel?.text = "Calculating..."
+        Task { [weak distanceLabel] in
+            let distanceText = await DistanceService.shared.calculateDistanceToItem(
+                itemLatitude: item.latitude,
+                itemLongitude: item.longitude
+            )
+            await MainActor.run {
+                distanceLabel?.text = distanceText
+            }
+        }
 
         if let path = item.images.first, let url = StorageURLBuilder.publicFileURL(for: path) {
             setImage(into: imageView, from: url)

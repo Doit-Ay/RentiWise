@@ -16,6 +16,10 @@ struct Item: Decodable {
     let is_active: Bool
     let created_at: Date?
     let updated_at: Date?
+    
+    // Location coordinates for distance calculation
+    let latitude: Double?
+    let longitude: Double?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -30,5 +34,7 @@ struct Item: Decodable {
         case is_active
         case created_at
         case updated_at
+        case latitude
+        case longitude
     }
 }

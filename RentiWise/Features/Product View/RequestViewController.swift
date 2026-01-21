@@ -288,9 +288,20 @@ class RequestViewController: UIViewController {
             ownerRating?.text = "★ 4.5"
             productRatingLabel?.text = "★ 4.5"
         }
-        if ownerDist?.text?.isEmpty ?? true {
-            ownerDist?.text = "2.3 km"
-            productDistance?.text = "2.3 km"
+        
+        // Calculate real distance asynchronously
+        ownerDist?.text = "Calculating..."
+        productDistance?.text = "Calculating..."
+        Task { [weak self] in
+            guard let self = self else { return }
+            let distanceText = await DistanceService.shared.calculateDistanceToItem(
+                itemLatitude: self.item?.latitude,
+                itemLongitude: self.item?.longitude
+            )
+            await MainActor.run {
+                self.ownerDist?.text = distanceText
+                self.productDistance?.text = distanceText
+            }
         }
         
         if let avatar = avatarURLString, !avatar.isEmpty, let url = urlForAvatarPath(avatar) {

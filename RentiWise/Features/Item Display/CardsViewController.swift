@@ -68,7 +68,9 @@ final class CardsViewController: UIViewController {
         for item in demoItems {
             let card = CardView()
             let priceText = (currencyFormatter.string(from: NSNumber(value: item.pricePerDay)) ?? "\(item.pricePerDay)") + " / day"
-            card.configure(title: item.title, priceText: priceText, ratingText: item.ratingText, distanceText: item.distanceText)
+            
+            // Initially show "Calculating..." for distance
+            card.configure(title: item.title, priceText: priceText, ratingText: item.ratingText, distanceText: "Calculating...")
 
             // Horizontal padding 16, no extra vertical padding so stack spacing stays exactly 16
             card.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16)
@@ -97,7 +99,7 @@ final class CardsViewController: UIViewController {
                 }
             }
 
-            // Construct a real Item from DemoItem
+            // Construct a real Item from DemoItem (with nil lat/lng for demo)
             let demo = item
             let now = Date()
             let constructed = Item(
@@ -112,19 +114,33 @@ final class CardsViewController: UIViewController {
                 images: [demo.imagePath],
                 is_active: true,
                 created_at: now,
-                updated_at: now
+                updated_at: now,
+                latitude: nil,  // Demo items don't have real coordinates
+                longitude: nil
             )
             itemMap[constructed.id] = constructed
             rentButton.accessibilityValue = constructed.id
 
             stack.addArrangedSubview(card)
 
-            // Load image (choose ONE: public or private)
+            // Load image and calculate distance
             Task {
+                // Calculate distance (will show "Distance N/A" for demo items without coords)
+                let distanceText = await DistanceService.shared.calculateDistanceToItem(
+                    itemLatitude: constructed.latitude,
+                    itemLongitude: constructed.longitude
+                )
+                await MainActor.run {
+                    card.configure(title: demo.title, priceText: priceText, ratingText: demo.ratingText, distanceText: distanceText)
+                }
+                
+                // Load image
                 do {
                     // PRIVATE bucket (signed URL)
                     let url = try await storage.signedURL(bucket: "itemimages", path: item.imagePath, expiresIn: 3600)
-                    card.setImage(from: url)
+                    await MainActor.run {
+                        card.setImage(from: url)
+                    }
                 } catch {
                     // handle image error if needed
                 }

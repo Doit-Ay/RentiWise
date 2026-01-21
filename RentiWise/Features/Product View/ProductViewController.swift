@@ -151,9 +151,21 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         ratingValueLabel?.text = String(format: "%.1f", unifiedRating)
         ratingReviewsLabel?.text = unifiedReviewsText
 
-        // Distance (placeholder unless you later compute from user/location)
-        distanceLabel?.text = "2.3 km"
-        distanceRightLabel?.text = "2.3 km"
+        // Distance - calculate real distance asynchronously
+        distanceLabel?.text = "Calculating..."
+        distanceRightLabel?.text = "Calculating..."
+        
+        Task { [weak self] in
+            guard let self = self else { return }
+            let distanceText = await DistanceService.shared.calculateDistanceToItem(
+                itemLatitude: item.latitude,
+                itemLongitude: item.longitude
+            )
+            await MainActor.run {
+                self.distanceLabel?.text = distanceText
+                self.distanceRightLabel?.text = distanceText
+            }
+        }
 
         // Description card
         descriptionTitleLabel?.text = "Description"
