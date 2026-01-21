@@ -421,3 +421,181 @@ from public.users;
 Then grant:
 grant select on public.user_profiles to authenticated;
 grant select on public.user_profiles to anon;
+
+
+
+-- ===============================
+-- REVIEWS TABLE
+-- ===============================
+
+create table if not exists public.reviews (
+  id uuid primary key default gen_random_uuid(),
+
+  item_id uuid not null
+    references public.items(id)
+    on delete cascade,
+
+  reviewer_id uuid not null
+    references public.users(id)
+    on delete cascade,
+
+  rating int not null
+    check (rating >= 1 and rating <= 5),
+
+  review_text text,
+
+  created_at timestamptz default now()
+);
+
+-- ===============================
+-- ENABLE ROW LEVEL SECURITY
+-- ===============================
+
+alter table public.reviews enable row level security;
+
+-- ===============================
+-- RLS POLICIES
+-- ===============================
+
+-- Insert: user can add only their own review
+drop policy if exists "reviews_insert_own" on public.reviews;
+create policy "reviews_insert_own"
+on public.reviews
+for insert
+to authenticated
+with check (reviewer_id = auth.uid());
+
+-- Select: anyone can read reviews
+drop policy if exists "reviews_select_all" on public.reviews;
+create policy "reviews_select_all"
+on public.reviews
+for select
+to anon, authenticated
+using (true);
+
+-- Update: user can update only their own review
+drop policy if exists "reviews_update_own" on public.reviews;
+create policy "reviews_update_own"
+on public.reviews
+for update
+to authenticated
+using (reviewer_id = auth.uid())
+with check (reviewer_id = auth.uid());
+
+-- Delete: user can delete only their own review
+drop policy if exists "reviews_delete_own" on public.reviews;
+create policy "reviews_delete_own"
+on public.reviews
+for delete
+to authenticated
+using (reviewer_id = auth.uid());
+
+-- ===============================
+-- PREVENT DUPLICATE REVIEWS
+-- (One review per user per item)
+-- ===============================
+
+create unique index if not exists one_review_per_user_per_item
+on public.reviews (item_id, reviewer_id);
+
+-- ===============================
+-- HELPFUL INDEXES (PERFORMANCE)
+-- ===============================
+
+create index if not exists reviews_item_id_idx
+on public.reviews (item_id);
+
+create index if not exists reviews_created_at_idx
+on public.reviews (created_at desc);
+
+
+-- =====================================
+-- ADDRESSES TABLE
+-- =====================================
+
+create table if not exists public.addresses (
+  id uuid primary key default gen_random_uuid(),
+
+  user_id uuid not null
+    references auth.users(id)
+    on delete cascade,
+
+  label text,                    -- Home, Office, Hostel, etc.
+  full_name text,
+  phone text,
+
+  address_line1 text not null,
+  address_line2 text,
+  city text not null,
+  state text not null,
+  postal_code text not null,
+  country text not null default 'India',
+
+  is_default boolean default false,
+
+  created_at timestamptz default now()
+);
+
+-- =====================================
+-- ENABLE ROW LEVEL SECURITY
+-- =====================================
+
+alter table public.addresses enable row level security;
+
+-- =====================================
+-- RLS POLICIES
+-- =====================================
+
+-- INSERT: user can add their own address
+drop policy if exists "addresses_insert_own" on public.addresses;
+create policy "addresses_insert_own"
+on public.addresses
+for insert
+to authenticated
+with check (user_id = auth.uid());
+
+-- SELECT: user can view their own addresses
+drop policy if exists "addresses_select_own" on public.addresses;
+create policy "addresses_select_own"
+on public.addresses
+for select
+to authenticated
+using (user_id = auth.uid());
+
+-- UPDATE: user can update their own addresses
+drop policy if exists "addresses_update_own" on public.addresses;
+create policy "addresses_update_own"
+on public.addresses
+for update
+to authenticated
+using (user_id = auth.uid())
+with check (user_id = auth.uid());
+
+-- DELETE: user can delete their own addresses
+drop policy if exists "addresses_delete_own" on public.addresses;
+create policy "addresses_delete_own"
+on public.addresses
+for delete
+to authenticated
+using (user_id = auth.uid());
+
+-- =====================================
+-- INDEXES (PERFORMANCE)
+-- =====================================
+
+create index if not exists addresses_user_id_idx
+on public.addresses (user_id);
+
+create index if not exists addresses_created_at_idx
+on public.addresses (created_at desc);
+
+create index if not exists addresses_default_idx
+on public.addresses (user_id, is_default);
+
+-- =====================================
+-- ONE DEFAULT ADDRESS PER USER
+-- =====================================
+
+create unique index if not exists one_default_address_per_user
+on public.addresses (user_id)
+where is_default = true;

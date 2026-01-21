@@ -14,8 +14,11 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
     var selectedItem: Item?
     
     struct Review {
+        let id: String
+        let userId: String
         let userInitials: String
         let username: String
+        let avatarURL: String?
         let comment: String
         let rating: Int
         let date: Date
@@ -76,36 +79,13 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
     // Optional height constraint outlet (connect only if not using UIStackView)
     @IBOutlet weak var depositCardHeight: NSLayoutConstraint?
 
-    // MARK: - Reviews section (superseded by reviewsStack)
+    // MARK: - Reviews section
     @IBOutlet weak var reviewsTitleLabel: UILabel?
 
-    // Old review outlets (superseded by reviewsStack)
-    // Review 1 (Alex K.)
+    // Legacy single review card container you mentioned
     @IBOutlet weak var review1Card: UIView?
-    @IBOutlet weak var review1DateLabel: UILabel?
-    @IBOutlet weak var r1star1: UIImageView?
-    @IBOutlet weak var r1star2: UIImageView?
-    @IBOutlet weak var r1star3: UIImageView?
-    @IBOutlet weak var r1star4: UIImageView?
-    @IBOutlet weak var r1star5: UIImageView?
-    @IBOutlet weak var r1AvatarImageView: UIImageView?
-    @IBOutlet weak var r1NameLabel: UILabel?
-    @IBOutlet weak var r1CommentLabel: UILabel?
 
-    // Review 2 (Emily R.)
-    @IBOutlet weak var review2Card: UIView?
-    @IBOutlet weak var review2DateLabel: UILabel?
-    @IBOutlet weak var r2star1: UIImageView?
-    @IBOutlet weak var r2star2: UIImageView?
-    @IBOutlet weak var r2star3: UIImageView?
-    @IBOutlet weak var r2star4: UIImageView?
-    @IBOutlet weak var r2star5: UIImageView?
-    @IBOutlet weak var r2AvatarImageView: UIImageView?
-    @IBOutlet weak var r2NameLabel: UILabel?
-    @IBOutlet weak var r2CommentLabel: UILabel?
-
-    // New reviews stack replacing the above
-    // Make sure to connect this outlet in Interface Builder to avoid it being nil
+    // New reviews stack replacing the old fixed outlets (connect if available)
     @IBOutlet weak var reviewsStack: UIStackView?
 
     // MARK: - Action buttons
@@ -183,6 +163,11 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         
         applyDisplayMode()
         setupNavBarForDisplayMode()
+
+        // Load reviews from Supabase
+        Task { [weak self] in
+            await self?.loadReviews()
+        }
     }
 
     private func applyDisplayMode() {
@@ -304,33 +289,33 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
     }
 
     // Fetch current user's display name and initials from Supabase auth/users table
-    private func fetchCurrentUserNameAndInitials() async -> (String, String) {
+    private func fetchCurrentUserNameAndInitials() async -> (String, String, String?) {
         do {
             let client = SupabaseManager.shared.client
             // Get current session/user
-            if let session = try? await client.auth.session, let userId = session.user.id.uuidString as String? {
-                // Try to read full_name from user_profiles (public view)
+            if let session = try? await client.auth.session {
+                let userId = session.user.id.uuidString
+                // Try to read full_name and profile_photo_url from user_profiles (public view)
                 do {
                     let response = try await client
                         .from("user_profiles")
-                        .select("full_name")
+                        .select("full_name,profile_photo_url")
                         .eq("id", value: userId)
                         .single()
                         .execute()
 
                     if let data = response.data as? Data {
-                        struct NameDTO: Decodable { let full_name: String? }
+                        struct NameDTO: Decodable { let full_name: String?; let profile_photo_url: String? }
                         if let dto = try? JSONDecoder().decode(NameDTO.self, from: data) {
-                            let name = (dto.full_name?.isEmpty == false) ? dto.full_name! : "Me"
+                            let name = (dto.full_name?.isEmpty == false) ? dto.full_name! : (session.user.email?.split(separator: "@").first.map(String.init) ?? "Me")
                             let initials = self.makeInitials(from: name)
-                            return (name, initials)
+                            return (name, initials, dto.profile_photo_url)
                         }
                     }
                 } catch {
                     // Fall through to use email or default
                 }
 
-                // Fallback to email username or generic
                 let emailName: String
                 if let email = session.user.email, let namePart = email.split(separator: "@").first, !namePart.isEmpty {
                     emailName = String(namePart)
@@ -338,12 +323,12 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
                     emailName = "Me"
                 }
                 let initials = self.makeInitials(from: emailName)
-                return (emailName, initials)
+                return (emailName, initials, nil)
             }
         }
         // No session: default placeholders
         let fallback = "Me"
-        return (fallback, self.makeInitials(from: fallback))
+        return (fallback, self.makeInitials(from: fallback), nil)
     }
 
     private func confirmDeleteAndDelete() async {
@@ -390,21 +375,18 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         }
     }
 
-    private func setStars(_ stars: [UIImageView?], to rating: Double) {
-        let full = Int(floor(rating))
-        let hasHalf = (rating - Double(full)) >= 0.5
-        for i in 0..<stars.count {
-            let imageView = stars[i]
-            let imageName: String
-            if i < full {
-                imageName = "star.fill"
-            } else if i == full && hasHalf {
-                imageName = "star.leadinghalf.filled"
-            } else {
-                imageName = "star"
-            }
-            imageView?.image = UIImage(systemName: imageName)
-            imageView?.tintColor = .systemYellow
+    private func setStars(_ starsRow: UIStackView, rating: Int) {
+        starsRow.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        let count = max(0, min(5, rating))
+        let config = UIImage.SymbolConfiguration(pointSize: 16, weight: .semibold)
+        for i in 0..<5 {
+            let iv = UIImageView()
+            iv.image = UIImage(systemName: i < count ? "star.fill" : "star", withConfiguration: config)
+            iv.tintColor = .systemYellow
+            iv.contentMode = .scaleAspectFit
+            iv.setContentHuggingPriority(.required, for: .horizontal)
+            iv.setContentCompressionResistancePriority(.required, for: .horizontal)
+            starsRow.addArrangedSubview(iv)
         }
     }
 
@@ -451,7 +433,7 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
 
         if let avatar = avatarURLString, !avatar.isEmpty {
             if let url = URL(string: avatar), avatar.lowercased().hasPrefix("http") {
-                UIImageView.loadImage(from: url) { [weak self] img in
+                UIImageView.rw_loadImage(from: url) { [weak self] img in
                     DispatchQueue.main.async {
                         if let img = img {
                             self?.ownerAvatarImageView?.image = img
@@ -463,7 +445,7 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
                     }
                 }
             } else if let url = StorageURLBuilder.publicFileURL(for: avatar) {
-                UIImageView.loadImage(from: url) { [weak self] img in
+                UIImageView.rw_loadImage(from: url) { [weak self] img in
                     DispatchQueue.main.async {
                         if let img = img {
                             self?.ownerAvatarImageView?.image = img
@@ -547,7 +529,7 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
             heroImageView?.clipsToBounds = true
             let path = images[0]
             if let url = urlForImagePath(path) {
-                UIImageView.loadImage(from: url) { [weak self] img in
+                UIImageView.rw_loadImage(from: url) { [weak self] img in
                     self?.heroImageView?.image = img
                 }
             } else {
@@ -589,7 +571,6 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
 
         // Add image views horizontally
         var lastTrailing: NSLayoutXAxisAnchor?
-        var imageViews: [UIImageView] = []
 
         for (index, path) in images.enumerated() {
             let iv = UIImageView()
@@ -609,10 +590,9 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
                 iv.leadingAnchor.constraint(equalTo: prevTrailing).isActive = true
             }
             lastTrailing = iv.trailingAnchor
-            imageViews.append(iv)
 
             if let url = urlForImagePath(path) {
-                UIImageView.loadImage(from: url) { image in
+                UIImageView.rw_loadImage(from: url) { image in
                     iv.image = image
                 }
             }
@@ -654,7 +634,452 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         pc.currentPage = max(0, min(page, pc.numberOfPages - 1))
     }
 
-    // MARK: - Hero/Gallery setup end
+    // MARK: - Reviews: Supabase load + render
+
+    private struct ReviewRowDTO: Decodable {
+        let id: String
+        let item_id: String
+        let reviewer_id: String
+        let rating: Int
+        let review_text: String?
+        let created_at: String
+    }
+
+    private struct ReviewerDTO: Decodable {
+        let full_name: String?
+        let profile_photo_url: String?
+    }
+
+    private var reviewerCache: [String: ReviewerDTO] = [:]
+
+    private func loadReviews() async {
+        guard let itemId = selectedItem?.id else { return }
+        do {
+            let client = SupabaseManager.shared.client
+            // Newest first
+            let response = try await client
+                .from("reviews")
+                .select()
+                .eq("item_id", value: itemId)
+                .order("created_at", ascending: false)
+                .execute()
+
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            let rows = try decoder.decode([ReviewRowDTO].self, from: response.data)
+
+            var built: [Review] = []
+            for row in rows {
+                let reviewerId = row.reviewer_id
+                let profile = try await fetchReviewerProfile(userId: reviewerId)
+                let name = (profile.full_name?.isEmpty == false) ? profile.full_name! : "User"
+                let initials = makeInitials(from: name)
+                // Parse created_at best-effort
+                let date = iso8601ToDate(row.created_at) ?? Date()
+                built.append(Review(
+                    id: row.id,
+                    userId: reviewerId,
+                    userInitials: initials,
+                    username: name,
+                    avatarURL: profile.profile_photo_url,
+                    comment: row.review_text ?? "",
+                    rating: max(1, min(5, row.rating)),
+                    date: date
+                ))
+            }
+
+            await MainActor.run {
+                self.reviews = built
+                self.renderReviews()
+            }
+        } catch {
+            await MainActor.run {
+                self.reviews = []
+                self.renderReviews()
+            }
+        }
+    }
+
+    private func iso8601ToDate(_ s: String) -> Date? {
+        // Supabase timestamptz often decodes with ISO8601 including fractional seconds
+        let df = ISO8601DateFormatter()
+        df.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let d = df.date(from: s) { return d }
+        df.formatOptions = [.withInternetDateTime]
+        return df.date(from: s)
+    }
+
+    private func fetchReviewerProfile(userId: String) async throws -> ReviewerDTO {
+        if let cached = reviewerCache[userId] { return cached }
+        let client = SupabaseManager.shared.client
+        let resp = try await client
+            .from("user_profiles")
+            .select("full_name,profile_photo_url")
+            .eq("id", value: userId)
+            .single()
+            .execute()
+        if let data = resp.data as? Data {
+            let dto = try JSONDecoder().decode(ReviewerDTO.self, from: data)
+            reviewerCache[userId] = dto
+            return dto
+        }
+        // Fallback empty
+        let dto = ReviewerDTO(full_name: nil, profile_photo_url: nil)
+        reviewerCache[userId] = dto
+        return dto
+    }
+
+    private func renderReviews() {
+        // Choose container: prefer reviewsStack if connected, else build one inside review1Card
+        let containerStack: UIStackView
+        if let rs = reviewsStack {
+            containerStack = rs
+        } else {
+            if let host = review1Card {
+                host.subviews.forEach { $0.removeFromSuperview() }
+                let v = UIStackView()
+                v.axis = .vertical
+                v.alignment = .fill
+                v.spacing = 16
+                v.translatesAutoresizingMaskIntoConstraints = false
+                host.addSubview(v)
+                NSLayoutConstraint.activate([
+                    v.leadingAnchor.constraint(equalTo: host.leadingAnchor, constant: 16),
+                    v.trailingAnchor.constraint(equalTo: host.trailingAnchor, constant: -16),
+                    v.topAnchor.constraint(equalTo: host.topAnchor, constant: 16),
+                    v.bottomAnchor.constraint(equalTo: host.bottomAnchor, constant: -16)
+                ])
+                reviewsStack = v
+                containerStack = v
+            } else {
+                let v = UIStackView()
+                v.axis = .vertical
+                v.alignment = .fill
+                v.spacing = 16
+                v.translatesAutoresizingMaskIntoConstraints = false
+                view.addSubview(v)
+                NSLayoutConstraint.activate([
+                    v.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
+                    v.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+                    v.topAnchor.constraint(equalTo: descriptionCard.bottomAnchor, constant: 16)
+                ])
+                reviewsStack = v
+                containerStack = v
+            }
+        }
+
+        // Clear old content
+        containerStack.arrangedSubviews.forEach { sub in
+            containerStack.removeArrangedSubview(sub)
+            sub.removeFromSuperview()
+        }
+
+        if reviews.isEmpty {
+            containerStack.addArrangedSubview(makeEmptyReviewsView())
+            return
+        }
+
+        let df = DateFormatter()
+        df.dateStyle = .medium
+
+        Task {
+            let currentUserId = await SupabaseManager.shared.currentUserId()
+            // Debug: verify identity
+            // print("[Reviews] currentUserId=\(currentUserId ?? "nil")")
+
+            for (idx, review) in self.reviews.enumerated() {
+                let card = UIView()
+                card.backgroundColor = .clear
+
+                let v = UIStackView()
+                v.axis = .vertical
+                v.alignment = .fill
+                v.spacing = 8
+                v.translatesAutoresizingMaskIntoConstraints = false
+                card.addSubview(v)
+                NSLayoutConstraint.activate([
+                    v.leadingAnchor.constraint(equalTo: card.leadingAnchor),
+                    v.trailingAnchor.constraint(equalTo: card.trailingAnchor),
+                    v.topAnchor.constraint(equalTo: card.topAnchor),
+                    v.bottomAnchor.constraint(equalTo: card.bottomAnchor)
+                ])
+
+                // Top row: date (left) + Edit (right if mine)
+                let topRow = UIStackView()
+                topRow.axis = .horizontal
+                topRow.alignment = .center
+                topRow.spacing = 8
+
+                let dateLabel = UILabel()
+                dateLabel.font = .systemFont(ofSize: 13, weight: .regular)
+                dateLabel.textColor = .secondaryLabel
+                dateLabel.text = df.string(from: review.date)
+
+                let spacer = UIView()
+                spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+                spacer.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+                let editButton = UIButton(type: .system)
+                editButton.setTitle("Edit", for: .normal)
+                editButton.titleLabel?.font = .systemFont(ofSize: 13, weight: .semibold)
+                editButton.addAction(UIAction(handler: { [weak self] _ in
+                    self?.presentEditReview(review)
+                }), for: .touchUpInside)
+
+                // Robust author check (case-insensitive)
+                let isMine = (currentUserId?.lowercased() == review.userId.lowercased())
+                editButton.isHidden = !isMine
+                editButton.isEnabled = isMine
+
+                topRow.addArrangedSubview(dateLabel)
+                topRow.addArrangedSubview(spacer)
+                topRow.addArrangedSubview(editButton)
+                v.addArrangedSubview(topRow)
+
+                // Avatar + Name + Stars
+                let row = UIStackView()
+                row.axis = .horizontal
+                row.alignment = .center
+                row.spacing = 12
+
+                let avatarSize: CGFloat = 36
+                let avatar = UIImageView()
+                avatar.translatesAutoresizingMaskIntoConstraints = false
+                NSLayoutConstraint.activate([
+                    avatar.widthAnchor.constraint(equalToConstant: avatarSize),
+                    avatar.heightAnchor.constraint(equalToConstant: avatarSize)
+                ])
+                avatar.layer.cornerRadius = avatarSize / 2
+                avatar.layer.masksToBounds = true
+                avatar.contentMode = .scaleAspectFill
+
+                if let avatarPath = review.avatarURL, !avatarPath.isEmpty {
+                    if let url = urlForImagePath(avatarPath) {
+                        UIImageView.rw_loadImage(from: url) { [weak avatar] img in
+                            DispatchQueue.main.async {
+                                if let img = img {
+                                    avatar?.image = img
+                                } else {
+                                    avatar?.image = self.drawInitialsImage(initials: review.userInitials, size: CGSize(width: avatarSize, height: avatarSize))
+                                }
+                            }
+                        }
+                    } else {
+                        avatar.image = drawInitialsImage(initials: review.userInitials, size: CGSize(width: avatarSize, height: avatarSize))
+                    }
+                } else {
+                    avatar.image = drawInitialsImage(initials: review.userInitials, size: CGSize(width: avatarSize, height: avatarSize))
+                }
+
+                let nameLabel = UILabel()
+                nameLabel.font = .systemFont(ofSize: 15, weight: .semibold)
+                nameLabel.textColor = .label
+                nameLabel.text = review.username
+                nameLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+                nameLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
+
+                let starsRow = UIStackView()
+                starsRow.axis = .horizontal
+                starsRow.alignment = .center
+                starsRow.spacing = 4
+                starsRow.setContentHuggingPriority(.required, for: .horizontal)
+                starsRow.setContentCompressionResistancePriority(.required, for: .horizontal)
+                self.setStars(starsRow, rating: review.rating)
+
+                let gapView = UIView()
+                gapView.translatesAutoresizingMaskIntoConstraints = false
+                NSLayoutConstraint.activate([
+                    gapView.widthAnchor.constraint(equalToConstant: 16)
+                ])
+                gapView.setContentHuggingPriority(.defaultLow, for: .horizontal)
+                gapView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+                row.addArrangedSubview(avatar)
+                row.addArrangedSubview(nameLabel)
+                row.addArrangedSubview(gapView)
+                row.addArrangedSubview(starsRow)
+                v.addArrangedSubview(row)
+
+                if !review.comment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    let commentLabel = UILabel()
+                    commentLabel.numberOfLines = 0
+                    commentLabel.textColor = .label
+                    commentLabel.font = .systemFont(ofSize: 15, weight: .regular)
+                    commentLabel.text = review.comment
+                    commentLabel.setContentCompressionResistancePriority(.required, for: .vertical)
+                    commentLabel.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
+                    commentLabel.setContentHuggingPriority(.defaultLow, for: .vertical)
+                    v.addArrangedSubview(commentLabel)
+                }
+
+                if idx < (self.reviews.count - 1) {
+                    let sep = UIView()
+                    sep.backgroundColor = UIColor.systemGray4
+                    sep.translatesAutoresizingMaskIntoConstraints = false
+                    sep.heightAnchor.constraint(equalToConstant: 0.5).isActive = true
+                    sep.setContentCompressionResistancePriority(.required, for: .vertical)
+                    sep.setContentHuggingPriority(.required, for: .vertical)
+                    v.addArrangedSubview(sep)
+                }
+
+                containerStack.addArrangedSubview(card)
+            }
+        }
+    }
+
+    private func makeEmptyReviewsView() -> UIView {
+        let container = UIView()
+
+        let v = UIStackView()
+        v.axis = .vertical
+        v.alignment = .center
+        v.spacing = 8
+        v.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(v)
+        NSLayoutConstraint.activate([
+            v.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 0),
+            v.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: 0),
+            v.topAnchor.constraint(equalTo: container.topAnchor, constant: 8),
+            v.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -8)
+        ])
+
+        let title = UILabel()
+        title.text = "No reviews yet"
+        title.font = .systemFont(ofSize: 16, weight: .semibold)
+        title.textColor = .secondaryLabel
+        title.textAlignment = .center
+
+        let subtitle = UILabel()
+        subtitle.text = "Be the first to review this item."
+        subtitle.font = .systemFont(ofSize: 14, weight: .regular)
+        subtitle.textColor = .secondaryLabel
+        subtitle.textAlignment = .center
+        subtitle.numberOfLines = 0
+
+        let button = UIButton(type: .system)
+        button.setTitle("Write a Review", for: .normal)
+        button.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
+        button.addTarget(self, action: #selector(emptyStateWriteTapped), for: .touchUpInside)
+
+        v.addArrangedSubview(title)
+        v.addArrangedSubview(subtitle)
+        v.addArrangedSubview(button)
+        return container
+    }
+
+    @objc private func emptyStateWriteTapped() {
+        // Reuse the same action as your existing write button
+        if let b = writeAReview { didtappreviewbutton(b) }
+    }
+
+    // MARK: - Insert/Update reviews in Supabase
+
+    private func insertReviewIntoSupabase(rating: Int, text: String) async throws {
+        guard let itemId = selectedItem?.id else {
+            throw NSError(domain: "ProductVC", code: 1, userInfo: [NSLocalizedDescriptionKey: "Missing item id"])
+        }
+        guard let reviewerId = await SupabaseManager.shared.currentUserId() else {
+            throw NSError(domain: "ProductVC", code: 2, userInfo: [NSLocalizedDescriptionKey: "You must be logged in to review."])
+        }
+        struct NewReviewRow: Encodable {
+            let item_id: String
+            let reviewer_id: String
+            let rating: Int
+            let review_text: String?
+        }
+        let row = NewReviewRow(item_id: itemId, reviewer_id: reviewerId, rating: rating, review_text: text)
+        print("[InsertReview] Payload item_id=\(itemId) reviewer_id=\(reviewerId) rating=\(rating) textLen=\(text.count)")
+
+        // Request the inserted row back to verify the DB stored the text
+        let resp = try await SupabaseManager.shared.client
+            .from("reviews")
+            .insert(row)
+            .select()
+            .single()
+            .execute()
+
+        if let json = String(data: resp.data, encoding: .utf8) {
+            print("[InsertReview] DB echoed row:", json)
+        } else {
+            print("[InsertReview] Insert succeeded; unable to stringify response.")
+        }
+    }
+
+    private func updateReviewInSupabase(reviewId: String, rating: Int, text: String) async throws {
+        struct Patch: Encodable {
+            let rating: Int
+            let review_text: String?
+        }
+        let payload = Patch(rating: rating, review_text: text)
+
+        _ = try await SupabaseManager.shared.client
+            .from("reviews")
+            .update(payload)
+            .eq("id", value: reviewId)
+            .execute()
+    }
+
+    private func presentEditReview(_ review: Review) {
+        let nibName = "WriteReviewViewController"
+        let vc: WriteReviewViewController
+        if Bundle.main.path(forResource: nibName, ofType: "nib") != nil ||
+            Bundle.main.path(forResource: nibName, ofType: "xib") != nil {
+            vc = WriteReviewViewController(nibName: nibName, bundle: nil)
+        } else {
+            vc = WriteReviewViewController()
+        }
+
+        vc.title = "Edit Review"
+        vc.hidesBottomBarWhenPushed = true
+        vc.isEditingReview = true
+        vc.initialRating = review.rating
+        vc.initialText = review.comment
+
+        vc.onReviewEdited = { [weak self] newRating, newText in
+            guard let self = self else { return }
+            Task {
+                do {
+                    try await self.updateReviewInSupabase(reviewId: review.id, rating: newRating, text: newText)
+                } catch {
+                    await MainActor.run { self.presentError(error.localizedDescription) }
+                    return
+                }
+
+                // Update local model
+                if let idx = self.reviews.firstIndex(where: { $0.id == review.id }) {
+                    let old = self.reviews[idx]
+                    let updated = Review(
+                        id: old.id,
+                        userId: old.userId,
+                        userInitials: old.userInitials,
+                        username: old.username,
+                        avatarURL: old.avatarURL,
+                        comment: newText,
+                        rating: newRating,
+                        date: old.date
+                    )
+                    await MainActor.run {
+                        self.reviews[idx] = updated
+                        self.renderReviews()
+                    }
+                }
+
+                // Refresh from DB to stay canonical
+                await self.loadReviews()
+            }
+        }
+
+        if let nav = self.navigationController {
+            nav.setNavigationBarHidden(false, animated: true)
+            nav.pushViewController(vc, animated: true)
+        } else {
+            let nav = UINavigationController(rootViewController: vc)
+            nav.modalPresentationStyle = .formSheet
+            present(nav, animated: true)
+        }
+    }
+
+    // MARK: - Lifecycle
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -664,17 +1089,9 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         // Ensure description wraps to allow dynamic card height
         descriptionBodyLabel?.numberOfLines = 0
         
-        // Setup initial reviews for demo
-        reviews = [
-            Review(userInitials: "AK", username: "Alex K.", comment: "Great quality and easy pickup.", rating: 5, date: Date(timeIntervalSinceNow: -86400)),
-            Review(userInitials: "ER", username: "Emily R.", comment: "Worked as expected. Would rent again.", rating: 4, date: Date(timeIntervalSinceNow: -3600*48))
-        ]
+        // Clear legacy/demo reviews; real data will be loaded from Supabase
+        reviews = []
         
-        r1CommentLabel?.numberOfLines = 0
-        r2CommentLabel?.numberOfLines = 0
-        
-        refreshReviewsUI()
-
         if selectedItem != nil { bindItemToUI() }
     }
     
@@ -682,42 +1099,8 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         super.viewDidAppear(animated)
         if selectedItem != nil { bindItemToUI() }
     }
-    
-    private func refreshReviewsUI() {
-        // Show up to 2 reviews
-        let reviewCards = [
-            (card: review1Card, dateLabel: review1DateLabel, nameLabel: r1NameLabel, commentLabel: r1CommentLabel, stars: [r1star1, r1star2, r1star3, r1star4, r1star5], avatarImageView: r1AvatarImageView),
-            (card: review2Card, dateLabel: review2DateLabel, nameLabel: r2NameLabel, commentLabel: r2CommentLabel, stars: [r2star1, r2star2, r2star3, r2star4, r2star5], avatarImageView: r2AvatarImageView)
-        ]
-        let df = DateFormatter()
-        df.dateStyle = .medium
-        for (i, cardData) in reviewCards.enumerated() {
-            if i < reviews.count {
-                let review = reviews[i]
-                cardData.card?.isHidden = false
-                cardData.nameLabel?.isHidden = false
-                cardData.commentLabel?.isHidden = false
-                cardData.commentLabel?.numberOfLines = 0
-                cardData.dateLabel?.text = df.string(from: review.date)
-                cardData.nameLabel?.text = review.username
-                cardData.commentLabel?.text = review.comment
-                cardData.commentLabel?.textColor = .label
-                cardData.commentLabel?.preferredMaxLayoutWidth = cardData.commentLabel?.bounds.width ?? 0
-                setStars(cardData.stars, to: Double(review.rating))
-                // Set initials/avatar
-                let initials = review.userInitials
-                cardData.avatarImageView?.image = drawInitialsImage(initials: initials, size: CGSize(width: 36, height: 36))
-                cardData.card?.setNeedsLayout()
-                cardData.card?.layoutIfNeeded()
-            } else {
-                cardData.card?.isHidden = true
-                cardData.nameLabel?.isHidden = true
-                cardData.commentLabel?.isHidden = true
-            }
-        }
-        self.view.setNeedsLayout()
-        self.view.layoutIfNeeded()
-    }
+
+    // MARK: - Actions
 
     @IBAction func didTapRentNow(_ sender: UIButton) {
         guard let item = selectedItem else { return }
@@ -763,19 +1146,41 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         // Add completion handler to receive new review and update UI
         reviewVC.onReviewSubmitted = { [weak self] rating, text in
             guard let self = self else { return }
+            print("[ProductVC] onReviewSubmitted rating=\(rating), textLen=\(text.count)")
             Task { [weak self] in
                 guard let self = self else { return }
-                let (displayName, initials) = await self.fetchCurrentUserNameAndInitials()
+                do {
+                    print("[ProductVC] Will insert rating=\(rating) textLen=\(text.count)")
+                    try await self.insertReviewIntoSupabase(rating: rating, text: text)
+                } catch {
+                    await MainActor.run {
+                        // Friendly duplicate constraint message
+                        let msg = error.localizedDescription.contains("duplicate key") ?
+                            "You have already reviewed this item." :
+                            error.localizedDescription
+                        self.presentError(msg)
+                    }
+                    return
+                }
+                // Build local review row for immediate UI update
+                let (displayName, initials, avatarURL) = await self.fetchCurrentUserNameAndInitials()
                 let newReview = Review(
+                    id: UUID().uuidString,
+                    userId: await SupabaseManager.shared.currentUserId() ?? "",
                     userInitials: initials,
                     username: displayName,
+                    avatarURL: avatarURL,
                     comment: text,
                     rating: rating,
                     date: Date()
                 )
                 await MainActor.run {
                     self.reviews.insert(newReview, at: 0)
-                    self.refreshReviewsUI()
+                    self.renderReviews()
+                }
+                // Also refresh from DB to ensure canonical ordering/fields
+                Task { [weak self] in
+                    await self?.loadReviews()
                 }
             }
         }

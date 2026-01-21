@@ -10,22 +10,52 @@ import UIKit
 class WriteReviewViewController: UIViewController {
 
     @IBOutlet var StarView: UIView!
-    // Make reviewTextView optional; ensure to connect this outlet in Interface Builder to prevent runtime nil issues
+    // Make sure this outlet is connected to the actual UITextView in your XIB.
     @IBOutlet weak var reviewTextView: UITextView?
     
+    // Edit mode support
+    var isEditingReview: Bool = false
+    var initialRating: Int?
+    var initialText: String?
+    var onReviewEdited: ((_ rating: Int, _ text: String) -> Void)?
+
+    // New review submit
     var onReviewSubmitted: ((_ rating: Int, _ text: String) -> Void)?
     
     private var starButtons: [UIButton] = []
     private var currentRating: Int = 0 { // 0...5
         didSet { updateStarAppearance() }
     }
+    // Backing text buffer so we don’t rely on the outlet at submit time
+    private var currentText: String = ""
     
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .systemGroupedBackground
         StarView.backgroundColor = .systemGroupedBackground
         configureStars()
-        reviewTextView?.text = ""
+
+        // Configure text view delegate and initial text
+        reviewTextView?.delegate = self
+        if let t = reviewTextView?.text {
+            currentText = t
+        } else {
+            reviewTextView?.text = ""
+            currentText = ""
+        }
+
+        // Prefill for edit mode
+        if isEditingReview {
+            if let r = initialRating { currentRating = max(0, min(5, r)) }
+            if let txt = initialText {
+                reviewTextView?.text = txt
+                currentText = txt
+            }
+            // Optionally change title
+            if title == nil || title?.isEmpty == true {
+                title = "Edit Review"
+            }
+        }
     }
     
     private func configureStars() {
@@ -96,7 +126,12 @@ class WriteReviewViewController: UIViewController {
             button.setContentCompressionResistancePriority(.required, for: .horizontal)
         }
 
-        updateStarAppearance()
+        // If editing and initialRating was set before view loaded, reflect it
+        if isEditingReview, let r = initialRating {
+            currentRating = max(0, min(5, r))
+        } else {
+            updateStarAppearance()
+        }
     }
     
     @objc private func didTapStar(_ sender: UIButton) {
@@ -113,15 +148,38 @@ class WriteReviewViewController: UIViewController {
             button.isSelected = (i < currentRating)
             button.alpha = button.isSelected ? 1.0 : 0.6
         }
-        // If you want haptics when rating changes
+        // Haptics on rating change
         let generator = UIImpactFeedbackGenerator(style: .light)
         generator.impactOccurred()
     }
     
     @IBAction func didTapSubmit(_ sender: UIButton) {
+        // 1) Require a star rating (text is optional)
         let rating = currentRating
-        let text = reviewTextView?.text ?? ""
-        onReviewSubmitted?(rating, text)
+        guard rating >= 1 else {
+            let ac = UIAlertController(
+                title: isEditingReview ? "Edit Review" : "Write a Review",
+                message: "Please select a star rating.",
+                preferredStyle: .alert
+            )
+            ac.addAction(UIAlertAction(title: "OK", style: .default))
+            present(ac, animated: true)
+            return
+        }
+
+        // 2) Text is optional: trim and allow empty string
+        let raw = currentText.isEmpty ? (reviewTextView?.text ?? "") : currentText
+        let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        // No validation needed for text; it can be empty.
+
+        // 3) Call the appropriate completion
+        if isEditingReview {
+            onReviewEdited?(rating, text)
+        } else {
+            onReviewSubmitted?(rating, text)
+        }
+
+        // 4) Dismiss
         if let nav = navigationController {
             nav.popViewController(animated: true)
         } else {
@@ -130,3 +188,11 @@ class WriteReviewViewController: UIViewController {
     }
 }
 
+extension WriteReviewViewController: UITextViewDelegate {
+    func textViewDidChange(_ textView: UITextView) {
+        currentText = textView.text ?? ""
+    }
+    func textViewDidEndEditing(_ textView: UITextView) {
+        currentText = textView.text ?? ""
+    }
+}

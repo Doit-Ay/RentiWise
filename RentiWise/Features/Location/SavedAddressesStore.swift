@@ -16,13 +16,6 @@ final class SavedAddressesStore {
     private let addressesKey = "rw.savedAddresses"
     private let selectedAddressKey = "rw.selectedAddress"
 
-    // Seed defaults the first time (you can customize or remove)
-    private let initialAddresses = [
-        "Home, Chennai",
-        "Office, Bengaluru",
-        "Hostel, SRMIST"
-    ]
-
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         bootstrapIfNeeded()
@@ -31,8 +24,9 @@ final class SavedAddressesStore {
     // MARK: - Bootstrap
 
     private func bootstrapIfNeeded() {
+        // Do not seed demo data. If nothing saved yet, keep it empty.
         if defaults.array(forKey: addressesKey) as? [String] == nil {
-            defaults.set(initialAddresses, forKey: addressesKey)
+            defaults.set([], forKey: addressesKey)
         }
     }
 

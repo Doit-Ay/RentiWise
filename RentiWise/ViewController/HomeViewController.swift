@@ -709,24 +709,45 @@ private extension HomeViewController {
             self?.refreshLocationButtonTitle()
         }
 
+        // NEW: push ManualAddressViewController
         vc.onEnterManualAddress = { [weak self] completion in
             guard let self = self else { return }
-            let ac = UIAlertController(title: "Enter Address", message: nil, preferredStyle: .alert)
-            ac.addTextField { tf in
-                tf.placeholder = "Type your address"
-                tf.autocapitalizationType = .words
-                tf.clearButtonMode = .whileEditing
+            let form = ManualAddressViewController()
+            // If you want to prefill from current location, you can set form.prefillCity/state/country
+            form.onSaved = { saved in
+                // Use a compact display string for the button
+                let display = [saved.label, saved.city, saved.state].compactMap { $0 }.first ?? saved.city
+                SavedAddressesStore.shared.setDefaultSelectedAddress(display)
+                self.refreshLocationButtonTitle()
+                completion(display)
             }
-            ac.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-            ac.addAction(UIAlertAction(title: "Use", style: .default, handler: { _ in
-                let text = ac.textFields?.first?.text ?? ""
-                completion(text)
-            }))
-            self.present(ac, animated: true)
+            if let nav = self.navigationController {
+                nav.setNavigationBarHidden(false, animated: true)
+                nav.pushViewController(form, animated: true)
+            } else {
+                let nav = UINavigationController(rootViewController: form)
+                nav.modalPresentationStyle = .fullScreen
+                self.present(nav, animated: true)
+            }
         }
 
+        // NEW: push ManageAddressesViewController
         vc.onManageSavedAddresses = { [weak self] in
-            self?.presentSavedAddressesManager()
+            guard let self = self else { return }
+            let list = ManageAddressesViewController()
+            list.onPicked = { [weak self] addr in
+                let display = [addr.label, addr.city, addr.state].compactMap { $0 }.first ?? addr.city
+                SavedAddressesStore.shared.setDefaultSelectedAddress(display)
+                self?.refreshLocationButtonTitle()
+            }
+            if let nav = self.navigationController {
+                nav.setNavigationBarHidden(false, animated: true)
+                nav.pushViewController(list, animated: true)
+            } else {
+                let nav = UINavigationController(rootViewController: list)
+                nav.modalPresentationStyle = .fullScreen
+                self.present(nav, animated: true)
+            }
         }
 
         if let sheet = vc.presentationController as? UISheetPresentationController {
@@ -745,51 +766,29 @@ private extension HomeViewController {
     }
 
     func presentSavedAddressesManager() {
-        let store = SavedAddressesStore.shared
-        let addresses = store.allAddresses()
-
-        let list = UIAlertController(title: "Saved Addresses", message: nil, preferredStyle: .actionSheet)
-
-        for addr in addresses {
-            list.addAction(UIAlertAction(title: addr, style: .default, handler: { [weak self] _ in
-                store.setDefaultSelectedAddress(addr)
-                self?.refreshLocationButtonTitle()
-            }))
+        // This method is no longer used by the sheet; keeping it for compatibility
+        let listVC = ManageAddressesViewController()
+        if let nav = self.navigationController {
+            nav.setNavigationBarHidden(false, animated: true)
+            nav.pushViewController(listVC, animated: true)
+        } else {
+            let nav = UINavigationController(rootViewController: listVC)
+            nav.modalPresentationStyle = .fullScreen
+            present(nav, animated: true)
         }
-
-        list.addAction(UIAlertAction(title: "Add New…", style: .default, handler: { [weak self] _ in
-            self?.presentAddAddressPrompt()
-        }))
-
-        list.addAction(UIAlertAction(title: "Clear Selection", style: .destructive, handler: { [weak self] _ in
-            store.clearSelectedAddress()
-            self?.refreshLocationButtonTitle()
-        }))
-
-        list.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-
-        if let pop = list.popoverPresentationController, let button = self.locationTapped {
-            pop.sourceView = button
-            pop.sourceRect = button.bounds
-        }
-        present(list, animated: true)
     }
 
     func presentAddAddressPrompt() {
-        let ac = UIAlertController(title: "Add Address", message: nil, preferredStyle: .alert)
-        ac.addTextField { tf in
-            tf.placeholder = "e.g., 123 Anna Salai, Chennai"
-            tf.autocapitalizationType = .words
+        // Replaced by ManualAddressViewController; keeping stub for compatibility.
+        let form = ManualAddressViewController()
+        if let nav = self.navigationController {
+            nav.setNavigationBarHidden(false, animated: true)
+            nav.pushViewController(form, animated: true)
+        } else {
+            let nav = UINavigationController(rootViewController: form)
+            nav.modalPresentationStyle = .fullScreen
+            present(nav, animated: true)
         }
-        ac.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        ac.addAction(UIAlertAction(title: "Save", style: .default, handler: { [weak self] _ in
-            guard let text = ac.textFields?.first?.text?.trimmingCharacters(in: .whitespacesAndNewlines),
-                  !text.isEmpty else { return }
-            SavedAddressesStore.shared.add(text)
-            SavedAddressesStore.shared.setDefaultSelectedAddress(text)
-            self?.refreshLocationButtonTitle()
-        }))
-        present(ac, animated: true)
     }
 }
 
@@ -1834,4 +1833,3 @@ extension HomeViewController {
         openItem(featuredItems[3])
     }
 }
-
