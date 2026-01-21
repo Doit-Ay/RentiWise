@@ -173,12 +173,12 @@ class RequestViewController: UIViewController {
 
     // Applies the glass effect to all the primary card views.
     private func applyGlassToCards() {
-        itemcardview?.applyGlassEffectSimple()
-        rentalTypeCard?.applyGlassEffectSimple()
-        selectdateandtimeCard?.applyGlassEffectSimple()
-        bookingsummaryCard?.applyGlassEffectSimple()
-        ownerCard?.applyGlassEffectSimple()
-        priceBreakdownCard?.applyGlassEffectSimple()
+//        itemcardview?.applyGlassEffectSimple()
+//        rentalTypeCard?.applyGlassEffectSimple()
+//        selectdateandtimeCard?.applyGlassEffectSimple()
+//        bookingsummaryCard?.applyGlassEffectSimple()
+//        ownerCard?.applyGlassEffectSimple()
+//        priceBreakdownCard?.applyGlassEffectSimple()
     }
 
     override func viewDidAppear(_ animated: Bool) {
