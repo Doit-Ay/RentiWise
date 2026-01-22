@@ -25,7 +25,7 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
     }
     
     private var reviews: [Review] = []
-    private var wishlistButton: UIBarButtonItem?
+    // Removed wishlist bar button; we keep only Share in the nav bar
     private var shareButton: UIBarButtonItem?
     private var isWishlisted: Bool = false
 
@@ -75,6 +75,12 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
     // Optional height constraint outlet (connect only if not using UIStackView)
     @IBOutlet weak var ownerCardHeight: NSLayoutConstraint?
 
+    // In-view wishlist button (connect this outlet and the action in Interface Builder)
+    @IBAction func wishlistButton(_ sender: UIButton) {
+        toggleWishlist()
+    }
+    @IBOutlet weak var WishlistButton: UIButton!
+
     // MARK: - Deposit card
     @IBOutlet weak var depositCard: UIView?
     @IBOutlet weak var depositTitleLabel: UILabel?
@@ -92,6 +98,7 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
     // New reviews stack replacing the old fixed outlets (connect if available)
     @IBOutlet weak var reviewsStack: UIStackView?
 
+    
     // MARK: - Action buttons
     @IBOutlet weak var writeAReview: UIButton?
     @IBOutlet weak var rentNowoutlet: UIButton?
@@ -114,79 +121,18 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         self.selectedItem = item
     }
     
-    private func setupWishlistButtonIfNeeded() {
+    // MARK: - Share button (kept in nav bar)
+    private func setupShareButtonIfNeeded() {
         guard isViewLoaded else { return }
-        guard displayMode == .normal else { return }
-        // Heart button
-        let heartConfig = UIImage.SymbolConfiguration(pointSize: 18, weight: .semibold)
-        let heartImage = UIImage(systemName: isWishlisted ? "heart.fill" : "heart", withConfiguration: heartConfig)
-        let heartBtn = UIBarButtonItem(image: heartImage, style: .plain, target: self, action: #selector(didTapWishlist))
-        heartBtn.tintColor = isWishlisted ? brandTeal : .label
-        self.wishlistButton = heartBtn
-
-        // Share button
+        guard displayMode == .normal else {
+            navigationItem.rightBarButtonItems = nil
+            return
+        }
         let shareImage = UIImage(systemName: "square.and.arrow.up")
         let shareBtn = UIBarButtonItem(image: shareImage, style: .plain, target: self, action: #selector(didTapShare))
         shareBtn.tintColor = brandTeal
         self.shareButton = shareBtn
-
-        // Order: heart on the far right, share to its left
-        navigationItem.rightBarButtonItems = [heartBtn, shareBtn]
-    }
-
-    @objc private func didTapWishlist() {
-        guard let itemId = selectedItem?.id else { return }
-        Task { [weak self] in
-            guard let self = self else { return }
-            guard let userId = await SupabaseManager.shared.currentUserId() else {
-                await MainActor.run { self.presentError("Please sign in to manage your wishlist.") }
-                return
-            }
-            if self.isWishlisted {
-                // Remove from wishlist
-                do {
-                    _ = try await SupabaseManager.shared.client
-                        .from("wishlists")
-                        .delete()
-                        .eq("user_id", value: userId)
-                        .eq("item_id", value: itemId)
-                        .execute()
-                    await MainActor.run {
-                        self.isWishlisted = false
-                        self.updateWishlistButtonAppearance()
-                        self.pulseWishlistButton()
-                    }
-                } catch {
-                    await MainActor.run { self.presentError(error.localizedDescription) }
-                }
-                return
-            }
-            // Add to wishlist
-            struct Row: Encodable { let user_id: String; let item_id: String }
-            do {
-                _ = try await SupabaseManager.shared.client
-                    .from("wishlists")
-                    .insert(Row(user_id: userId, item_id: itemId))
-                    .execute()
-                await MainActor.run {
-                    self.isWishlisted = true
-                    self.updateWishlistButtonAppearance()
-                    self.pulseWishlistButton()
-                }
-            } catch {
-                let msg = error.localizedDescription.lowercased()
-                if msg.contains("duplicate") || msg.contains("conflict") {
-                    await MainActor.run {
-                        self.isWishlisted = true
-                        self.updateWishlistButtonAppearance()
-                    }
-                } else {
-                    await MainActor.run { self.presentError(error.localizedDescription) }
-                }
-            }
-            // Ensure canonical state from DB
-            await self.refreshWishlistState()
-        }
+        navigationItem.rightBarButtonItems = [shareBtn]
     }
 
     @objc private func didTapShare() {
@@ -206,23 +152,77 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         present(ac, animated: true)
     }
 
-    private func updateWishlistButtonAppearance() {
-        guard let btn = wishlistButton else { return }
+    // MARK: - In-view wishlist button helpers
+
+    private func updateWishlistButtonAppearanceInView() {
+        guard let button = WishlistButton else { return }
         let config = UIImage.SymbolConfiguration(pointSize: 18, weight: .semibold)
-        btn.image = UIImage(systemName: isWishlisted ? "heart.fill" : "heart", withConfiguration: config)
-        btn.tintColor = isWishlisted ? brandTeal : .label
-        navigationItem.rightBarButtonItems = [btn, shareButton].compactMap { $0 }
+        let imageName = isWishlisted ? "heart.fill" : "heart"
+        let image = UIImage(systemName: imageName, withConfiguration: config)
+        button.setImage(image, for: .normal)
+        button.tintColor = isWishlisted ? brandTeal : .label
+        // Optional: small pulse animation to acknowledge change
+        UIView.animate(withDuration: 0.08, animations: {
+            button.transform = CGAffineTransform(scaleX: 0.92, y: 0.92)
+        }, completion: { _ in
+            UIView.animate(withDuration: 0.12) {
+                button.transform = .identity
+            }
+        })
     }
 
-    private func pulseWishlistButton() {
-        if let view = self.navigationItem.rightBarButtonItem?.value(forKey: "view") as? UIView {
-            UIView.animate(withDuration: 0.08, animations: {
-                view.transform = CGAffineTransform(scaleX: 0.9, y: 0.9)
-            }, completion: { _ in
-                UIView.animate(withDuration: 0.12) {
-                    view.transform = .identity
+    private func toggleWishlist() {
+        guard let itemId = selectedItem?.id else { return }
+        Task { [weak self] in
+            guard let self = self else { return }
+            guard let userId = await SupabaseManager.shared.currentUserId() else {
+                await MainActor.run { self.presentError("Please sign in to manage your wishlist.") }
+                return
+            }
+            if self.isWishlisted {
+                // Remove from wishlist
+                do {
+                    _ = try await SupabaseManager.shared.client
+                        .from("wishlist") // table name matches your SQL
+                        .delete()
+                        .eq("user_id", value: userId)
+                        .eq("item_id", value: itemId)
+                        .execute()
+                    await MainActor.run {
+                        self.isWishlisted = false
+                        self.updateWishlistButtonAppearanceInView()
+                    }
+                } catch {
+                    await MainActor.run { self.presentError(error.localizedDescription) }
                 }
-            })
+                // Ensure canonical state from DB
+                await self.refreshWishlistState()
+                return
+            }
+            // Add to wishlist
+            struct Row: Encodable { let user_id: String; let item_id: String }
+            do {
+                _ = try await SupabaseManager.shared.client
+                    .from("wishlist") // table name matches your SQL
+                    .insert(Row(user_id: userId, item_id: itemId))
+                    .execute()
+                await MainActor.run {
+                    self.isWishlisted = true
+                    self.updateWishlistButtonAppearanceInView()
+                }
+            } catch {
+                let msg = error.localizedDescription.lowercased()
+                if msg.contains("duplicate") || msg.contains("conflict") {
+                    await MainActor.run {
+                        self.isWishlisted = true
+                        self.updateWishlistButtonAppearanceInView()
+                    }
+                } else {
+                    await MainActor.run { self.presentError(error.localizedDescription) }
+                }
+            }
+            // Ensure canonical state from DB
+            await self.refreshWishlistState()
         }
     }
 
@@ -231,13 +231,13 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         guard let userId = await SupabaseManager.shared.currentUserId() else {
             await MainActor.run {
                 self.isWishlisted = false
-                self.updateWishlistButtonAppearance()
+                self.updateWishlistButtonAppearanceInView()
             }
             return
         }
         do {
             let resp = try await SupabaseManager.shared.client
-                .from("wishlists")
+                .from("wishlist") // table name matches your SQL
                 .select("id", head: true, count: .exact)
                 .eq("user_id", value: userId)
                 .eq("item_id", value: itemId)
@@ -245,13 +245,12 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
             let exists = (resp.count ?? 0) > 0
             await MainActor.run {
                 self.isWishlisted = exists
-                self.setupWishlistButtonIfNeeded()
-                self.updateWishlistButtonAppearance()
+                self.updateWishlistButtonAppearanceInView()
             }
         } catch {
             await MainActor.run {
                 self.isWishlisted = false
-                self.updateWishlistButtonAppearance()
+                self.updateWishlistButtonAppearanceInView()
             }
         }
     }
@@ -277,9 +276,20 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         ratingValueLabel?.text = String(format: "%.1f", unifiedRating)
         ratingReviewsLabel?.text = unifiedReviewsText
 
-        // Distance (placeholder unless you later compute from user/location)
-        distanceLabel?.text = "2.3 km"
-        distanceRightLabel?.text = "2.3 km"
+        // Distance: compute via DistanceService for both top and right labels
+        setDistanceLabels(nil) // clear while loading
+        Task { [weak self] in
+            guard let self = self else { return }
+            if let text = await DistanceService.shared.distanceText(for: item) {
+                await MainActor.run {
+                    self.setDistanceLabels(text)
+                }
+            } else {
+                await MainActor.run {
+                    self.setDistanceLabels(nil)
+                }
+            }
+        }
 
         // Description card
         descriptionTitleLabel?.text = "Description"
@@ -309,6 +319,10 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         
         applyDisplayMode()
         setupNavBarForDisplayMode()
+        // Ensure Share button exists when appropriate
+        setupShareButtonIfNeeded()
+
+        // Sync wishlist state and update in-view button
         Task { [weak self] in
             await self?.refreshWishlistState()
         }
@@ -317,6 +331,11 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         Task { [weak self] in
             await self?.loadReviews()
         }
+    }
+
+    private func setDistanceLabels(_ text: String?) {
+        distanceLabel?.text = text
+        distanceRightLabel?.text = text
     }
 
     private func applyDisplayMode() {
@@ -367,7 +386,8 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
                 navigationItem.rightBarButtonItem = UIBarButtonItem(image: image, style: .plain, target: self, action: #selector(didTapMore))
             }
         case .normal:
-            setupWishlistButtonIfNeeded()
+            // Only Share button in normal mode
+            setupShareButtonIfNeeded()
         }
     }
 
@@ -911,7 +931,9 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
                 NSLayoutConstraint.activate([
                     v.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
                     v.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
-                    v.topAnchor.constraint(equalTo: descriptionCard.bottomAnchor, constant: 16)
+                    v.topAnchor.constraint(equalTo: descriptionCard.bottomAnchor, constant: 16),
+                    // IMPORTANT: add a bottom constraint so the section can expand
+                    v.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16)
                 ])
                 reviewsStack = v
                 containerStack = v
@@ -934,8 +956,6 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
 
         Task {
             let currentUserId = await SupabaseManager.shared.currentUserId()
-            // Debug: verify identity
-            // print("[Reviews] currentUserId=\(currentUserId ?? "nil")")
 
             for (idx, review) in self.reviews.enumerated() {
                 let card = UIView()
@@ -1242,6 +1262,9 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         // Clear legacy/demo reviews; real data will be loaded from Supabase
         reviews = []
         
+        // Set initial wishlist button appearance
+        updateWishlistButtonAppearanceInView()
+
         if selectedItem != nil { bindItemToUI() }
     }
     
@@ -1345,4 +1368,3 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         }
     }
 }
-

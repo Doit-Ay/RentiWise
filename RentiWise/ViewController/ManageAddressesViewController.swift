@@ -109,19 +109,29 @@ extension ManageAddressesViewController: UITableViewDataSource, UITableViewDeleg
         config.text = title
         config.secondaryText = "\(addr.city), \(addr.state) \(addr.postal_code)"
         cell.contentConfiguration = config
-        cell.accessoryType = addr.is_default ? .checkmark : .disclosureIndicator
+        cell.accessoryType = .disclosureIndicator
+        if addr.is_default {
+            cell.imageView?.image = UIImage(systemName: "bookmark.fill")
+            cell.imageView?.tintColor = .systemBlue
+        } else {
+            cell.imageView?.image = UIImage(systemName: "bookmark")
+            cell.imageView?.tintColor = .secondaryLabel
+        }
         return cell
     }
 
+    // NEW: open detail screen on tap
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         let addr = addresses[indexPath.row]
-        // Default behavior: pick address and set as default
-        setDefault(address: addr)
-        onPicked?(addr)
+        let detail = AddressDetailViewController(address: addr)
+        detail.onChanged = { [weak self] _ in
+            Task { await self?.load() }
+        }
+        navigationController?.pushViewController(detail, animated: true)
     }
 
-    // Swipe actions: Edit, Delete, Set Default
+    // Keep swipe actions: Edit, Delete, Set Default
     func tableView(_ tableView: UITableView,
                    trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
         let addr = addresses[indexPath.row]

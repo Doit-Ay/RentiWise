@@ -531,8 +531,9 @@ private struct WishlistPage: View {
         struct WishRow: Decodable { let item_id: String }
         do {
             let client = SupabaseManager.shared.client
+            // FIX: use the correct table name "wishlist" (singular)
             let resp = try await client
-                .from("wishlists")
+                .from("wishlist")
                 .select("item_id")
                 .eq("user_id", value: userId)
                 .execute()
@@ -634,3 +635,4 @@ private struct HelpSupportPage: View {
         .background(Color(.systemGroupedBackground))
     }
 }
+

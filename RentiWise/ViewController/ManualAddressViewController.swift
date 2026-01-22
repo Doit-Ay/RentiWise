@@ -51,6 +51,9 @@ final class ManualAddressViewController: UIViewController {
     // Service
     private let service: AddressServicing = AddressService()
 
+    // Geocoder
+    private let geocoder = CLGeocoder()
+
     override func viewDidLoad() {
         super.viewDidLoad()
         title = existing == nil ? "Add Address" : "Edit Address"
@@ -176,11 +179,9 @@ final class ManualAddressViewController: UIViewController {
         tf.font = .systemFont(ofSize: 16)
         tf.textColor = .label
 
-        // Left padding already via PaddedTextField; ensure height
         tf.translatesAutoresizingMaskIntoConstraints = false
         tf.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
 
-        // Focus ring
         tf.addTarget(self, action: #selector(editingDidBegin(_:)), for: .editingDidBegin)
         tf.addTarget(self, action: #selector(editingDidEnd(_:)), for: .editingDidEnd)
 
@@ -201,7 +202,7 @@ final class ManualAddressViewController: UIViewController {
     }
 
     private func setupFields() {
-        // Contact (Full name and Phone are REQUIRED now)
+        // Contact
         labelField = makeStyledField("Home, Office, Hostel…",
                                      keyboard: .default,
                                      contentType: .nickname,
@@ -264,40 +265,32 @@ final class ManualAddressViewController: UIViewController {
                                        returnKey: .done,
                                        autocap: .words)
 
-        // Address line 1 and 2
+        // Rows
         let line1Row = labeledRow(label: "Address line 1", field: line1Field)
         let line2Row = labeledRow(label: "Address line 2 (optional)", field: line2Field)
         addressSection.addArrangedSubview(line1Row)
         addressSection.addArrangedSubview(line2Row)
 
-        // Two columns row (City, State)
         let rowCityState = UIStackView()
         rowCityState.axis = .horizontal
         rowCityState.alignment = .fill
         rowCityState.spacing = 10
-
         let cityCol = labeledRow(label: "City", field: cityField)
         let stateCol = labeledRow(label: "State", field: stateField)
-
         rowCityState.addArrangedSubview(cityCol)
         rowCityState.addArrangedSubview(stateCol)
         cityCol.widthAnchor.constraint(equalTo: stateCol.widthAnchor).isActive = true
-
         addressSection.addArrangedSubview(rowCityState)
 
-        // Two columns row (Postal, Country)
         let rowPostalCountry = UIStackView()
         rowPostalCountry.axis = .horizontal
         rowPostalCountry.alignment = .fill
         rowPostalCountry.spacing = 10
-
         let postalCol = labeledRow(label: "Postal code", field: postalField)
         let countryCol = labeledRow(label: "Country", field: countryField)
-
         rowPostalCountry.addArrangedSubview(postalCol)
         rowPostalCountry.addArrangedSubview(countryCol)
         postalCol.widthAnchor.constraint(equalTo: countryCol.widthAnchor).isActive = true
-
         addressSection.addArrangedSubview(rowPostalCountry)
 
         // Prefill location button
@@ -328,7 +321,6 @@ final class ManualAddressViewController: UIViewController {
             $0.isHidden = true
         }
 
-        // Contact section: insert errors under Full name and Phone (Label remains optional; keep labelError ready if you later want it)
         if let fullNameRowIndex = contactSection.arrangedSubviews.firstIndex(where: { ($0 as? UIStackView)?.arrangedSubviews.first is UILabel && (($0 as? UIStackView)?.arrangedSubviews.first as? UILabel)?.text == "Full name" }) {
             contactSection.insertArrangedSubview(fullNameError, at: fullNameRowIndex + 1)
         } else {
@@ -341,17 +333,12 @@ final class ManualAddressViewController: UIViewController {
             contactSection.addArrangedSubview(phoneError)
         }
 
-        // Address section errors relative to current structure
-        // 0: line1Row, 1: line2Row, 2: rowCityState, 3: rowPostalCountry, 4: prefillLocationButton
-
-        // After line1 row
         if addressSection.arrangedSubviews.indices.contains(0) {
             addressSection.insertArrangedSubview(line1Error, at: 1)
         } else {
             addressSection.addArrangedSubview(line1Error)
         }
 
-        // After rowCityState: cityError then stateError
         if let cityStateIndex = addressSection.arrangedSubviews.firstIndex(where: { ($0 as? UIStackView)?.axis == .horizontal }) {
             addressSection.insertArrangedSubview(cityError, at: cityStateIndex + 1)
             addressSection.insertArrangedSubview(stateError, at: cityStateIndex + 2)
@@ -360,7 +347,6 @@ final class ManualAddressViewController: UIViewController {
             addressSection.addArrangedSubview(stateError)
         }
 
-        // After rowPostalCountry: postalError then countryError
         if let postalCountryIndex = addressSection.arrangedSubviews.lastIndex(where: { ($0 as? UIStackView)?.axis == .horizontal }) {
             addressSection.insertArrangedSubview(postalError, at: postalCountryIndex + 1)
             addressSection.insertArrangedSubview(countryError, at: postalCountryIndex + 2)
@@ -410,11 +396,8 @@ final class ManualAddressViewController: UIViewController {
             if !valid { ok = false }
         }
 
-        // Contact required
         required(fullNameField, fullNameError, "Full name is required.")
         required(phoneField, phoneError, "Phone number is required.")
-
-        // Address required
         required(line1Field, line1Error, "Address line 1 is required.")
         required(cityField, cityError, "City is required.")
         required(stateField, stateError, "State is required.")
@@ -422,7 +405,6 @@ final class ManualAddressViewController: UIViewController {
         required(countryField, countryError, "Country is required.")
 
         if ok == false {
-            // Scroll to first visible error in logical order
             if !fullNameError.isHidden { scrollToView(fullNameField); return false }
             if !phoneError.isHidden { scrollToView(phoneField); return false }
             if !line1Error.isHidden { scrollToView(line1Field); return false }
@@ -435,7 +417,6 @@ final class ManualAddressViewController: UIViewController {
     }
 
     private func updateSaveEnabled() {
-        // All required fields must be non-empty
         let requiredFilled = [fullNameField, phoneField, line1Field, cityField, stateField, postalField, countryField].allSatisfy {
             !($0.text?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
         }
@@ -460,7 +441,6 @@ final class ManualAddressViewController: UIViewController {
     }
 
     @objc private func textDidChange(_ sender: UITextField) {
-        // Live validation: hide error when user types
         let isEmpty = (sender.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         switch sender {
         case fullNameField: fullNameError.isHidden = !isEmpty
@@ -489,7 +469,6 @@ final class ManualAddressViewController: UIViewController {
             do {
                 let loc = try await AppLocationManager.shared.currentLocation()
                 let name = try await AppLocationManager.shared.placename(for: loc)
-                // Try splitting "City, State, Country"
                 let parts = name.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
                 await MainActor.run {
                     if parts.count >= 1 { self.cityField.text = parts[0] }
@@ -507,39 +486,120 @@ final class ManualAddressViewController: UIViewController {
         }
     }
 
+    // Build full and fallback address strings for geocoding
+    private func fullAddressString() -> String {
+        let parts = [
+            line1Field.text,
+            line2Field.text,
+            cityField.text,
+            stateField.text,
+            postalField.text,
+            countryField.text
+        ]
+        return parts
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: ", ")
+    }
+
+    private func cityStateCountryString() -> String {
+        let parts = [
+            cityField.text,
+            stateField.text,
+            countryField.text
+        ]
+        return parts
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: ", ")
+    }
+
+    // Try multiple strategies to obtain coordinates
+    private func resolveCoordinatesForSave() async -> (Double?, Double?) {
+        // 1) Full address
+        let primary = fullAddressString()
+        if !primary.isEmpty {
+            do {
+                let placemarks = try await geocoder.geocodeAddressString(primary)
+                if let loc = placemarks.first?.location {
+                    print("[Address] Geocoded full address OK: \(primary) -> \(loc.coordinate.latitude), \(loc.coordinate.longitude)")
+                    return (loc.coordinate.latitude, loc.coordinate.longitude)
+                } else {
+                    print("[Address] Geocode returned no results for full address: \(primary)")
+                }
+            } catch {
+                print("[Address] Geocode error for full address '\(primary)': \(error.localizedDescription)")
+            }
+        }
+
+        // 2) Fallback: city, state, country
+        let fallback = cityStateCountryString()
+        if !fallback.isEmpty {
+            do {
+                let placemarks = try await geocoder.geocodeAddressString(fallback)
+                if let loc = placemarks.first?.location {
+                    print("[Address] Geocoded fallback OK: \(fallback) -> \(loc.coordinate.latitude), \(loc.coordinate.longitude)")
+                    return (loc.coordinate.latitude, loc.coordinate.longitude)
+                } else {
+                    print("[Address] Geocode returned no results for fallback: \(fallback)")
+                }
+            } catch {
+                print("[Address] Geocode error for fallback '\(fallback)': \(error.localizedDescription)")
+            }
+        }
+
+        // 3) Optional: as a last resort, try current GPS (if allowed)
+        do {
+            let loc = try await AppLocationManager.shared.currentLocation()
+            print("[Address] Using current GPS as last resort: \(loc.coordinate.latitude), \(loc.coordinate.longitude)")
+            return (loc.coordinate.latitude, loc.coordinate.longitude)
+        } catch {
+            print("[Address] GPS fallback not available: \(error.localizedDescription)")
+        }
+
+        // Failed to resolve coords; proceed without
+        return (nil, nil)
+    }
+
     @objc private func saveTapped() {
         view.endEditing(true)
         guard validate() else { return }
 
         Task {
+            // 1) Build the payload basics
+            let label = emptyToNil(labelField.text)
+            let fullName = fullNameField.text!.trimmingCharacters(in: .whitespacesAndNewlines)
+            let phone = phoneField.text!.trimmingCharacters(in: .whitespacesAndNewlines)
+            let line1 = line1Field.text!.trimmingCharacters(in: .whitespacesAndNewlines)
+            let line2 = emptyToNil(line2Field.text)
+            let city = cityField.text!.trimmingCharacters(in: .whitespacesAndNewlines)
+            let state = stateField.text!.trimmingCharacters(in: .whitespacesAndNewlines)
+            let postal = postalField.text!.trimmingCharacters(in: .whitespacesAndNewlines)
+            let country = countryField.text!.trimmingCharacters(in: .whitespacesAndNewlines)
+            let isDefault = defaultSwitch.isOn
+
+            // 2) Resolve coordinates with robust fallbacks
+            let (lat, lon) = await resolveCoordinatesForSave()
+            print("[Address] Final coords to save: lat=\(String(describing: lat)) lon=\(String(describing: lon))")
+
             do {
                 let userId = try await service.currentUserId()
-                let input = AddressInput(
-                    user_id: userId,
-                    label: emptyToNil(labelField.text),
-                    full_name: fullNameField.text!.trimmingCharacters(in: .whitespacesAndNewlines),
-                    phone: phoneField.text!.trimmingCharacters(in: .whitespacesAndNewlines),
-                    address_line1: line1Field.text!.trimmingCharacters(in: .whitespacesAndNewlines),
-                    address_line2: emptyToNil(line2Field.text),
-                    city: cityField.text!.trimmingCharacters(in: .whitespacesAndNewlines),
-                    state: stateField.text!.trimmingCharacters(in: .whitespacesAndNewlines),
-                    postal_code: postalField.text!.trimmingCharacters(in: .whitespacesAndNewlines),
-                    country: countryField.text!.trimmingCharacters(in: .whitespacesAndNewlines),
-                    is_default: defaultSwitch.isOn
-                )
 
                 if let existing = existing {
+                    // Update
                     let patch = AddressPatch(
-                        label: input.label,
-                        full_name: input.full_name,
-                        phone: input.phone,
-                        address_line1: input.address_line1,
-                        address_line2: input.address_line2,
-                        city: input.city,
-                        state: input.state,
-                        postal_code: input.postal_code,
-                        country: input.country,
-                        is_default: input.is_default
+                        label: label,
+                        full_name: fullName,
+                        phone: phone,
+                        address_line1: line1,
+                        address_line2: line2,
+                        city: city,
+                        state: state,
+                        postal_code: postal,
+                        country: country,
+                        is_default: isDefault,
+                        latitude: lat,
+                        longitude: lon
                     )
                     let updated = try await service.update(id: existing.id, patch: patch)
                     await MainActor.run {
@@ -547,6 +607,22 @@ final class ManualAddressViewController: UIViewController {
                         self.navigationController?.popViewController(animated: true)
                     }
                 } else {
+                    // Create
+                    let input = AddressInput(
+                        user_id: userId,
+                        label: label,
+                        full_name: fullName,
+                        phone: phone,
+                        address_line1: line1,
+                        address_line2: line2,
+                        city: city,
+                        state: state,
+                        postal_code: postal,
+                        country: country,
+                        is_default: isDefault,
+                        latitude: lat,
+                        longitude: lon
+                    )
                     let created = try await service.create(input)
                     await MainActor.run {
                         self.onSaved?(created)
@@ -603,3 +679,4 @@ private final class PaddedTextField: UITextField {
         return bounds.inset(by: inset)
     }
 }
+

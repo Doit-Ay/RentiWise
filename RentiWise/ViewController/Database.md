@@ -710,3 +710,70 @@ create index if not exists uid_computed_at_idx
 on public.user_item_distances (computed_at desc);
 
 
+-- =====================================
+-- WISHLIST TABLE
+-- =====================================
+
+create table if not exists public.wishlist (
+  id uuid primary key default gen_random_uuid(),
+
+  user_id uuid not null
+    references auth.users(id)
+    on delete cascade,
+
+  item_id uuid not null
+    references public.items(id)
+    on delete cascade,
+
+  created_at timestamptz default now(),
+
+  -- Prevent duplicate wishlist entries
+  unique (user_id, item_id)
+);
+
+-- =====================================
+-- ENABLE ROW LEVEL SECURITY
+-- =====================================
+
+alter table public.wishlist enable row level security;
+
+-- =====================================
+-- RLS POLICIES
+-- =====================================
+
+-- SELECT: user can view only their wishlist
+drop policy if exists "wishlist_select_own" on public.wishlist;
+create policy "wishlist_select_own"
+on public.wishlist
+for select
+to authenticated
+using (user_id = auth.uid());
+
+-- INSERT: user can add items to their wishlist
+drop policy if exists "wishlist_insert_own" on public.wishlist;
+create policy "wishlist_insert_own"
+on public.wishlist
+for insert
+to authenticated
+with check (user_id = auth.uid());
+
+-- DELETE: user can remove items from their wishlist
+drop policy if exists "wishlist_delete_own" on public.wishlist;
+create policy "wishlist_delete_own"
+on public.wishlist
+for delete
+to authenticated
+using (user_id = auth.uid());
+
+-- =====================================
+-- INDEXES (PERFORMANCE)
+-- =====================================
+
+create index if not exists wishlist_user_id_idx
+on public.wishlist (user_id);
+
+create index if not exists wishlist_item_id_idx
+on public.wishlist (item_id);
+
+create index if not exists wishlist_created_at_idx
+on public.wishlist (created_at desc);

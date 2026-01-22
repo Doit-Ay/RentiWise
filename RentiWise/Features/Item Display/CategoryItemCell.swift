@@ -38,6 +38,12 @@ final class CategoryItemCell: UITableViewCell {
     // Track the owner id this cell is currently representing to guard against reuse
     private var currentOwnerId: String?
 
+    // Track the item id this cell is showing (to further guard async distance updates)
+    private var currentItemId: String?
+
+    // Simple UI cache to avoid flicker while scrolling; key by owner_id (owner-level distance)
+    private static let distanceCache = NSCache<NSString, NSString>()
+
     override func awakeFromNib() {
         super.awakeFromNib()
         backgroundColor = .clear
@@ -139,6 +145,7 @@ final class CategoryItemCell: UITableViewCell {
         itemRating?.text = nil
         ownerName?.text = nil
         currentOwnerId = nil
+        currentItemId = nil
     }
 
     func configure(with item: Item, currencyFormatter: NumberFormatter) {
@@ -150,12 +157,18 @@ final class CategoryItemCell: UITableViewCell {
 
         // Defaults so nothing looks blank if backend doesn’t provide values
         applyYellowStarRating(valueText: "3.5")           // ★ in yellow, number in black
-        itemDistance?.text = "1.5 km"                     // distance text in black (label)
+
+        // Distance placeholder while loading
+        itemDistance?.text = "…"
 
         // Owner name: set placeholder, then resolve asynchronously with cache
         ownerName?.text = "Owner"
         currentOwnerId = item.owner_id
+        currentItemId = item.id
         resolveOwnerName(for: item.owner_id)
+
+        // Distance: owner-level, matching Home/Product behavior
+        resolveDistance(for: item)
 
         // If your bucket is private and you need signed URLs:
         if let path = item.images.first {
@@ -187,6 +200,35 @@ final class CategoryItemCell: UITableViewCell {
             itemimage?.image = nil
         }
         */
+    }
+
+    // MARK: - Distance resolution (owner-level, cached, reuse-safe)
+    private func resolveDistance(for item: Item) {
+        let ownerKey = item.owner_id as NSString
+
+        // 1) UI cache hit to avoid flicker while scrolling
+        if let cached = CategoryItemCell.distanceCache.object(forKey: ownerKey) {
+            if self.currentOwnerId == item.owner_id, self.currentItemId == item.id {
+                self.itemDistance?.text = cached as String
+            }
+            return
+        }
+
+        // 2) Async compute using DistanceService; it already caches geocoding/routing/DB
+        Task { [weak self] in
+            guard let self else { return }
+            let text = await DistanceService.shared.distanceText(for: item) ?? "—"
+            // Cache for subsequent rows with same owner
+            CategoryItemCell.distanceCache.setObject(text as NSString, forKey: ownerKey)
+
+            await MainActor.run { [weak self] in
+                guard let self = self else { return }
+                // Reuse guard: ensure this cell still represents the same item/owner
+                if self.currentOwnerId == item.owner_id, self.currentItemId == item.id {
+                    self.itemDistance?.text = text
+                }
+            }
+        }
     }
 
     // MARK: - Owner name resolution (self-contained, cached)
@@ -293,3 +335,4 @@ private extension UIImageView {
         }
     }
 }
+

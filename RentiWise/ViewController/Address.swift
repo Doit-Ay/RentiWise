@@ -14,6 +14,10 @@ struct Address: Codable, Identifiable, Equatable {
     var country: String
     var is_default: Bool
     let created_at: String?
+
+    // New: client-side geocoded coordinates (optional)
+    var latitude: Double?
+    var longitude: Double?
 }
 
 struct AddressInput: Encodable {
@@ -28,6 +32,10 @@ struct AddressInput: Encodable {
     let postal_code: String
     let country: String
     let is_default: Bool
+
+    // New: coordinates (optional)
+    let latitude: Double?
+    let longitude: Double?
 }
 
 struct AddressPatch: Encodable {
@@ -41,4 +49,9 @@ struct AddressPatch: Encodable {
     let postal_code: String
     let country: String
     let is_default: Bool
+
+    // New: coordinates (optional)
+    let latitude: Double?
+    let longitude: Double?
 }
+

@@ -11,6 +11,7 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
 
     @IBOutlet weak var collectionView: UICollectionView!
 
+    @IBOutlet weak var Homepagelastline: UILabel!
     @IBOutlet var productclicked: UIView!
     // Single image outlet only
     @IBOutlet weak var homeimage: UIImageView!
@@ -244,7 +245,7 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
             homeimage?.image = UIImage(named: first)
         }
         
-        // Refresh location button title ("SRMIST" if none saved)
+        // Refresh location button title ("SRMIST" if none saved) and ensure a real default is persisted
         refreshLocationButtonTitle()
 
         // Initialize search helper (rounded search bar, keyboard behavior, inline results)
@@ -255,6 +256,9 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
             }
             self.homeSearch = hs
         }
+
+        // Set the bottom tagline "You ❤️ RentiWise" with brand-colored heart
+        setBottomTagline()
     }
 
     override func viewDidLayoutSubviews() {
@@ -705,10 +709,34 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
 // MARK: - Location handling (sheet + persistence)
 private extension HomeViewController {
     func refreshLocationButtonTitle() {
+        // Ensure we have a persisted default so DistanceService can compute immediately.
+        if SavedAddressesStore.shared.getDefaultSelectedAddress() == nil {
+            // Use a full geocodable default string (adjust to your campus/location as needed).
+            let defaultGeocodable = "SRM Institute of Science and Technology, Kattankulathur, Tamil Nadu, India"
+            SavedAddressesStore.shared.setDefaultSelectedAddress(defaultGeocodable)
+        }
+
         let selected = SavedAddressesStore.shared.getDefaultSelectedAddress() ?? "SRMIST"
         locationTapped?.setTitle(selected, for: .normal)
         locationTapped?.setTitleColor(UIColor(red: 112/255, green: 167/255, blue: 180/255, alpha: 1.0), for: .normal) // brand blue
         locationTapped?.titleLabel?.font = .systemFont(ofSize: 14, weight: .semibold)
+    }
+
+    // Build a precise geocodable string from a backend Address
+    func makeFullAddressString(from addr: Address) -> String {
+        // Prefer full name/phone only for display; geocoding uses address fields
+        let parts = [
+            addr.address_line1,
+            addr.address_line2,
+            addr.city,
+            addr.state,
+            addr.postal_code,
+            addr.country
+        ]
+        return parts
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: ", ")
     }
 
     @IBAction func locationTappedAction(_ sender: UIButton) {
@@ -734,9 +762,11 @@ private extension HomeViewController {
             let form = ManualAddressViewController()
             // If you want to prefill from current location, you can set form.prefillCity/state/country
             form.onSaved = { saved in
-                // Use a compact display string for the button
+                // Build a short display title for the button
                 let display = [saved.label, saved.city, saved.state].compactMap { $0 }.first ?? saved.city
-                SavedAddressesStore.shared.setDefaultSelectedAddress(display)
+                // Build a precise geocodable string for distance computations
+                let fullString = self.makeFullAddressString(from: saved)
+                SavedAddressesStore.shared.setDefaultSelectedAddress(fullString)
                 self.refreshLocationButtonTitle()
                 completion(display)
             }
@@ -755,9 +785,13 @@ private extension HomeViewController {
             guard let self = self else { return }
             let list = ManageAddressesViewController()
             list.onPicked = { [weak self] addr in
+                guard let self = self else { return }
+                // Short title for UI
                 let display = [addr.label, addr.city, addr.state].compactMap { $0 }.first ?? addr.city
-                SavedAddressesStore.shared.setDefaultSelectedAddress(display)
-                self?.refreshLocationButtonTitle()
+                // Precise geocodable string for DistanceService
+                let fullString = self.makeFullAddressString(from: addr)
+                SavedAddressesStore.shared.setDefaultSelectedAddress(fullString)
+                self.refreshLocationButtonTitle()
             }
             if let nav = self.navigationController {
                 nav.setNavigationBarHidden(false, animated: true)
@@ -1092,7 +1126,15 @@ private extension HomeViewController {
         // Rating: yellow star + normal text
         ratingLabel?.attributedText = makeYellowStarRatingText(valueText: "4.5", reviewsText: "(23)")
 
-        distanceLabel?.text = "2.3 km"
+        // Distance: fetch road distance asynchronously and update label
+        distanceLabel?.text = nil
+        Task { [weak distanceLabel] in
+            if let text = await DistanceService.shared.distanceText(for: item) {
+                await MainActor.run { distanceLabel?.text = text }
+            } else {
+                await MainActor.run { distanceLabel?.text = nil }
+            }
+        }
 
         if let path = item.images.first, let url = StorageURLBuilder.publicFileURL(for: path) {
             setImage(into: imageView, from: url)
@@ -1805,9 +1847,19 @@ private final class TrendingItemCell: UICollectionViewCell {
         priceMainLabel.text = priceText
         priceSuffixLabel.text = "/ day"
 
-        // Rating and distance – placeholders until real data is available
+        // Rating placeholder
         ratingLabel.text = "4.8"
-        distanceLabel.text = "1.4 km"
+
+        // Distance: fetch road distance asynchronously
+        distanceLabel.text = nil
+        Task { [weak self] in
+            guard let self = self else { return }
+            if let text = await DistanceService.shared.distanceText(for: item) {
+                await MainActor.run { self.distanceLabel.text = text }
+            } else {
+                await MainActor.run { self.distanceLabel.text = nil }
+            }
+        }
 
         if let path = item.images.first, let url = StorageURLBuilder.publicFileURL(for: path) {
             // Lightweight image load with cache
@@ -1853,3 +1905,25 @@ extension HomeViewController {
     }
 }
 
+// MARK: - Bottom tagline helper
+private extension HomeViewController {
+    func setBottomTagline() {
+        guard let label = Homepagelastline else { return }
+        let heart = "❤️"
+        let full = "You \(heart) RentiWise"
+
+        let brandTeal = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0)
+        let baseColor = label.textColor ?? .label
+        let baseFont = label.font ?? UIFont.systemFont(ofSize: 14)
+
+        let attr = NSMutableAttributedString(string: full, attributes: [
+            .foregroundColor: baseColor,
+            .font: baseFont
+        ])
+        if let r = full.range(of: heart) {
+            let ns = NSRange(r, in: full)
+            attr.addAttribute(.foregroundColor, value: brandTeal, range: ns)
+        }
+        label.attributedText = attr
+    }
+}

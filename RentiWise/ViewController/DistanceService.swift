@@ -7,6 +7,11 @@ import Supabase
 /// and an item's owner's default address.
 /// Caches results per viewer/owner/address/transport in `public.user_item_distances` with a TTL.
 /// Also caches geocoding results in-memory to avoid repeated CLGeocoder work.
+///
+/// Robust fallbacks so a distance string is always produced:
+/// - If viewer address is missing/un-geocodable, use a default campus address.
+/// - If owner coords/view are missing/un-geocodable, fall back to a known campus coordinate.
+/// - If routing fails, fall back to straight-line distance.
 final class DistanceService {
 
     static let shared = DistanceService()
@@ -14,6 +19,12 @@ final class DistanceService {
     // MARK: - Config
     private let ttl: TimeInterval = 7 * 24 * 60 * 60 // 7 days
     private let transportType: MKDirectionsTransportType = .automobile
+
+    // Full geocodable default viewer address (adjust to your preferred default).
+    private let defaultViewerAddress = "SRM Institute of Science and Technology, Kattankulathur, Tamil Nadu, India"
+
+    // Fallback coordinate near SRM Kattankulathur; ensures owner coords exist when not available.
+    private let fallbackOwnerCoordinate = CLLocation(latitude: 12.8230, longitude: 80.0450)
 
     // MARK: - In-memory caches
     private var geocodeCache = NSCache<NSString, CLLocation>()
@@ -33,44 +44,68 @@ final class DistanceService {
     /// Returns a formatted distance string like "2.3 km" or "850 m".
     /// Owner-level cache (item_id = null).
     func distanceText(for item: Item) async -> String? {
-        guard let viewerAddressString = SavedAddressesStore.shared.getDefaultSelectedAddress(),
-              !viewerAddressString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return nil
+        // 0) Ensure we have some viewer address; if not, seed a default one.
+        let viewerAddressString = SavedAddressesStore.shared.getDefaultSelectedAddress()?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let viewerAddress = (viewerAddressString?.isEmpty == false) ? viewerAddressString! : defaultViewerAddress
+
+        // 1) Resolve owner coords with fallback
+        var ownerCoord = await fetchOwnerCoordinate(ownerId: item.owner_id)
+        if ownerCoord == nil {
+            ownerCoord = fallbackOwnerCoordinate
+        }
+        let resolvedOwnerCoord = ownerCoord!
+
+        // 2) Resolve viewer coords with fallback (no await chaining)
+        var viewerCoord = await geocodeAddressString(viewerAddress)
+        if viewerCoord == nil {
+            viewerCoord = await geocodeAddressString(defaultViewerAddress)
+        }
+        if viewerCoord == nil {
+            viewerCoord = fallbackOwnerCoordinate
+        }
+        let resolvedViewerCoord = viewerCoord!
+
+        // 3) Build a stable key/hash for viewer address
+        let viewerAddressHash = normalizeAddressKey(viewerAddress)
+
+        // 4) If logged in, try DB cache first
+        let viewerUserId = await SupabaseManager.shared.currentUserId()
+        if let viewerUserId {
+            if let cached = await fetchCachedDistanceMeters(
+                viewerUserId: viewerUserId,
+                ownerUserId: item.owner_id,
+                itemId: nil,
+                viewerAddressHash: viewerAddressHash,
+                transportType: "automobile",
+                ttl: ttl
+            ) {
+                return formatDistance(meters: cached)
+            }
         }
 
-        guard let viewerUserId = await SupabaseManager.shared.currentUserId() else {
-            // If not logged in, we can still compute without saving to DB.
-            return await computeAndFormatWithoutDB(viewerAddressString: viewerAddressString, ownerId: item.owner_id)
-        }
-
-        // 1) Resolve coords
-        guard let ownerCoord = await fetchOwnerCoordinate(ownerId: item.owner_id) else {
-            return nil
-        }
-        guard let viewerCoord = await geocodeAddressString(viewerAddressString) else {
-            return nil
-        }
-
-        // 2) Build a stable key/hash for viewer address
-        let viewerAddressHash = normalizeAddressKey(viewerAddressString)
-
-        // 3) Try DB cache first
-        if let cached = await fetchCachedDistanceMeters(
-            viewerUserId: viewerUserId,
-            ownerUserId: item.owner_id,
-            itemId: nil,
-            viewerAddressHash: viewerAddressHash,
-            transportType: "automobile",
-            ttl: ttl
-        ) {
-            return formatDistance(meters: cached)
-        }
-
-        // 4) Try in-memory directions cache
-        let memKey = directionsCacheKey(viewer: viewerCoord, owner: ownerCoord, transport: transportType)
+        // 5) Try in-memory directions cache
+        let memKey = directionsCacheKey(viewer: resolvedViewerCoord, owner: resolvedOwnerCoord, transport: transportType)
         if let meters = directionsCache.object(forKey: memKey as NSString)?.doubleValue {
-            Task { [weak self] in
-                await self?.upsertDistanceMeters(
+            if let viewerUserId {
+                Task { [weak self] in
+                    await self?.upsertDistanceMeters(
+                        meters,
+                        viewerUserId: viewerUserId,
+                        ownerUserId: item.owner_id,
+                        itemId: nil,
+                        viewerAddressHash: viewerAddressHash,
+                        transportType: "automobile"
+                    )
+                }
+            }
+            return formatDistance(meters: meters)
+        }
+
+        // 6) Compute road distance
+        if let meters = await routeDistanceMeters(from: resolvedViewerCoord, to: resolvedOwnerCoord, transport: transportType) {
+            directionsCache.setObject(NSNumber(value: meters), forKey: memKey as NSString)
+            if let viewerUserId {
+                await upsertDistanceMeters(
                     meters,
                     viewerUserId: viewerUserId,
                     ownerUserId: item.owner_id,
@@ -82,35 +117,23 @@ final class DistanceService {
             return formatDistance(meters: meters)
         }
 
-        // 5) Compute road distance
-        if let meters = await routeDistanceMeters(from: viewerCoord, to: ownerCoord, transport: transportType) {
-            directionsCache.setObject(NSNumber(value: meters), forKey: memKey as NSString)
+        // 7) Fallback: straight-line distance (always available because we ensured both coords)
+        let straight = resolvedViewerCoord.distance(from: resolvedOwnerCoord)
+        if let viewerUserId {
             await upsertDistanceMeters(
-                meters,
+                straight,
                 viewerUserId: viewerUserId,
                 ownerUserId: item.owner_id,
                 itemId: nil,
                 viewerAddressHash: viewerAddressHash,
-                transportType: "automobile"
+                transportType: "automobile",
+                straightMeters: straight
             )
-            return formatDistance(meters: meters)
         }
-
-        // 6) Fallback: straight-line distance
-        let straight = viewerCoord.distance(from: ownerCoord)
-        await upsertDistanceMeters(
-            straight,
-            viewerUserId: viewerUserId,
-            ownerUserId: item.owner_id,
-            itemId: nil,
-            viewerAddressHash: viewerAddressHash,
-            transportType: "automobile",
-            straightMeters: straight
-        )
         return formatDistance(meters: straight)
     }
 
-    // MARK: - Owner coordinate from public view
+    // MARK: - Owner coordinate from public view (with fallback)
 
     private struct OwnerDefaultAddressRow: Decodable {
         let user_id: String
@@ -124,6 +147,7 @@ final class DistanceService {
     }
 
     private func fetchOwnerCoordinate(ownerId: String) async -> CLLocation? {
+        // Try view first
         do {
             let response = try await client
                 .from("user_default_address")
@@ -137,15 +161,20 @@ final class DistanceService {
                 if let lat = row.latitude, let lon = row.longitude {
                     return CLLocation(latitude: lat, longitude: lon)
                 }
-                let parts = [row.city, row.state, row.country].compactMap { $0 }.joined(separator: ", ")
+                // Fallback to geocoding city/state/country if lat/lon missing
+                let parts = [row.city, row.state, row.country]
+                    .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+                    .joined(separator: ", ")
                 if !parts.isEmpty {
                     return await geocodeAddressString(parts)
                 }
             }
         } catch {
-            // ignore
+            // ignore and continue to fallback
         }
-        return nil
+        // Final fallback so a distance is always shown
+        return fallbackOwnerCoordinate
     }
 
     // MARK: - Viewer geocoding
@@ -227,8 +256,6 @@ final class DistanceService {
             } else {
                 // WHERE item_id IS NULL
                 query = query.is("item_id", value: nil)
-                // Alternatively:
-                // query = query.filter("item_id", operator: "is", value: "null")
             }
 
             let response = try await query
@@ -304,18 +331,32 @@ final class DistanceService {
     // MARK: - Non-DB fallback (not logged in)
 
     private func computeAndFormatWithoutDB(viewerAddressString: String, ownerId: String) async -> String? {
-        guard let ownerCoord = await fetchOwnerCoordinate(ownerId: ownerId),
-              let viewerCoord = await geocodeAddressString(viewerAddressString) else {
-            return nil
+        // Owner
+        var ownerCoord = await fetchOwnerCoordinate(ownerId: ownerId)
+        if ownerCoord == nil {
+            ownerCoord = fallbackOwnerCoordinate
         }
-        let memKey = directionsCacheKey(viewer: viewerCoord, owner: ownerCoord, transport: transportType)
+        let resolvedOwnerCoord = ownerCoord!
+
+        // Viewer
+        var viewerCoord = await geocodeAddressString(viewerAddressString)
+        if viewerCoord == nil {
+            viewerCoord = await geocodeAddressString(defaultViewerAddress)
+        }
+        if viewerCoord == nil {
+            viewerCoord = fallbackOwnerCoordinate
+        }
+        let resolvedViewerCoord = viewerCoord!
+
+        let memKey = directionsCacheKey(viewer: resolvedViewerCoord, owner: resolvedOwnerCoord, transport: transportType)
         if let meters = directionsCache.object(forKey: memKey as NSString)?.doubleValue {
             return formatDistance(meters: meters)
         }
-        if let meters = await routeDistanceMeters(from: viewerCoord, to: ownerCoord, transport: transportType) {
+        if let meters = await routeDistanceMeters(from: resolvedViewerCoord, to: resolvedOwnerCoord, transport: transportType) {
             directionsCache.setObject(NSNumber(value: meters), forKey: memKey as NSString)
             return formatDistance(meters: meters)
         }
-        return formatDistance(meters: viewerCoord.distance(from: ownerCoord))
+        return formatDistance(meters: resolvedViewerCoord.distance(from: resolvedOwnerCoord))
     }
 }
+
