@@ -89,6 +89,26 @@ private struct SupportChatHost: UIViewControllerRepresentable {
     func updateUIViewController(_ uiViewController: SupportChatViewController, context: Context) {}
 }
 
+// Bridge to present ProductViewController inside SwiftUI (push style)
+private struct ProductHostView: UIViewControllerRepresentable {
+    let item: Item
+    func makeUIViewController(context: Context) -> ProductViewController {
+        let nibName = "ProductViewController"
+        let vc: ProductViewController
+        if Bundle.main.path(forResource: nibName, ofType: "nib") != nil ||
+            Bundle.main.path(forResource: nibName, ofType: "xib") != nil {
+            vc = ProductViewController(nibName: nibName, bundle: nil)
+        } else {
+            vc = ProductViewController()
+        }
+        vc.configure(with: item)
+        vc.title = "Product Detail"
+        vc.hidesBottomBarWhenPushed = true
+        return vc
+    }
+    func updateUIViewController(_ uiViewController: ProductViewController, context: Context) {}
+}
+
 // MARK: - SwiftUI Profile
 
 private struct ProfileRootView: View {
@@ -426,22 +446,156 @@ private struct EditProfileView: View {
 // MARK: - Placeholder pages
 
 private struct WishlistPage: View {
+    @State private var isLoading = false
+    @State private var items: [Item] = []
+    @State private var errorMessage: String?
+
+    private let brandTeal = Color(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0)
+
     var body: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "heart")
-                .font(.system(size: 36))
-                .foregroundStyle(.secondary)
-            Text("Wishlist")
-                .font(.headline)
-            Text("Add items to your wishlist from Explore.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+        List {
+            if let errorMessage {
+                Text(errorMessage)
+                    .foregroundStyle(.red)
+                    .font(.footnote)
+            }
+
+            if items.isEmpty && !isLoading && errorMessage == nil {
+                VStack(spacing: 12) {
+                    Image(systemName: "heart")
+                        .font(.system(size: 36))
+                        .foregroundStyle(.secondary)
+                    Text("Wishlist")
+                        .font(.headline)
+                    Text("Add items to your wishlist from Explore.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.vertical, 24)
+                .listRowBackground(Color.clear)
+            }
+
+            ForEach(items, id: \.id) { item in
+                NavigationLink {
+                    ProductHostView(item: item)
+                        .navigationBarTitleDisplayMode(.inline)
+                } label: {
+                    HStack(spacing: 12) {
+                        WishlistImage(path: item.images.first)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(item.title)
+                                .font(.headline)
+                                .lineLimit(2)
+                            Text(priceText(for: item))
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer(minLength: 8)
+                        Image(systemName: "heart.fill")
+                            .foregroundStyle(brandTeal)
+                    }
+                    .padding(.vertical, 6)
+                }
+            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .padding(.top, 24)
+        .listStyle(.insetGrouped)
         .navigationTitle("Wishlist")
         .navigationBarTitleDisplayMode(.inline)
-        .background(Color(.systemGroupedBackground))
+        .task { await loadWishlist() }
+        .refreshable { await loadWishlist() }
+    }
+
+    private func priceText(for item: Item) -> String {
+        let nf = NumberFormatter()
+        nf.numberStyle = .currency
+        nf.minimumFractionDigits = 2
+        nf.maximumFractionDigits = 2
+        let amount = NSNumber(value: item.price_per_day)
+        let price = nf.string(from: amount) ?? String(format: "%.2f", item.price_per_day)
+        return "\(price) / day"
+    }
+
+    private func loadWishlist() async {
+        await MainActor.run {
+            isLoading = true
+            errorMessage = nil
+        }
+        defer { Task { await MainActor.run { isLoading = false } } }
+
+        guard let userId = await SupabaseManager.shared.currentUserId() else {
+            await MainActor.run { errorMessage = "Please sign in to view your wishlist." }
+            return
+        }
+
+        struct WishRow: Decodable { let item_id: String }
+        do {
+            let client = SupabaseManager.shared.client
+            let resp = try await client
+                .from("wishlists")
+                .select("item_id")
+                .eq("user_id", value: userId)
+                .execute()
+            let wishRows = try JSONDecoder().decode([WishRow].self, from: resp.data)
+            let itemIds = wishRows.map { $0.item_id }
+            if itemIds.isEmpty {
+                await MainActor.run { self.items = [] }
+                return
+            }
+            let itemsResp = try await client
+                .from("items")
+                .select()
+                .in("id", value: itemIds)
+                .execute()
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            let fetched = try decoder.decode([Item].self, from: itemsResp.data)
+            await MainActor.run { self.items = fetched }
+        } catch {
+            await MainActor.run { errorMessage = error.localizedDescription }
+        }
+    }
+}
+
+private struct WishlistImage: View {
+    let path: String?
+
+    var body: some View {
+        Group {
+            if let path, let url = StorageURLBuilder.publicFileURL(for: path) {
+                if #available(iOS 15.0, *) {
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case .empty:
+                            placeholder
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .scaledToFill()
+                        case .failure:
+                            placeholder
+                        @unknown default:
+                            placeholder
+                        }
+                    }
+                } else {
+                    placeholder
+                }
+            } else {
+                placeholder
+            }
+        }
+        .frame(width: 60, height: 60)
+        .background(Color(.secondarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var placeholder: some View {
+        Image(systemName: "photo")
+            .resizable()
+            .scaledToFit()
+            .foregroundStyle(.secondary)
+            .padding(10)
     }
 }
 

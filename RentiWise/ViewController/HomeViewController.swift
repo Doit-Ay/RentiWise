@@ -569,7 +569,26 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
             let item = trendingItems[indexPath.item]
             cell.configure(with: item, currencyFormatter: currencyFormatter)
             cell.onRentTapped = { [weak self] in
-                self?.openItem(item)
+                guard let self = self else { return }
+                let nibName = "RequestViewController"
+                let requestVC: RequestViewController
+                if Bundle.main.path(forResource: nibName, ofType: "nib") != nil ||
+                   Bundle.main.path(forResource: nibName, ofType: "xib") != nil {
+                    requestVC = RequestViewController(nibName: nibName, bundle: nil)
+                } else {
+                    requestVC = RequestViewController()
+                }
+                requestVC.configure(with: item)
+                requestVC.title = "Request"
+                requestVC.hidesBottomBarWhenPushed = true
+                if let nav = self.navigationController {
+                    nav.setNavigationBarHidden(false, animated: true)
+                    nav.pushViewController(requestVC, animated: true)
+                } else {
+                    let nav = UINavigationController(rootViewController: requestVC)
+                    nav.modalPresentationStyle = .fullScreen
+                    self.present(nav, animated: true)
+                }
             }
             // Owner name removed from trending UI; no resolution or setting here.
             return cell
@@ -1833,3 +1852,4 @@ extension HomeViewController {
         openItem(featuredItems[3])
     }
 }
+
