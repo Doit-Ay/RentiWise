@@ -599,3 +599,114 @@ on public.addresses (user_id, is_default);
 create unique index if not exists one_default_address_per_user
 on public.addresses (user_id)
 where is_default = true;
+
+
+alter table public.addresses
+add column if not exists latitude double precision,
+add column if not exists longitude double precision;
+
+create or replace view public.user_default_address as
+select distinct on (a.user_id)
+  a.user_id,
+  a.id as address_id,
+  a.city,
+  a.state,
+  a.country,
+  a.latitude,
+  a.longitude,
+  a.is_default,
+  a.created_at
+from public.addresses a
+order by
+  a.user_id,
+  a.is_default desc,
+  a.created_at desc;
+
+grant select on public.user_default_address to anon, authenticated;
+
+
+-- =====================================
+-- USER ↔ ITEM DISTANCE CACHE TABLE
+-- =====================================
+
+create table if not exists public.user_item_distances (
+  id uuid primary key default gen_random_uuid(),
+
+  viewer_user_id uuid not null
+    references auth.users(id)
+    on delete cascade,
+
+  owner_user_id uuid not null
+    references auth.users(id)
+    on delete cascade,
+
+  item_id uuid
+    references public.items(id)
+    on delete cascade,
+
+  viewer_address_hash text not null,
+  transport_type text not null default 'automobile',
+
+  road_distance_m integer not null,
+  straight_distance_m integer,
+
+  computed_at timestamptz not null default now()
+);
+
+-- =====================================
+-- ENABLE RLS
+-- =====================================
+
+alter table public.user_item_distances enable row level security;
+
+-- =====================================
+-- RLS POLICIES
+-- =====================================
+
+-- SELECT: viewer can read only their own distances
+drop policy if exists "uid_select_own" on public.user_item_distances;
+create policy "uid_select_own"
+on public.user_item_distances
+for select
+to authenticated
+using (viewer_user_id = auth.uid());
+
+-- INSERT: viewer can insert only their own distances
+drop policy if exists "uid_insert_own" on public.user_item_distances;
+create policy "uid_insert_own"
+on public.user_item_distances
+for insert
+to authenticated
+with check (viewer_user_id = auth.uid());
+
+-- UPDATE: viewer can update only their own distances
+drop policy if exists "uid_update_own" on public.user_item_distances;
+create policy "uid_update_own"
+on public.user_item_distances
+for update
+to authenticated
+using (viewer_user_id = auth.uid())
+with check (viewer_user_id = auth.uid());
+
+-- DELETE: viewer can delete only their own distances
+drop policy if exists "uid_delete_own" on public.user_item_distances;
+create policy "uid_delete_own"
+on public.user_item_distances
+for delete
+to authenticated
+using (viewer_user_id = auth.uid());
+
+-- =====================================
+-- INDEXES (PERFORMANCE)
+-- =====================================
+
+create index if not exists uid_owner_item_idx
+on public.user_item_distances (viewer_user_id, owner_user_id, item_id);
+
+create index if not exists uid_address_transport_idx
+on public.user_item_distances (viewer_user_id, viewer_address_hash, transport_type);
+
+create index if not exists uid_computed_at_idx
+on public.user_item_distances (computed_at desc);
+
+
