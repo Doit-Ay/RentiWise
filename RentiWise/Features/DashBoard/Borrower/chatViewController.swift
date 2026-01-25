@@ -6,6 +6,7 @@
 //
 
 import UIKit
+import Supabase
 
 final class ChatThreadViewController: UIViewController {
 
@@ -13,16 +14,11 @@ final class ChatThreadViewController: UIViewController {
     var otherUserId: String?
     var itemId: String?
 
-    // Simple in-memory messages for now
-    private struct Message {
-        let id: String
-        let senderId: String
-        let text: String
-        let date: Date
-    }
-    private var messages: [Message] = []
+    // Backend models
+    private var conversation: ChatConversation?
+    private var messages: [ChatMessage] = []
 
-    // Current user id (no subtitle usage to avoid iOS version API issues)
+    // Current user id
     private var currentUserId: String?
 
     // MARK: - UI
@@ -30,8 +26,10 @@ final class ChatThreadViewController: UIViewController {
     private let inputBar = UIView()
     private let inputField = UITextField()
     private let sendButton = UIButton(type: .system)
-
     private var inputBottomConstraint: NSLayoutConstraint?
+
+    // Realtime channel
+    private var realtimeChannel: RealtimeChannelV2?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -49,23 +47,16 @@ final class ChatThreadViewController: UIViewController {
         setupInputBar()
         observeKeyboard()
 
-        // Load current user id (async); for now mock as non-nil so bubble alignment works
-        Task {
-            let uid = await SupabaseManager.shared.currentUserId()
-            await MainActor.run {
-                self.currentUserId = uid ?? "me"
-                self.loadInitialMessages()
-            }
-        }
-    }
-
-    @objc private func closeTapped() {
-        // Dismiss the modal chat flow
-        dismiss(animated: true)
+        Task { await bootstrapConversationAndLoad() }
     }
 
     deinit {
         NotificationCenter.default.removeObserver(self)
+        Task { await unsubscribeRealtime() }
+    }
+
+    @objc private func closeTapped() {
+        dismiss(animated: true)
     }
 
     private func setupTable() {
@@ -159,35 +150,129 @@ final class ChatThreadViewController: UIViewController {
         }
     }
 
-    private func loadInitialMessages() {
-        // Seed with a couple of sample messages
-        let me = currentUserId ?? "me"
-        let other = otherUserId ?? "other"
+    // MARK: - Backend wiring
 
-        messages = [
-            Message(id: UUID().uuidString, senderId: other, text: "Hi! Thanks for your interest.", date: Date().addingTimeInterval(-3600)),
-            Message(id: UUID().uuidString, senderId: me, text: "Hello! Is the item available tomorrow?", date: Date().addingTimeInterval(-3500))
-        ]
-        tableView.reloadData()
-        scrollToBottom(animated: false)
+    private func bootstrapConversationAndLoad() async {
+        // Resolve user
+        let uid = await SupabaseManager.shared.currentUserId()
+        await MainActor.run { self.currentUserId = uid }
+
+        guard let other = otherUserId else {
+            await MainActor.run {
+                self.presentError("Missing other user.")
+            }
+            return
+        }
+
+        do {
+            // Get or create conversation
+            let convo = try await ChatServiceV2.shared.getOrCreateConversation(withUserId: other, itemId: itemId)
+            await MainActor.run {
+                self.conversation = convo
+            }
+
+            // Load messages
+            let loaded = try await ChatServiceV2.shared.fetchMessages(conversationId: convo.id)
+            await MainActor.run {
+                self.messages = loaded
+                self.tableView.reloadData()
+                self.scrollToBottom(animated: false)
+            }
+
+            // Mark as read
+            try? await ChatServiceV2.shared.markMessagesAsRead(conversationId: convo.id)
+
+            // Subscribe for realtime updates
+            await subscribeRealtime(conversationId: convo.id)
+        } catch {
+            await MainActor.run {
+                self.presentError(error.localizedDescription)
+            }
+        }
     }
 
     @objc private func sendTapped() {
-        guard let text = inputField.text?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else { return }
-        let me = currentUserId ?? "me"
-        let msg = Message(id: UUID().uuidString, senderId: me, text: text, date: Date())
-        inputField.text = nil
-        messages.append(msg)
-        tableView.reloadData()
-        scrollToBottom(animated: true)
+        Task {
+            let text = (inputField.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty else { return }
+            guard let convoId = conversation?.id else { return }
 
-        // TODO: Send to backend (Supabase) with otherUserId and itemId context
+            // Optimistic UI: clear input immediately
+            await MainActor.run { self.inputField.text = nil }
+
+            do {
+                let sent = try await ChatServiceV2.shared.sendMessage(conversationId: convoId, text: text)
+                await MainActor.run {
+                    self.messages.append(sent)
+                    self.tableView.reloadData()
+                    self.scrollToBottom(animated: true)
+                }
+            } catch {
+                await MainActor.run {
+                    self.presentError(error.localizedDescription)
+                }
+            }
+        }
     }
 
     private func scrollToBottom(animated: Bool) {
         guard !messages.isEmpty else { return }
         let last = IndexPath(row: messages.count - 1, section: 0)
         tableView.scrollToRow(at: last, at: .bottom, animated: animated)
+    }
+
+    private func presentError(_ message: String) {
+        let ac = UIAlertController(title: "Chat Error", message: message, preferredStyle: .alert)
+        ac.addAction(UIAlertAction(title: "OK", style: .default))
+        present(ac, animated: true)
+    }
+
+    // MARK: - Realtime
+
+    private func subscribeRealtime(conversationId: String) async {
+        // Clean previous
+        await unsubscribeRealtime()
+
+        let client = SupabaseManager.shared.client
+        let channel = client.realtimeV2.channel("chat-\(conversationId)")
+        // Listen for Postgres INSERTs on chat_messages for this conversation
+        let stream = channel.postgresChange(InsertAction.self, schema: "public", table: "chat_messages", filter: "conversation_id=eq.\(conversationId)")
+
+        Task.detached { [weak self] in
+            guard let self else { return }
+            for await insert in stream {
+                do {
+                    let decoder = JSONDecoder()
+                    decoder.dateDecodingStrategy = .iso8601
+                    let msg = try insert.decodeRecord(as: ChatMessage.self, decoder: decoder)
+
+                    // Ignore messages we already have (simple check by id)
+                    if self.messages.contains(where: { $0.id == msg.id }) { continue }
+
+                    await MainActor.run {
+                        self.messages.append(msg)
+                        self.tableView.reloadData()
+                        self.scrollToBottom(animated: true)
+                    }
+                } catch {
+                    // ignore decode errors
+                }
+            }
+        }
+
+        do {
+            try await channel.subscribeWithError()
+            self.realtimeChannel = channel
+        } catch {
+            // Fallback: no realtime; chat still works with manual refresh
+        }
+    }
+
+    private func unsubscribeRealtime() async {
+        if let ch = realtimeChannel {
+            await ch.unsubscribe()
+            realtimeChannel = nil
+        }
     }
 }
 
@@ -200,7 +285,7 @@ extension ChatThreadViewController: UITableViewDataSource, UITableViewDelegate {
                    cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: BubbleCell.reuseID, for: indexPath) as! BubbleCell
         let msg = messages[indexPath.row]
-        let isMe = msg.senderId == (currentUserId ?? "")
+        let isMe = (currentUserId != nil) ? (msg.sender_id == currentUserId!) : false
         cell.configure(text: msg.text, isCurrentUser: isMe)
         return cell
     }
