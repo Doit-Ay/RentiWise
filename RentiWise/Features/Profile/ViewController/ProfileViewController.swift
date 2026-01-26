@@ -8,6 +8,7 @@
 import UIKit
 import SwiftUI
 import Supabase
+import UniformTypeIdentifiers
 
 final class ProfileViewController: UIViewController {
 
@@ -600,11 +601,368 @@ private struct WishlistImage: View {
     }
 }
 
+private struct ManageDataViews: View {
+    @State private var showDeleteConfirm = false
+    @State private var isDeleting = false
+    @State private var errorMessage: String?
+
+    var body: some View {
+        Form {
+            if let errorMessage {
+                Text(errorMessage)
+                    .foregroundStyle(.red)
+                    .font(.footnote)
+            }
+
+            Section("Data") {
+                NavigationLink("Profile Information") { ProfileInformationView() }
+                NavigationLink("Booking History") { BookingHistoryView() }
+                NavigationLink("Payment History") { PaymentHistoryView() }
+            }
+
+            Section("Actions") {
+                Button(role: .destructive) {
+                    showDeleteConfirm = true
+                } label: {
+                    if isDeleting {
+                        HStack { ProgressView(); Text("Deleting Account…") }
+                    } else {
+                        Text("Delete Account")
+                    }
+                }
+            }
+        }
+        .navigationTitle("Manage Data")
+        .navigationBarTitleDisplayMode(.inline)
+        .confirmationDialog(
+            "Delete your account?",
+            isPresented: $showDeleteConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Delete Account", role: .destructive) { Task { await deleteAccount() } }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will permanently delete your profile, bookings, and payments. This action cannot be undone.")
+        }
+    }
+
+    private func deleteAccount() async {
+        guard !isDeleting else { return }
+        isDeleting = true
+        defer { isDeleting = false }
+        do {
+            guard let userId = await SupabaseManager.shared.currentUserId() else {
+                throw NSError(domain: "ManageData", code: 2, userInfo: [NSLocalizedDescriptionKey: "Not signed in."])
+            }
+
+            let client = SupabaseManager.shared.client
+            // Delete related rows (order matters if FKs don't cascade)
+            _ = try await client.from("payments").delete().eq("user_id", value: userId).execute()
+            _ = try await client.from("bookings").delete().eq("user_id", value: userId).execute()
+            _ = try await client.from("wishlist").delete().eq("user_id", value: userId).execute()
+            _ = try await client.from("users").delete().eq("id", value: userId).execute()
+
+            try await SupabaseManager.shared.signOut()
+        } catch {
+            await MainActor.run { self.errorMessage = error.localizedDescription }
+        }
+    }
+}
+
+// MARK: - Data detail views
+
+private struct ProfileInformationView: View {
+    @State private var profile: UserProfile?
+    @State private var isLoading = false
+    @State private var errorMessage: String?
+
+    var body: some View {
+        List {
+            if let errorMessage { Text(errorMessage).foregroundStyle(.red).font(.footnote) }
+            if isLoading { ProgressView().frame(maxWidth: .infinity, alignment: .center) }
+            if let profile {
+                Section("Profile") {
+                    LabeledContent("Full Name", value: profile.fullName)
+                    LabeledContent("Email", value: profile.email)
+                    if !profile.phone.isEmpty { LabeledContent("Phone", value: profile.phone) }
+                }
+            }
+        }
+        .navigationTitle("Profile Information")
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await load() }
+        .refreshable { await load() }
+    }
+
+    private func load() async {
+        await MainActor.run { isLoading = true; errorMessage = nil }
+        defer { Task { await MainActor.run { isLoading = false } } }
+        do {
+            let p = try await ProfileService().fetchCurrentUserProfile()
+            await MainActor.run { profile = p }
+        } catch {
+            await MainActor.run { errorMessage = error.localizedDescription }
+        }
+    }
+}
+
+private struct BookingHistoryView: View {
+    @State private var items: [BookingItem] = []
+    @State private var isLoading = false
+    @State private var errorMessage: String?
+
+    var body: some View {
+        List {
+            if let errorMessage { Text(errorMessage).foregroundStyle(.red).font(.footnote) }
+            if isLoading { ProgressView().frame(maxWidth: .infinity, alignment: .center) }
+            ForEach(items) { item in
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(item.title).font(.headline)
+                    Text("\(dateRange(item.startDate, item.endDate)) • Total: \(currency(item.totalPrice))")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 6)
+            }
+        }
+        .navigationTitle("Booking History")
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await load() }
+        .refreshable { await load() }
+    }
+
+    private func load() async {
+        await MainActor.run { isLoading = true; errorMessage = nil }
+        defer { Task { await MainActor.run { isLoading = false } } }
+        do {
+            guard let userId = await SupabaseManager.shared.currentUserId() else {
+                throw NSError(domain: "BookingHistory", code: 1, userInfo: [NSLocalizedDescriptionKey: "Please sign in to view your bookings."])
+            }
+            let client = SupabaseManager.shared.client
+            let resp = try await client
+                .from("bookings")
+                .select("id,item_id,start_date,end_date,total_price,items(title)")
+                .eq("user_id", value: userId)
+                .order("start_date", ascending: false)
+                .execute()
+            struct Row: Decodable { let id: String; let item_id: String; let start_date: Date; let end_date: Date; let total_price: Double; let items: ItemTitle }
+            struct ItemTitle: Decodable { let title: String }
+            let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
+            let rows = try decoder.decode([Row].self, from: resp.data)
+            let mapped = rows.map { row in
+                BookingItem(id: row.id, title: row.items.title, startDate: row.start_date, endDate: row.end_date, totalPrice: row.total_price)
+            }
+            await MainActor.run { self.items = mapped }
+        } catch {
+            await MainActor.run { errorMessage = error.localizedDescription }
+        }
+    }
+
+    private func currency(_ value: Double) -> String {
+        let nf = NumberFormatter(); nf.numberStyle = .currency; return nf.string(from: NSNumber(value: value)) ?? "\(value)"
+    }
+    private func dateRange(_ s: Date, _ e: Date) -> String {
+        let df = DateFormatter(); df.dateStyle = .medium; return "\(df.string(from: s)) – \(df.string(from: e))"
+    }
+}
+
+private struct BookingItem: Identifiable { let id: String; let title: String; let startDate: Date; let endDate: Date; let totalPrice: Double }
+
+// Modifications start here for PaymentHistoryView:
+
+private struct PaymentHistoryView: View {
+    @State private var items: [PaymentHistoryItem] = []
+    @State private var isLoading = false
+    @State private var errorMessage: String?
+
+    private let brandTeal = Color(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0)
+
+    var body: some View {
+        List {
+            if let errorMessage { Text(errorMessage).foregroundStyle(.red).font(.footnote) }
+            if isLoading { ProgressView().frame(maxWidth: .infinity, alignment: .center) }
+
+            // Group by calendar day
+            ForEach(groupedByDayKeys(), id: \.self) { key in
+                Section(header: Text(sectionTitle(for: key)).font(.subheadline).foregroundStyle(.secondary)) {
+                    ForEach(itemsForDay(key)) { p in
+                        HStack {
+                            Spacer(minLength: 0)
+                            HStack(alignment: .center, spacing: 12) {
+                                // Leading icon container
+                                ZStack {
+                                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                        .fill(Color(.secondarySystemBackground))
+                                    Image(systemName: iconForProvider(p.provider))
+                                        .foregroundStyle(brandTeal)
+                                }
+                                .frame(width: 36, height: 36)
+
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(p.itemTitle.isEmpty ? "Item" : p.itemTitle)
+                                        .font(.headline)
+                                        .foregroundStyle(.primary)
+                                        .lineLimit(1)
+                                        .truncationMode(.tail)
+                                    Text(p.itemCategory.isEmpty ? "" : p.itemCategory)
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                        .truncationMode(.tail)
+                                    // Payment method + time
+                                    Text("\(prettyProvider(p.provider)) • \(timeText(p.createdAt))")
+                                        .font(.footnote)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                        .truncationMode(.tail)
+                                }
+
+                                Spacer(minLength: 8)
+
+                                Text(currency(p.amount))
+                                    .font(.headline)
+                                    .foregroundStyle(.primary)
+                            }
+                            .padding(12)
+                            .frame(width: 361, alignment: .leading)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(Color(.systemBackground))
+                                    .shadow(color: Color.black.opacity(0.06), radius: 6, x: 0, y: 2)
+                            )
+                            Spacer(minLength: 0)
+                        }
+                        .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
+                        .listRowBackground(Color.clear)
+                    }
+                }
+            }
+        }
+        .listStyle(.insetGrouped)
+        .background(Color(.systemGroupedBackground))
+        .navigationTitle("Payment History")
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await load() }
+        .refreshable { await load() }
+    }
+
+    private func load() async {
+        await MainActor.run { isLoading = true; errorMessage = nil }
+
+        defer { Task { await MainActor.run { isLoading = false } } }
+
+        do {
+            guard let userId = await SupabaseManager.shared.currentUserId() else {
+                throw NSError(domain: "PaymentHistory", code: 1, userInfo: [NSLocalizedDescriptionKey: "Please sign in to view your payments."])
+            }
+
+            let client = SupabaseManager.shared.client
+            let resp = try await client
+                .from("payments")
+                .select("id,total_amount,status,provider,created_at,items(title,category)")
+                .eq("borrower_id", value: userId)
+                .order("created_at", ascending: false)
+                .execute()
+
+            struct ItemInfo: Decodable { let title: String?; let category: String? }
+            struct PaymentDec: Decodable {
+                let id: String
+                let total_amount: Double
+                let status: String
+                let provider: String
+                let created_at: Date
+                let items: ItemInfo?
+            }
+
+            let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
+            let rows = try decoder.decode([PaymentDec].self, from: resp.data)
+            let mapped = rows.map { row in
+                PaymentHistoryItem(
+                    id: row.id,
+                    amount: row.total_amount,
+                    status: row.status,
+                    createdAt: row.created_at,
+                    provider: row.provider,
+                    itemTitle: row.items?.title ?? "",
+                    itemCategory: row.items?.category ?? ""
+                )
+            }
+            await MainActor.run { self.items = mapped }
+        } catch {
+            await MainActor.run { errorMessage = error.localizedDescription }
+        }
+    }
+
+    private func currency(_ value: Double) -> String {
+        let nf = NumberFormatter(); nf.numberStyle = .currency; return nf.string(from: NSNumber(value: value)) ?? "\(value)"
+    }
+    private func dateText(_ d: Date) -> String {
+        let df = DateFormatter(); df.dateStyle = .medium; df.timeStyle = .short; return df.string(from: d)
+    }
+    private func timeText(_ d: Date) -> String {
+        let df = DateFormatter()
+        df.dateStyle = .none
+        df.timeStyle = .short
+        return df.string(from: d)
+    }
+
+    private func groupedByDayKeys() -> [String] {
+        let df = DateFormatter()
+        df.dateFormat = "yyyy-MM-dd"
+        let keys = Set(items.map { df.string(from: $0.createdAt) })
+        // Sort descending by date string (ISO-like format sorts lexicographically)
+        return keys.sorted(by: >)
+    }
+
+    private func itemsForDay(_ key: String) -> [PaymentHistoryItem] {
+        let df = DateFormatter(); df.dateFormat = "yyyy-MM-dd"
+        return items.filter { df.string(from: $0.createdAt) == key }
+            .sorted { $0.createdAt > $1.createdAt }
+    }
+
+    private func sectionTitle(for key: String) -> String {
+        let inDF = DateFormatter(); inDF.dateFormat = "yyyy-MM-dd"
+        let outDF = DateFormatter(); outDF.dateStyle = .medium; outDF.timeStyle = .none
+        if let d = inDF.date(from: key) { return outDF.string(from: d) }
+        return key
+    }
+
+    private func iconForProvider(_ provider: String) -> String {
+        switch provider.lowercased() {
+        case "apple_pay": return "apple.logo"
+        case "card": return "creditcard"
+        case "cod": return "banknote"
+        default: return "creditcard"
+        }
+    }
+
+    private func prettyProvider(_ provider: String) -> String {
+        switch provider.lowercased() {
+        case "apple_pay": return "Apple Pay"
+        case "card": return "Card"
+        case "cod": return "Cash on Delivery"
+        default: return provider.capitalized
+        }
+    }
+}
+
+private struct PaymentHistoryItem: Identifiable {
+    let id: String
+    let amount: Double
+    let status: String
+    let createdAt: Date
+    let provider: String
+    let itemTitle: String
+    let itemCategory: String
+}
+
+// MARK: - PrivacySecurityPage fix
+
 private struct PrivacySecurityPage: View {
     var body: some View {
         List {
             Section("Privacy") {
-                NavigationLink("Manage Data") { Text("Manage Data") }
+                NavigationLink("Manage Data") { ManageDataViews() }
                 NavigationLink("App Permissions") { Text("App Permissions") }
             }
             Section("Security") {

@@ -157,10 +157,21 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
     private func updateWishlistButtonAppearanceInView() {
         guard let button = WishlistButton else { return }
         let config = UIImage.SymbolConfiguration(pointSize: 18, weight: .semibold)
-        let imageName = isWishlisted ? "heart.fill" : "heart"
-        let image = UIImage(systemName: imageName, withConfiguration: config)
-        button.setImage(image, for: .normal)
-        button.tintColor = isWishlisted ? brandTeal : .label
+
+        if isWishlisted {
+            // Selected: filled heart, brand teal tint, clear background
+            let image = UIImage(systemName: "heart.fill", withConfiguration: config)
+            button.setImage(image, for: .normal)
+            button.tintColor = .white
+            button.backgroundColor = UIColor(hex: "70A7B4")
+        } else {
+            // Unselected: white button, black outline heart
+            let image = UIImage(systemName: "heart", withConfiguration: config)
+            button.setImage(image, for: .normal)
+            button.tintColor = .white
+            button.backgroundColor = .white
+        }
+
         // Optional: small pulse animation to acknowledge change
         UIView.animate(withDuration: 0.08, animations: {
             button.transform = CGAffineTransform(scaleX: 0.92, y: 0.92)
@@ -1368,3 +1379,4 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         }
     }
 }
+
