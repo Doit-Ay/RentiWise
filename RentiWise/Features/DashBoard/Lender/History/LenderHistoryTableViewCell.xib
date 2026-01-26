@@ -17,46 +17,55 @@
                 <autoresizingMask key="autoresizingMask"/>
                 <subviews>
                     <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="vsr-mU-GD4">
-                        <rect key="frame" x="20" y="18" width="350" height="140"/>
+                        <rect key="frame" x="20" y="23" width="350" height="130"/>
                         <subviews>
                             <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="Image 1" translatesAutoresizingMaskIntoConstraints="NO" id="Mx7-67-njt">
-                                <rect key="frame" x="20" y="20" width="120" height="90"/>
+                                <rect key="frame" x="16" y="16" width="120" height="98"/>
                                 <constraints>
-                                    <constraint firstAttribute="height" constant="90" id="JLg-wW-3iX"/>
                                     <constraint firstAttribute="width" constant="120" id="cpD-R1-KTh"/>
                                 </constraints>
                             </imageView>
                             <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Item Name" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="QHi-x9-4VS">
-                                <rect key="frame" x="160" y="30" width="170" height="18"/>
-                                <fontDescription key="fontDescription" type="system" pointSize="15"/>
+                                <rect key="frame" x="156" y="24" width="174" height="18"/>
+                                <fontDescription key="fontDescription" type="system" weight="semibold" pointSize="15"/>
                                 <nil key="textColor"/>
                                 <nil key="highlightedColor"/>
                             </label>
                             <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Rate" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="xFw-dA-Nwu">
-                                <rect key="frame" x="160" y="53" width="31.333333333333343" height="18"/>
+                                <rect key="frame" x="156" y="47" width="31.333333333333343" height="18"/>
                                 <fontDescription key="fontDescription" type="system" pointSize="15"/>
                                 <nil key="textColor"/>
                                 <nil key="highlightedColor"/>
                             </label>
-                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" fixedFrame="YES" text="To: Aditya Yadav" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="8ls-rb-yZt">
-                                <rect key="frame" x="160" y="89" width="113" height="18"/>
-                                <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
-                                <fontDescription key="fontDescription" type="system" pointSize="15"/>
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Status:" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="EY5-aH-hbo">
+                                <rect key="frame" x="156" y="81" width="50" height="18"/>
+                                <fontDescription key="fontDescription" type="system" weight="medium" pointSize="15"/>
+                                <nil key="textColor"/>
+                                <nil key="highlightedColor"/>
+                            </label>
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Status showing" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="8ls-rb-yZt">
+                                <rect key="frame" x="208" y="81" width="108" height="18"/>
+                                <fontDescription key="fontDescription" type="system" weight="medium" pointSize="15"/>
                                 <nil key="textColor"/>
                                 <nil key="highlightedColor"/>
                             </label>
                         </subviews>
                         <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                         <constraints>
-                            <constraint firstItem="Mx7-67-njt" firstAttribute="top" secondItem="vsr-mU-GD4" secondAttribute="top" constant="20" id="K1w-nE-VSc"/>
+                            <constraint firstItem="Mx7-67-njt" firstAttribute="top" secondItem="vsr-mU-GD4" secondAttribute="top" constant="16" id="K1w-nE-VSc"/>
                             <constraint firstAttribute="width" constant="350" id="Ne8-yR-j2P"/>
                             <constraint firstAttribute="trailing" secondItem="QHi-x9-4VS" secondAttribute="trailing" constant="20" id="OuC-yr-mll"/>
+                            <constraint firstItem="8ls-rb-yZt" firstAttribute="leading" secondItem="EY5-aH-hbo" secondAttribute="trailing" constant="2" id="Qpe-u7-3dZ"/>
                             <constraint firstItem="xFw-dA-Nwu" firstAttribute="leading" secondItem="QHi-x9-4VS" secondAttribute="leading" id="Uzp-82-g87"/>
-                            <constraint firstAttribute="height" constant="140" id="cia-XP-9I8"/>
-                            <constraint firstItem="QHi-x9-4VS" firstAttribute="top" secondItem="vsr-mU-GD4" secondAttribute="top" constant="30" id="dpF-Fe-T2N"/>
+                            <constraint firstItem="EY5-aH-hbo" firstAttribute="leading" secondItem="xFw-dA-Nwu" secondAttribute="leading" id="be4-Op-wVp"/>
+                            <constraint firstAttribute="height" constant="130" id="cia-XP-9I8"/>
+                            <constraint firstItem="QHi-x9-4VS" firstAttribute="top" secondItem="vsr-mU-GD4" secondAttribute="top" constant="24" id="dpF-Fe-T2N"/>
                             <constraint firstItem="QHi-x9-4VS" firstAttribute="leading" secondItem="Mx7-67-njt" secondAttribute="trailing" constant="20" id="nqT-Wr-9aF"/>
+                            <constraint firstItem="EY5-aH-hbo" firstAttribute="top" secondItem="xFw-dA-Nwu" secondAttribute="bottom" constant="16" id="pbc-jl-dtm"/>
+                            <constraint firstAttribute="bottom" secondItem="Mx7-67-njt" secondAttribute="bottom" constant="16" id="s3f-h3-M0G"/>
+                            <constraint firstItem="8ls-rb-yZt" firstAttribute="centerY" secondItem="EY5-aH-hbo" secondAttribute="centerY" id="s9K-AK-lnw"/>
                             <constraint firstItem="xFw-dA-Nwu" firstAttribute="top" secondItem="QHi-x9-4VS" secondAttribute="bottom" constant="5" id="uor-6o-ctd"/>
-                            <constraint firstItem="Mx7-67-njt" firstAttribute="leading" secondItem="vsr-mU-GD4" secondAttribute="leading" constant="20" id="wDu-Ju-hM3"/>
+                            <constraint firstItem="Mx7-67-njt" firstAttribute="leading" secondItem="vsr-mU-GD4" secondAttribute="leading" constant="16" id="wDu-Ju-hM3"/>
                         </constraints>
                         <userDefinedRuntimeAttributes>
                             <userDefinedRuntimeAttribute type="number" keyPath="layer.cornerRadius">

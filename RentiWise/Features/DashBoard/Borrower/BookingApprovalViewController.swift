@@ -6,12 +6,18 @@
 
 import UIKit
 import Supabase
+import CoreLocation
 
 class BookingApprovalViewController: UIViewController {
 
     enum RequestStatus {
         case approved
         case pending
+    }
+
+    enum PresentationMode {
+        case myRentals   // existing behavior
+        case history     // no payment UI; show borrower address
     }
 
     static let requestApprovedNotification = Notification.Name("BookingApprovalRequestApprovedNotification")
@@ -21,6 +27,15 @@ class BookingApprovalViewController: UIViewController {
         didSet {
             if isViewLoaded {
                 applyRequestToUI()
+            }
+        }
+    }
+
+    // Screen mode: set this before presenting from History
+    var mode: PresentationMode = .myRentals {
+        didSet {
+            if isViewLoaded {
+                applyModeUI()
             }
         }
     }
@@ -67,6 +82,8 @@ class BookingApprovalViewController: UIViewController {
     @IBOutlet weak var circ3: UIView!
 
     // New container that holds ONLY the "View Code" button and the stack
+    
+    
     @IBOutlet weak var viewCodeUIView: UIView!
     @IBOutlet weak var codestack: UIStackView!
 
@@ -96,12 +113,15 @@ class BookingApprovalViewController: UIViewController {
     @IBOutlet weak var ownNameLabel: UILabel!
     @IBOutlet weak var rateOwnerlabel: UILabel!
     @IBOutlet weak var addressLabel: UILabel!
+    
+    @IBOutlet weak var addressBG: UIView!
     @IBOutlet weak var fee: UILabel!
     @IBOutlet weak var seclabel: UILabel!
     @IBOutlet weak var totamountlabel: UILabel!
     @IBOutlet weak var tickimage: UIImageView!
     @IBOutlet weak var approvedpending: UILabel!
     
+    @IBOutlet weak var paymentStatus: UILabel!
     // Constraint from statusView's bottom to viewCodeUIView's top
     @IBOutlet weak var statusToViewCodeTop: NSLayoutConstraint!
     // Height constraint for the new "View Code" container
@@ -139,7 +159,6 @@ class BookingApprovalViewController: UIViewController {
     private lazy var currencyFormatter: NumberFormatter = {
         let nf = NumberFormatter()
         nf.numberStyle = .currency
-        // Optional: explicitly set INR; if device locale already uses INR you can omit this.
         nf.currencyCode = "INR"
         return nf
     }()
@@ -211,6 +230,10 @@ class BookingApprovalViewController: UIViewController {
         imageprod?.clipsToBounds = true
         imageprod?.layer.cornerRadius = 16
 
+        // Address label: allow full multi-line text without ellipses
+        addressLabel.numberOfLines = 0
+        addressLabel.lineBreakMode = .byWordWrapping
+
         // Start in Pending state and disable payment until accepted
         status = .pending
         paymentButton.isEnabled = false
@@ -221,6 +244,9 @@ class BookingApprovalViewController: UIViewController {
 
         // Reflect any pre-configured dates
         updateDatesUI()
+
+        // Apply current mode (may hide sections)
+        applyModeUI()
 
         // If a request is already injected, apply it now
         applyRequestToUI()
@@ -235,6 +261,9 @@ class BookingApprovalViewController: UIViewController {
         // Re-assert rounded corners for the product image in case layout changes
         imageprod?.layer.cornerRadius = 16
         imageprod?.clipsToBounds = true
+
+        // Ensure wrapping uses the current width for intrinsic sizing
+        addressLabel.preferredMaxLayoutWidth = addressLabel.bounds.width
     }
     
     override func viewWillAppear(_ animated: Bool) {
@@ -272,7 +301,12 @@ class BookingApprovalViewController: UIViewController {
 
         Task {
             await refreshRequestFromDBIfPossible()
-            await refreshPaymentFromDB()
+            // Skip payment refresh in history mode for payment button/code, but we will still update label
+            if mode == .myRentals {
+                await refreshPaymentFromDB()
+            } else {
+                await refreshPaymentStatusForHistory()
+            }
         }
     }
 
@@ -400,6 +434,7 @@ class BookingApprovalViewController: UIViewController {
     }
     
     @IBAction func paymentbuttontapped(_ sender: UIButton) {
+        guard mode == .myRentals else { return } // no payment in history
         guard let req = request else { return }
 
         let actionSheet = UIAlertController(title: "Choose Payment Method", message: nil, preferredStyle: .actionSheet)
@@ -431,6 +466,31 @@ class BookingApprovalViewController: UIViewController {
     }
 
     // MARK: - Private helpers
+
+    private func applyModeUI() {
+        // Hide payment controls and code UI entirely in history mode
+        let hidePayment = (mode == .history)
+
+        paymentButton.isHidden = hidePayment
+        paymentButton.isEnabled = hidePayment ? false : paymentButton.isEnabled
+
+        viewCodeUIView.isHidden = true // never show code section in history
+        viewCodeHeight?.constant = hidePayment ? 0 : viewCodeHeight?.constant ?? 0
+        viewCodeHeight?.isActive = true
+        statusToViewCodeTop?.constant = 0
+
+        // Also collapse code stack
+        codestack.isHidden = true
+        codeStackCollapseConstraint?.isActive = true
+
+        // Payment status label visibility
+        paymentStatus?.isHidden = (mode == .myRentals)
+
+        // If history, ensure amounts still visible (rent + deposit) but no payment actions
+        updateStatusUI()
+        view.setNeedsLayout()
+        view.layoutIfNeeded()
+    }
 
     private func updateDatesUI() {
         let dateFormatter = DateFormatter()
@@ -482,8 +542,11 @@ class BookingApprovalViewController: UIViewController {
             approvedpending.text = "Approved"
             tickimage.image = UIImage(systemName: "checkmark.circle")
             tickimage.tintColor = .white
-            paymentButton.isEnabled = true
-            paymentButton.alpha = 1.0
+            // In history mode, keep payment disabled/hidden regardless
+            if mode == .myRentals {
+                paymentButton.isEnabled = true
+                paymentButton.alpha = 1.0
+            }
         case .pending:
             approvedpending.text = "Pending"
             tickimage.image = UIImage(systemName: "questionmark.circle.dashed")
@@ -495,8 +558,8 @@ class BookingApprovalViewController: UIViewController {
         tickimage.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 22, weight: .regular)
         tickimage.contentMode = .scaleAspectFit
 
-        // Show/hide View Code container depending on DB payment status
-        let shouldShowCode = hasCompletedPayment
+        // Show/hide View Code container depending on DB payment status (never show in history)
+        let shouldShowCode = hasCompletedPayment && mode == .myRentals
         viewCodeUIView.isHidden = !shouldShowCode
         if shouldShowCode {
             viewCodeHeight?.constant = collapsedViewCodeHeight
@@ -506,23 +569,25 @@ class BookingApprovalViewController: UIViewController {
             statusToViewCodeTop?.constant = 0
         }
 
-        // Button title from payment state
-        if hasCompletedPayment {
+        // Button title from payment state (ignored if hidden)
+        if hasCompletedPayment && mode == .myRentals {
             paymentButton.setTitle("Payment Successful", for: .normal)
-            // Ensure title text is black for both normal and disabled states
             paymentButton.setTitleColor(.black, for: .normal)
             paymentButton.setTitleColor(.black, for: .disabled)
             paymentButton.isEnabled = false
             paymentButton.alpha = 0.6
-        } else {
+        } else if mode == .myRentals {
             paymentButton.setTitle("Proceed to Payment", for: .normal)
-            // Restore a suitable title color for the normal actionable state
             paymentButton.setTitleColor(.label, for: .normal)
-            // Optionally also set .disabled for consistency when pending
             paymentButton.setTitleColor(.secondaryLabel, for: .disabled)
-            // Enable only if request is approved
             paymentButton.isEnabled = (status == .approved)
             paymentButton.alpha = paymentButton.isEnabled ? 1.0 : 0.5
+        }
+
+        // Update payment status label visibility/text per mode
+        paymentStatus?.isHidden = (mode == .myRentals)
+        if mode == .history {
+            updatePaymentStatusLabel()
         }
     }
 
@@ -567,13 +632,22 @@ class BookingApprovalViewController: UIViewController {
         if let cat = req.items?.category, !cat.isEmpty {
             categoryitemLabel?.text = cat
         } else {
-            categoryitemLabel?.text = "" // or "Uncategorized" if you prefer
+            categoryitemLabel?.text = ""
         }
 
-        // Owner info
+        // Name/avatar always show owner’s name (the item owner). If in history and you instead want
+        // the requester’s name here, you can switch to borrower_id.
         Task { [weak self] in
             guard let self = self else { return }
-            await self.fetchAndDisplayOwnerUnified(for: req.owner_id)
+            let userIdToShowName = req.owner_id
+            await self.fetchAndDisplayOwnerUnified(for: userIdToShowName)
+        }
+
+        // Address: owner for myRentals, borrower for history
+        Task { [weak self] in
+            guard let self = self else { return }
+            let userIdForAddress = (self.mode == .history) ? req.borrower_id : req.owner_id
+            await self.fetchAndDisplayAddress(for: userIdForAddress)
         }
 
         // Update amount labels for the current request
@@ -585,8 +659,17 @@ class BookingApprovalViewController: UIViewController {
             }
         }
 
-        // Always reflect latest payment from DB
-        Task { await self.refreshPaymentFromDB() }
+        // Only for myRentals, reflect latest payment from DB
+        if mode == .myRentals {
+            Task { await self.refreshPaymentFromDB() }
+        } else {
+            // In history, ensure code/flags are reset and update payment status label
+            hasCompletedPayment = false
+            currentPayment = nil
+            setCodeDigits(from: "000000")
+            updateStatusUI()
+            Task { await self.refreshPaymentStatusForHistory() }
+        }
     }
 
     private func selectClause() -> String {
@@ -616,9 +699,167 @@ class BookingApprovalViewController: UIViewController {
         }
     }
 
+    // MARK: - Address (generic)
+
+    // Full address row from "addresses" table
+    private struct OwnerAddressRow: Decodable {
+        let address_line1: String
+        let address_line2: String?
+        let city: String
+        let state: String
+        let postal_code: String
+        let country: String
+        let is_default: Bool
+        let created_at: String?
+    }
+
+    private struct OwnerDefaultAddressRow: Decodable {
+        let user_id: String
+        let latitude: Double?
+        let longitude: Double?
+        let city: String?
+        let state: String?
+        let country: String?
+        let is_default: Bool?
+        let created_at: String?
+    }
+
+    private func formatFullAddress(line1: String, line2: String?, city: String, state: String, postal: String, country: String) -> String {
+        let parts: [String] = [
+            line1.trimmingCharacters(in: .whitespacesAndNewlines),
+            (line2 ?? "").trimmingCharacters(in: .whitespacesAndNewlines),
+            city.trimmingCharacters(in: .whitespacesAndNewlines),
+            state.trimmingCharacters(in: .whitespacesAndNewlines),
+            postal.trimmingCharacters(in: .whitespacesAndNewlines),
+            country.trimmingCharacters(in: .whitespacesAndNewlines)
+        ].filter { !$0.isEmpty }
+        return parts.joined(separator: ", ")
+    }
+
+    // New generic address fetcher (reuses previous logic)
+    private func fetchAndDisplayAddress(for userId: String) async {
+        // Clear first to avoid stale text
+        await MainActor.run { self.addressLabel?.text = nil }
+
+        // 1) Try full address from "addresses" table (default first; else latest)
+        do {
+            let client = SupabaseManager.shared.client
+
+            // Try default row
+            if let data = try? await client
+                .from("addresses")
+                .select("address_line1,address_line2,city,state,postal_code,country,is_default,created_at")
+                .eq("user_id", value: userId)
+                .eq("is_default", value: true)
+                .single()
+                .execute()
+                .data as? Data {
+                let row = try JSONDecoder().decode(OwnerAddressRow.self, from: data)
+                let full = formatFullAddress(line1: row.address_line1, line2: row.address_line2, city: row.city, state: row.state, postal: row.postal_code, country: row.country)
+                await MainActor.run { self.addressLabel?.text = full }
+                return
+            }
+
+            // If no default, pick the most recent one
+            if let data = try? await client
+                .from("addresses")
+                .select("address_line1,address_line2,city,state,postal_code,country,is_default,created_at")
+                .eq("user_id", value: userId)
+                .order("created_at", ascending: false)
+                .limit(1)
+                .single()
+                .execute()
+                .data as? Data {
+                let row = try JSONDecoder().decode(OwnerAddressRow.self, from: data)
+                let full = formatFullAddress(line1: row.address_line1, line2: row.address_line2, city: row.city, state: row.state, postal: row.postal_code, country: row.country)
+                await MainActor.run { self.addressLabel?.text = full }
+                return
+            }
+        } catch {
+            // continue to fallback
+        }
+
+        // 2) Fallback to public view "user_default_address" (existing logic)
+        do {
+            let client = SupabaseManager.shared.client
+            let response = try await client
+                .from("user_default_address")
+                .select("user_id,latitude,longitude,city,state,country,is_default,created_at")
+                .eq("user_id", value: userId)
+                .single()
+                .execute()
+
+            if let data = response.data as? Data {
+                let row = try JSONDecoder().decode(OwnerDefaultAddressRow.self, from: data)
+
+                // Prefer textual fields we have
+                let parts = [row.city, row.state, row.country]
+                    .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+                let compact = parts.isEmpty ? nil : parts.joined(separator: ", ")
+
+                if let compact {
+                    await MainActor.run { self.addressLabel?.text = compact }
+                    return
+                }
+
+                // If no textual fields, try reverse geocoding coordinates
+                if let lat = row.latitude, let lon = row.longitude {
+                    let display = await reverseGeocodeIfNeeded(lat: lat, lon: lon, fallbackText: "Address unavailable")
+                    await MainActor.run { self.addressLabel?.text = display }
+                    return
+                }
+            }
+
+            // Nothing found -> placeholder
+            await MainActor.run { self.addressLabel?.text = "Address unavailable" }
+        } catch {
+            await MainActor.run { self.addressLabel?.text = "Address unavailable" }
+        }
+    }
+
+    private func reverseGeocodeIfNeeded(lat: Double, lon: Double, fallbackText: String) async -> String {
+        let geocoder = CLGeocoder()
+        let location = CLLocation(latitude: lat, longitude: lon)
+        do {
+            let placemarks = try await geocoder.reverseGeocodeLocation(location)
+            if let p = placemarks.first {
+                // Build a more detailed address if available
+                let streetNumber = p.subThoroughfare
+                let street = p.thoroughfare
+                let subLocality = p.subLocality
+                let locality = p.locality
+                let admin = p.administrativeArea ?? p.subAdministrativeArea
+                let postal = p.postalCode
+                let country = p.country
+
+                let streetLine: String? = {
+                    if let street = street, !street.isEmpty {
+                        if let num = streetNumber, !num.isEmpty {
+                            return "\(num) \(street)"
+                        }
+                        return street
+                    }
+                    return nil
+                }()
+
+                let parts = [streetLine, subLocality, locality, admin, postal, country]
+                    .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+
+                if !parts.isEmpty { return parts.joined(separator: ", ") }
+                if let name = p.name, !name.isEmpty { return name }
+            }
+        } catch {
+            // ignore and return fallback
+        }
+        return fallbackText
+    }
+
     // MARK: - Payments (DB-driven)
 
     private func refreshPaymentFromDB() async {
+        guard mode == .myRentals else { return } // never do in history
         guard let req = request else { return }
         do {
             let response = try await SupabaseManager.shared.client
@@ -672,7 +913,48 @@ class BookingApprovalViewController: UIViewController {
         }
     }
 
+    // Lightweight fetch to only update the status label in history mode
+    private func refreshPaymentStatusForHistory() async {
+        guard mode == .history, let req = request else { return }
+        do {
+            let response = try await SupabaseManager.shared.client
+                .from("payments")
+                .select("status")
+                .eq("request_id", value: req.id)
+                .order("created_at", ascending: false)
+                .limit(1)
+                .execute()
+            let decoder = JSONDecoder()
+            struct StatusRow: Decodable { let status: String }
+            let rows = try decoder.decode([StatusRow].self, from: response.data)
+            let latestStatus = rows.first?.status.lowercased()
+            await MainActor.run {
+                // Do not change buttons/code visibility here; only label
+                if let latestStatus = latestStatus {
+                    if latestStatus == "succeeded" {
+                        self.paymentStatus?.text = "Payment Successful"
+                        self.paymentStatus?.textColor = .systemGreen
+                    } else {
+                        self.paymentStatus?.text = "Payment Pending"
+                        self.paymentStatus?.textColor = .secondaryLabel
+                    }
+                } else {
+                    self.paymentStatus?.text = "No Payment"
+                    self.paymentStatus?.textColor = .secondaryLabel
+                }
+                self.paymentStatus?.isHidden = (self.mode == .myRentals)
+            }
+        } catch {
+            await MainActor.run {
+                self.paymentStatus?.text = "No Payment"
+                self.paymentStatus?.textColor = .secondaryLabel
+                self.paymentStatus?.isHidden = (self.mode == .myRentals)
+            }
+        }
+    }
+
     private func performDBBackedPayment(for req: RequestWithItem, provider: String, button: UIButton) async {
+        guard mode == .myRentals else { return }
         await MainActor.run {
             button.isEnabled = false
             button.alpha = 0.6
@@ -723,10 +1005,6 @@ class BookingApprovalViewController: UIViewController {
                 .from("payments")
                 .insert(insert)
                 .execute()
-
-            // Optional event log:
-            // try? await insertPaymentEvent(type: "created", message: "Payment created (pending)")
-
         } catch {
             await MainActor.run {
                 let ac = UIAlertController(title: "Payment Failed", message: error.localizedDescription, preferredStyle: .alert)
@@ -741,7 +1019,6 @@ class BookingApprovalViewController: UIViewController {
         let update = PaymentUpdate(status: "succeeded", pickup_code: code, provider_payment_id: nil, provider_receipt_url: nil, failure_reason: nil)
 
         do {
-            // Update latest pending payment for this request (policy allows borrower to update pending)
             _ = try await SupabaseManager.shared.client
                 .from("payments")
                 .update(update)
@@ -750,10 +1027,6 @@ class BookingApprovalViewController: UIViewController {
                 .order("created_at", ascending: false)
                 .limit(1)
                 .execute()
-
-            // Optional event log:
-            // try? await insertPaymentEvent(type: "captured", message: "Payment succeeded; code issued")
-
         } catch {
             await MainActor.run {
                 let ac = UIAlertController(title: "Finalize Failed", message: error.localizedDescription, preferredStyle: .alert)
@@ -936,23 +1209,9 @@ class BookingApprovalViewController: UIViewController {
         }
     }
 
-    // Optional: audit event writer
-    /*
-    private func insertPaymentEvent(type: String, message: String?) async throws {
-        guard let paymentId = currentPayment?.id else { return }
-        let event = PaymentEventInsert(payment_id: paymentId, event_type: type, raw_payload: message)
-        _ = try await SupabaseManager.shared.client
-            .from("payment_events")
-            .insert(event)
-            .execute()
-    }
-    */
-
     // MARK: - Tab bar visibility helpers
 
     private func ensureTabBarHiddenIfNeeded() {
-        // If we are pushed in a nav inside a tab bar, hidesBottomBarWhenPushed will work.
-        // If not (e.g., SwiftUI-hosted or modally presented over a root tab), hide tab bar manually.
         guard let tab = findTabBarController() else { return }
         if !tab.tabBar.isHidden {
             tab.tabBar.isHidden = true
@@ -967,20 +1226,44 @@ class BookingApprovalViewController: UIViewController {
     }
 
     private func findTabBarController() -> UITabBarController? {
-        // Walk up the parent/presenting chain to find a UITabBarController
         var parentVC: UIViewController? = self
         while let current = parentVC {
             if let tab = current as? UITabBarController { return tab }
             if let tab = current.tabBarController { return tab }
             parentVC = current.parent ?? current.presentingViewController ?? current.navigationController
         }
-        // As a fallback, try the key window’s root
         if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
            let window = scene.windows.first,
            let tab = window.rootViewController as? UITabBarController {
             return tab
         }
         return nil
+    }
+
+    // MARK: - Payment status label helper
+
+    private func updatePaymentStatusLabel() {
+        guard mode == .history else {
+            paymentStatus?.isHidden = true
+            return
+        }
+        // Prefer currentPayment if we have it; else leave as-is (refreshPaymentStatusForHistory will fill it)
+        if let p = currentPayment {
+            if p.status.lowercased() == "succeeded" {
+                paymentStatus?.text = "Payment Successful"
+                paymentStatus?.textColor = .systemGreen
+            } else {
+                paymentStatus?.text = "Payment Pending"
+                paymentStatus?.textColor = .secondaryLabel
+            }
+        } else {
+            // Leave whatever was set by refreshPaymentStatusForHistory or set a neutral default
+            if paymentStatus?.text?.isEmpty ?? true {
+                paymentStatus?.text = "No Payment"
+                paymentStatus?.textColor = .secondaryLabel
+            }
+        }
+        paymentStatus?.isHidden = false
     }
 }
 

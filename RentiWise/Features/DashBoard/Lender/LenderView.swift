@@ -162,7 +162,7 @@ final class LenderView: UIView {
             Task { await loadMyRequests() }
         case 2:
             Task {
-                await populateHistoryFromItems()
+                await loadHistoryFromDB()
                 await MainActor.run {
                     self.tableView.reloadData()
                     self.updateEmptyStateIfNeeded()
@@ -326,44 +326,66 @@ final class LenderView: UIView {
         refreshRequests()
     }
 
-    // MARK: - History from database (single item)
-    private func populateHistoryFromItems() async {
-        // Default to empty
+    // MARK: - History from database (rentals_history) showing same item details as Requests
+    private func loadHistoryFromDB() async {
         await MainActor.run { self.myHistory = [] }
 
-        guard let userId = await SupabaseManager.shared.currentUserId() else {
-            return
+        guard let userId = await SupabaseManager.shared.currentUserId() else { return }
+
+        // Join items and borrower display name (optional)
+        let select =
+        """
+        id,item_id,owner_id,borrower_id,start_date,end_date,total_amount,created_at,
+        items(title,images,price_per_day),
+        user_profiles!rentals_history_borrower_id_fkey(full_name)
+        """
+
+        struct ItemJoin: Decodable {
+            let title: String?
+            let images: [String]?
+            let price_per_day: Double?
+        }
+        struct BorrowerProfile: Decodable {
+            let full_name: String?
+        }
+        struct HistoryDecodable: Decodable {
+            let id: String
+            let item_id: String
+            let owner_id: String
+            let borrower_id: String
+            let start_date: String
+            let end_date: String
+            let total_amount: Double?
+            let created_at: String?
+            let items: ItemJoin?
+            let user_profiles: BorrowerProfile?
         }
 
         do {
-            // Fetch newest active item for this owner, limit 1
-            let response = try await SupabaseManager.shared.client
-                .from("items")
-                .select()
+            let resp = try await SupabaseManager.shared.client
+                .from("rentals_history")
+                .select(select)
                 .eq("owner_id", value: userId)
-                .eq("is_active", value: true)
                 .order("created_at", ascending: false)
-                .limit(1)
                 .execute()
 
             let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .iso8601
-            let items = try decoder.decode([Item].self, from: response.data)
+            let rows = try decoder.decode([HistoryDecodable].self, from: resp.data)
 
-            guard let item = items.first else { return }
-
-            let history = HistoryRow(
-                title: item.title,
-                ratePerDay: item.price_per_day,
-                borrowerName: "To: —",
-                imagePath: item.images.first
-            )
+            let mapped: [HistoryRow] = rows.map { r in
+                let title = r.items?.title ?? r.item_id
+                let rate = r.items?.price_per_day ?? 0
+                let borrower = (r.user_profiles?.full_name?.isEmpty == false) ? "To: \(r.user_profiles!.full_name!)" : "To: —"
+                let imagePath = r.items?.images?.first
+                return HistoryRow(title: title, ratePerDay: rate, borrowerName: borrower, imagePath: imagePath)
+            }
 
             await MainActor.run {
-                self.myHistory = [history]
+                self.myHistory = mapped
             }
         } catch {
             // Keep empty on error
+            await MainActor.run { self.myHistory = [] }
         }
     }
 }
@@ -381,7 +403,7 @@ private struct RequestBase: Decodable {
     let created_at: String?
 }
 
-// History model for dummy UI
+// History model used for the table
 private struct HistoryRow {
     let id: String = UUID().uuidString
     let title: String

@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<document type="com.apple.InterfaceBuilder3.CocoaTouch.XIB" version="3.0" toolsVersion="24506" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES">
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.XIB" version="3.0" toolsVersion="24128" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES">
     <device id="retina6_12" orientation="portrait" appearance="light"/>
     <dependencies>
-        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="24504"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="24063"/>
         <capability name="Safe area layout guides" minToolsVersion="9.0"/>
         <capability name="System colors in document resources" minToolsVersion="11.0"/>
         <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
@@ -10,6 +10,7 @@
     <objects>
         <placeholder placeholderIdentifier="IBFilesOwner" id="-1" userLabel="File's Owner" customClass="BookingApprovalViewController" customModule="RentiWise" customModuleProvider="target">
             <connections>
+                <outlet property="addressBG" destination="25q-cJ-NxQ" id="FBf-bn-BYb"/>
                 <outlet property="addressLabel" destination="hGx-1g-Giv" id="aO8-rb-e7U"/>
                 <outlet property="addresscard" destination="RWs-Ng-dQQ" id="ltv-iz-es3"/>
                 <outlet property="approvedpending" destination="suW-bl-hsM" id="crH-1m-FUn"/>
@@ -41,6 +42,7 @@
                 <outlet property="ownNameLabel" destination="8T5-1R-dDf" id="fcI-dT-5Qn"/>
                 <outlet property="ownerProfileImage" destination="0lA-3G-vRK" id="E7R-ty-c18"/>
                 <outlet property="paymentButton" destination="9tp-Nw-hnz" id="GzL-Rd-KFv"/>
+                <outlet property="paymentStatus" destination="Qwb-KB-s4E" id="hac-Jv-3ug"/>
                 <outlet property="picktimeLabel" destination="v7X-Kw-lcL" id="Hu4-6g-FJf"/>
                 <outlet property="price" destination="Ewr-RB-Bof" id="sJz-7t-lBK"/>
                 <outlet property="seclabel" destination="hfg-OR-CWk" id="F16-n2-8HH"/>
@@ -226,14 +228,22 @@
                                                 <action selector="paymentbuttontapped:" destination="-1" eventType="touchUpInside" id="J3g-LJ-emJ"/>
                                             </connections>
                                         </button>
+                                        <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="payment" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="Qwb-KB-s4E">
+                                            <rect key="frame" x="99" y="222.66666666666669" width="66.333333333333314" height="20.333333333333343"/>
+                                            <fontDescription key="fontDescription" type="system" pointSize="17"/>
+                                            <nil key="textColor"/>
+                                            <nil key="highlightedColor"/>
+                                        </label>
                                     </subviews>
                                     <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                     <constraints>
                                         <constraint firstItem="Ozs-en-7xi" firstAttribute="leading" secondItem="sUx-gz-ibj" secondAttribute="leading" constant="16" id="0Cb-xh-sFL"/>
+                                        <constraint firstItem="Qwb-KB-s4E" firstAttribute="leading" secondItem="suW-bl-hsM" secondAttribute="leading" id="2Gb-hq-f1G"/>
                                         <constraint firstItem="9tp-Nw-hnz" firstAttribute="leading" secondItem="suW-bl-hsM" secondAttribute="leading" id="5u5-yP-fWk"/>
                                         <constraint firstItem="skx-3R-smo" firstAttribute="top" secondItem="Ozs-en-7xi" secondAttribute="bottom" constant="15" id="88u-99-lbe"/>
                                         <constraint firstItem="skx-3R-smo" firstAttribute="leading" secondItem="sUx-gz-ibj" secondAttribute="leading" constant="30" id="F86-MT-F1H"/>
                                         <constraint firstItem="Ejz-xr-tdq" firstAttribute="centerY" secondItem="skx-3R-smo" secondAttribute="centerY" id="GZN-BY-eJD"/>
+                                        <constraint firstItem="Qwb-KB-s4E" firstAttribute="top" secondItem="suW-bl-hsM" secondAttribute="bottom" constant="60" id="KXU-pS-RDF"/>
                                         <constraint firstItem="pvz-Xy-lIC" firstAttribute="centerX" secondItem="skx-3R-smo" secondAttribute="centerX" id="OA5-rD-lx5"/>
                                         <constraint firstItem="Mkg-gs-0wu" firstAttribute="top" secondItem="pvz-Xy-lIC" secondAttribute="bottom" constant="3" id="Skt-lS-DO8"/>
                                         <constraint firstItem="Mkg-gs-0wu" firstAttribute="leading" secondItem="sUx-gz-ibj" secondAttribute="leading" constant="30" id="V8N-tO-Zsu"/>
@@ -350,10 +360,10 @@
                                             <nil key="highlightedColor"/>
                                         </label>
                                         <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="25q-cJ-NxQ">
-                                            <rect key="frame" x="16" y="119.33333333333337" width="329" height="50"/>
+                                            <rect key="frame" x="16" y="119.33333333333336" width="329" height="36.333333333333329"/>
                                             <subviews>
                                                 <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Address " textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="hGx-1g-Giv">
-                                                    <rect key="frame" x="8" y="7.9999999999999982" width="67" height="20.333333333333329"/>
+                                                    <rect key="frame" x="8" y="7.9999999999999982" width="313" height="20.333333333333329"/>
                                                     <fontDescription key="fontDescription" type="system" pointSize="17"/>
                                                     <nil key="textColor"/>
                                                     <nil key="highlightedColor"/>
@@ -361,9 +371,10 @@
                                             </subviews>
                                             <color key="backgroundColor" red="0.92143100499999997" green="0.92145264149999995" blue="0.92144101860000005" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                                             <constraints>
-                                                <constraint firstAttribute="height" constant="50" id="2NS-vK-bYm"/>
+                                                <constraint firstAttribute="trailing" secondItem="hGx-1g-Giv" secondAttribute="trailing" constant="8" id="5AZ-Rk-MeN"/>
                                                 <constraint firstItem="hGx-1g-Giv" firstAttribute="leading" secondItem="25q-cJ-NxQ" secondAttribute="leading" constant="8" id="Dax-Nb-aZg"/>
                                                 <constraint firstItem="hGx-1g-Giv" firstAttribute="top" secondItem="25q-cJ-NxQ" secondAttribute="top" constant="8" id="qHS-HU-mTt"/>
+                                                <constraint firstAttribute="bottom" secondItem="hGx-1g-Giv" secondAttribute="bottom" constant="8" id="tE1-hN-EmG"/>
                                             </constraints>
                                             <userDefinedRuntimeAttributes>
                                                 <userDefinedRuntimeAttribute type="number" keyPath="ibCornerRadius">
@@ -372,7 +383,7 @@
                                             </userDefinedRuntimeAttributes>
                                         </view>
                                         <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="ikh-dv-Bkg">
-                                            <rect key="frame" x="16" y="177.33333333333326" width="156" height="34.333333333333343"/>
+                                            <rect key="frame" x="16" y="163.66666666666663" width="156" height="34.333333333333343"/>
                                             <color key="tintColor" red="0.36470588240000001" green="0.66274509800000003" blue="0.71372549019999998" alpha="1" colorSpace="calibratedRGB"/>
                                             <state key="normal" title="Button"/>
                                             <buttonConfiguration key="configuration" style="plain" image="document.on.document" catalog="system" title="Copy Address" imagePadding="3" titleAlignment="leading">
@@ -380,7 +391,7 @@
                                             </buttonConfiguration>
                                         </button>
                                         <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="IHh-4r-Yb8">
-                                            <rect key="frame" x="185.66666666666663" y="177.33333333333326" width="159.33333333333337" height="34.333333333333343"/>
+                                            <rect key="frame" x="185.66666666666663" y="163.66666666666663" width="159.33333333333337" height="34.333333333333343"/>
                                             <color key="tintColor" red="0.36470588240000001" green="0.66274509800000003" blue="0.71372549019999998" alpha="1" colorSpace="calibratedRGB"/>
                                             <state key="normal" title="Button"/>
                                             <buttonConfiguration key="configuration" style="plain" image="arrow.up.and.down.and.arrow.left.and.right" catalog="system" title="Get Directions" imagePadding="3" titleAlignment="leading">

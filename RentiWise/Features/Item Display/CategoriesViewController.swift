@@ -26,6 +26,19 @@ final class CategoriesViewController: UIViewController {
         return f
     }()
 
+    // Empty state label
+    private lazy var emptyStateLabel: UILabel = {
+        let l = UILabel()
+        l.textAlignment = .center
+        l.textColor = .secondaryLabel
+        l.numberOfLines = 0
+        l.font = .systemFont(ofSize: 16, weight: .medium)
+        l.text = "No items in this category"
+        // Add a bit of horizontal padding so long texts don’t touch edges on iPad
+        l.translatesAutoresizingMaskIntoConstraints = false
+        return l
+    }()
+
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         navigationController?.setNavigationBarHidden(false, animated: animated)
@@ -50,6 +63,22 @@ final class CategoriesViewController: UIViewController {
         // Add consistent 16pt spacing above first card and below last card
         tableViewForItem?.contentInset = UIEdgeInsets(top: 16, left: 0, bottom: 16, right: 0)
 
+        // Prepare empty state view (backgroundView) now so constraints can be applied
+        if let table = tableViewForItem {
+            let container = UIView(frame: table.bounds)
+            container.backgroundColor = .clear
+            container.addSubview(emptyStateLabel)
+            NSLayoutConstraint.activate([
+                emptyStateLabel.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+                emptyStateLabel.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+                emptyStateLabel.leadingAnchor.constraint(greaterThanOrEqualTo: container.leadingAnchor, constant: 24),
+                emptyStateLabel.trailingAnchor.constraint(lessThanOrEqualTo: container.trailingAnchor, constant: -24)
+            ])
+            // Start hidden; will toggle after load
+            container.isHidden = true
+            table.backgroundView = container
+        }
+
         // IMPORTANT: Do not register UITableViewCell.self for "ItemCell" anywhere,
         // or you will override the storyboard prototype cell.
 
@@ -66,6 +95,7 @@ final class CategoriesViewController: UIViewController {
     @MainActor
     private func reloadUI() {
         tableViewForItem?.reloadData()
+        updateEmptyState()
     }
 
     private func presentError(_ message: String) {
@@ -84,6 +114,20 @@ final class CategoriesViewController: UIViewController {
         }
     }
 
+    private func updateEmptyState() {
+        guard let table = tableViewForItem else { return }
+        // If there are no items, show the label; otherwise hide.
+        let shouldShow = items.isEmpty
+        table.backgroundView?.isHidden = !shouldShow
+
+        // Customize the message per category if desired
+        if let cat = category, !cat.isEmpty {
+            emptyStateLabel.text = "No items in \(cat)"
+        } else {
+            emptyStateLabel.text = "No items in this category"
+        }
+    }
+
     private func loadItems() async {
         showLoading(true)
         defer { showLoading(false) }
@@ -95,6 +139,8 @@ final class CategoriesViewController: UIViewController {
             await MainActor.run { self.reloadUI() }
         } catch {
             await MainActor.run {
+                // Keep items as-is (likely empty) and update empty state too
+                self.reloadUI()
                 self.presentError(error.localizedDescription)
             }
         }

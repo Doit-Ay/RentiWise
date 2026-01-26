@@ -74,6 +74,23 @@ class DashboardLenderRequestViewController: UIViewController {
         return df
     }()
 
+    // Parse pickup_time saved as "HH:mm:ssXXXXX" (e.g., "13:40:00+05:30")
+    private lazy var sqlTimeParser: DateFormatter = {
+        let df = DateFormatter()
+        df.calendar = Calendar(identifier: .gregorian)
+        df.timeZone = .current
+        df.dateFormat = "HH:mm:ssXXXXX"
+        return df
+    }()
+
+    // Display localized short time like "1:40 PM"
+    private lazy var displayTimeFormatter: DateFormatter = {
+        let df = DateFormatter()
+        df.dateStyle = .none
+        df.timeStyle = .short
+        return df
+    }()
+
     private let currencyFormatter: NumberFormatter = {
         let f = NumberFormatter()
         f.numberStyle = .currency
@@ -201,8 +218,12 @@ class DashboardLenderRequestViewController: UIViewController {
         // Title from joined item, fallback to item_id
         itemNameLabel?.text = req.items?.title ?? req.item_id
 
-        // Category not present in RequestWithItem; leave blank or fetch if you need it
-        categoryLabel?.text = ""
+        // Category from joined item if available
+        if let cat = req.items?.category, !cat.isEmpty {
+            categoryLabel?.text = cat
+        } else {
+            categoryLabel?.text = "—"
+        }
 
         // Dates and duration
         let startDate = sqlDateFormatter.date(from: req.start_date)
@@ -219,9 +240,30 @@ class DashboardLenderRequestViewController: UIViewController {
             numberodDaysLabel?.text = "—"
         }
 
-        // Pickup time raw for now
-        if let t = req.pickup_time, !t.isEmpty {
-            pickuptimeLabel?.text = t
+        // Pickup time: parse "HH:mm:ssXXXXX" and show localized short time
+        if let raw = req.pickup_time, !raw.isEmpty {
+            if let date = sqlTimeParser.date(from: raw) {
+                pickuptimeLabel?.text = displayTimeFormatter.string(from: date)
+            } else {
+                // Fallbacks for possible older formats like "HH:mm" or "HH:mm:ss"
+                let fallbacks = ["HH:mm:ss", "HH:mm"]
+                var shown = false
+                for fmt in fallbacks {
+                    let df = DateFormatter()
+                    df.calendar = Calendar(identifier: .gregorian)
+                    df.timeZone = .current
+                    df.dateFormat = fmt
+                    if let d = df.date(from: raw) {
+                        pickuptimeLabel?.text = displayTimeFormatter.string(from: d)
+                        shown = true
+                        break
+                    }
+                }
+                if !shown {
+                    // Last resort: show raw
+                    pickuptimeLabel?.text = raw
+                }
+            }
         } else {
             pickuptimeLabel?.text = "—"
         }
@@ -458,4 +500,3 @@ class DashboardLenderRequestViewController: UIViewController {
         await MainActor.run { self.setButtonsEnabled(true) }
     }
 }
-

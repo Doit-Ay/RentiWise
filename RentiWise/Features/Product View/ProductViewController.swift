@@ -35,7 +35,12 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         case ownItem     // viewing my own item (hide owner/rent/deposit/review)
     }
     var displayMode: DisplayMode = .normal {
-        didSet { setupNavBarForDisplayMode() }
+        didSet {
+            // Only update UI if the view is loaded; otherwise we re-apply in viewWillAppear/bindItemToUI
+            if isViewLoaded {
+                setupNavBarForDisplayMode()
+            }
+        }
     }
 
     // Currency formatter for rates and deposits
@@ -62,6 +67,11 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
 
     // MARK: - Description card
     @IBOutlet weak var descriptionCard: UIView!
+    // Place reviews title right after descriptionCard as requested
+    @IBOutlet weak var reviewsTitleLabel: UILabel?
+    // Move review1Card up to be immediately after the reviews title
+    @IBOutlet weak var review1Card: UIView?
+
     @IBOutlet weak var descriptionTitleLabel: UILabel?
     @IBOutlet weak var descriptionBodyLabel: UILabel?
 
@@ -90,10 +100,7 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
     @IBOutlet weak var depositCardHeight: NSLayoutConstraint?
 
     // MARK: - Reviews section
-    @IBOutlet weak var reviewsTitleLabel: UILabel?
-
-    // Legacy single review card container you mentioned
-    @IBOutlet weak var review1Card: UIView?
+    // reviewsTitleLabel moved above per your request
 
     // New reviews stack replacing the old fixed outlets (connect if available)
     @IBOutlet weak var reviewsStack: UIStackView?
@@ -115,6 +122,9 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
     private var galleryScrollView: UIScrollView?
     private var pageControl: UIPageControl?
 
+    // MARK: - Runtime constraint to force Reviews directly under Description in own-item mode
+    private var ownModeDescriptionToReviewsConstraint: NSLayoutConstraint?
+
     // MARK: - Public API
     /// Call this to inject the item before navigation
     func configure(with item: Item) {
@@ -125,7 +135,7 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
     private func setupShareButtonIfNeeded() {
         guard isViewLoaded else { return }
         guard displayMode == .normal else {
-            navigationItem.rightBarButtonItems = nil
+            // In ownItem mode we show the ellipsis; no Share button.
             return
         }
         let shareImage = UIImage(systemName: "square.and.arrow.up")
@@ -328,9 +338,25 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         // Reviews section title
         reviewsTitleLabel?.text = "Reviews"
         
+        // AUTO-DETECT OWNERSHIP: if the current user is the owner, switch to ownItem mode (case-insensitive)
+        Task { [weak self] in
+            guard let self = self else { return }
+            if let me = await SupabaseManager.shared.currentUserId(),
+               me.lowercased() == item.owner_id.lowercased() {
+                await MainActor.run {
+                    self.displayMode = .ownItem
+                    self.setupNavBarForDisplayMode()
+                }
+            } else {
+                await MainActor.run {
+                    self.displayMode = .normal
+                    self.setupNavBarForDisplayMode()
+                }
+            }
+        }
+
         applyDisplayMode()
-        setupNavBarForDisplayMode()
-        // Ensure Share button exists when appropriate
+        // Ensure Share button exists when appropriate (normal mode only)
         setupShareButtonIfNeeded()
 
         // Sync wishlist state and update in-view button
@@ -359,17 +385,38 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         rentNowoutlet?.isHidden = isOwn
         actionButtonsContainer?.isHidden = isOwn || ((writeAReview == nil || writeAReview?.isHidden == true) && (rentNowoutlet == nil || rentNowoutlet?.isHidden == true))
 
+        // Extra safeguard: explicitly hide owner subviews in own-item mode
+        ownerNameLabel?.isHidden = isOwn
+        ownerAvatarImageView?.isHidden = isOwn
+        distanceRightLabel?.isHidden = isOwn
+        ownerRating?.isHidden = isOwn
+
+        // Ensure runtime constraint exists (safe even if already created)
+        if ownModeDescriptionToReviewsConstraint == nil,
+           let desc = descriptionCard,
+           let reviewsTitle = reviewsTitleLabel {
+            let c = reviewsTitle.topAnchor.constraint(equalTo: desc.bottomAnchor, constant: 12)
+            c.priority = .required
+            ownModeDescriptionToReviewsConstraint = c
+        }
+
         // Collapse heights if not using a UIStackView
         if isOwn {
             ownerCardHeight?.constant = 0
             depositCardHeight?.constant = 0
             actionButtonsContainerHeight?.constant = 0
 
-            // Make Reviews sit right after Description in own-item mode
-            descriptionAndReview?.constant = 16
+            // Deactivate storyboard spacing and force Reviews under Description
+            descriptionAndReview?.isActive = false
+            ownModeDescriptionToReviewsConstraint?.isActive = true
+
         } else {
             // Restore the normal spacing value between Description and Reviews
-            descriptionAndReview?.constant = 248
+            ownModeDescriptionToReviewsConstraint?.isActive = false
+            if let spacer = descriptionAndReview {
+                spacer.constant = 248
+                spacer.isActive = true
+            }
         }
 
         UIView.animate(withDuration: 0.2) {
@@ -382,20 +429,11 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         guard isViewLoaded else { return }
         switch displayMode {
         case .ownItem:
-            navigationItem.rightBarButtonItems = nil
-            if #available(iOS 14.0, *) {
-                navigationItem.rightBarButtonItem = UIBarButtonItem(
-                    systemItem: .action,
-                    primaryAction: nil,
-                    menu: nil
-                )
-                let image = UIImage(systemName: "ellipsis.circle")
-                let item = UIBarButtonItem(image: image, style: .plain, target: self, action: #selector(didTapMore))
-                navigationItem.rightBarButtonItem = item
-            } else {
-                let image = UIImage(systemName: "ellipsis") ?? UIImage(systemName: "ellipsis.circle")
-                navigationItem.rightBarButtonItem = UIBarButtonItem(image: image, style: .plain, target: self, action: #selector(didTapMore))
-            }
+            // Show the ellipsis (more) button with Edit/Delete actions
+            let image = UIImage(systemName: "ellipsis.circle") ?? UIImage(systemName: "ellipsis")
+            let item = UIBarButtonItem(image: image, style: .plain, target: self, action: #selector(didTapMore))
+            item.tintColor = brandTeal
+            navigationItem.rightBarButtonItem = item
         case .normal:
             // Only Share button in normal mode
             setupShareButtonIfNeeded()
@@ -409,6 +447,10 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         }))
         ac.addAction(UIAlertAction(title: "Delete", style: .destructive, handler: { [weak self] _ in
             Task { await self?.confirmDeleteAndDelete() }
+        }))
+        // New Share action inside three dots
+        ac.addAction(UIAlertAction(title: "Share", style: .default, handler: { [weak self] _ in
+            self?.didTapShare()
         }))
         ac.addAction(UIAlertAction(title: "Cancel", style: .cancel))
 
@@ -923,12 +965,14 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
                 v.alignment = .fill
                 v.spacing = 16
                 v.translatesAutoresizingMaskIntoConstraints = false
+                v.isLayoutMarginsRelativeArrangement = true
+                v.layoutMargins = UIEdgeInsets(top: 0, left: 16, bottom: 16, right: 16)
                 host.addSubview(v)
                 NSLayoutConstraint.activate([
-                    v.leadingAnchor.constraint(equalTo: host.leadingAnchor, constant: 16),
-                    v.trailingAnchor.constraint(equalTo: host.trailingAnchor, constant: -16),
+                    v.leadingAnchor.constraint(equalTo: host.leadingAnchor),
+                    v.trailingAnchor.constraint(equalTo: host.trailingAnchor),
                     v.topAnchor.constraint(equalTo: host.topAnchor, constant: 16),
-                    v.bottomAnchor.constraint(equalTo: host.bottomAnchor, constant: -16)
+                    v.bottomAnchor.constraint(equalTo: host.bottomAnchor)
                 ])
                 reviewsStack = v
                 containerStack = v
@@ -938,13 +982,15 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
                 v.alignment = .fill
                 v.spacing = 16
                 v.translatesAutoresizingMaskIntoConstraints = false
+                v.isLayoutMarginsRelativeArrangement = true
+                v.layoutMargins = UIEdgeInsets(top: 0, left: 16, bottom: 16, right: 16)
                 view.addSubview(v)
                 NSLayoutConstraint.activate([
-                    v.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
-                    v.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+                    v.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+                    v.trailingAnchor.constraint(equalTo: view.trailingAnchor),
                     v.topAnchor.constraint(equalTo: descriptionCard.bottomAnchor, constant: 16),
-                    // IMPORTANT: add a bottom constraint so the section can expand
-                    v.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16)
+                    // Bottom anchor ensures automatic expansion
+                    v.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor)
                 ])
                 reviewsStack = v
                 containerStack = v
@@ -1276,12 +1322,25 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         // Set initial wishlist button appearance
         updateWishlistButtonAppearanceInView()
 
+        // Prepare runtime constraint (if outlets are connected)
+        if let desc = descriptionCard, let reviewsTitle = reviewsTitleLabel {
+            let c = reviewsTitle.topAnchor.constraint(equalTo: desc.bottomAnchor, constant: 12)
+            c.priority = .required
+            ownModeDescriptionToReviewsConstraint = c
+        }
+
         if selectedItem != nil { bindItemToUI() }
     }
     
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         if selectedItem != nil { bindItemToUI() }
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        // Re-apply the nav item for the current mode to ensure the ellipsis appears when ownItem
+        setupNavBarForDisplayMode()
     }
 
     // MARK: - Actions
@@ -1379,4 +1438,3 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         }
     }
 }
-

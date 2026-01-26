@@ -71,6 +71,9 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
     private struct HistoryRow { let title: String; let ratePerDay: Double; let borrowerName: String; let imagePath: String? }
     private var historyRows: [HistoryRow] = []
 
+    // New: keep the full requests we fetched for history so we can open details
+    private var ownerHistoryRequests: [RequestWithItem] = []
+
     private let currencyFormatter: NumberFormatter = {
         let f = NumberFormatter()
         f.numberStyle = .currency
@@ -187,7 +190,7 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
         guard let segment = Segment(rawValue: roleSegmented.selectedSegmentIndex) else { return }
         switch segment {
         case .listing: Task { await loadMyItems() }
-        case .history: Task { await loadHistoryPlaceholder() }
+        case .history: Task { await loadOwnerHistoryFromDB() }
         }
     }
 
@@ -244,51 +247,52 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
         }
     }
 
-    private func loadHistoryPlaceholder() async {
+    private func loadOwnerHistoryFromDB() async {
         await MainActor.run {
             self.historyRows = []
+            self.ownerHistoryRequests = []
             self.tableView.reloadData()
             self.loadEmptyStateIfNeeded()
         }
 
         guard let userId = await SupabaseManager.shared.currentUserId() else { return }
 
+        // Mirror Home/Requests select and shape
+        let select =
+        """
+        id,item_id,owner_id,borrower_id,start_date,end_date,pickup_time,status,created_at,
+        items(id,title,images,price_per_day)
+        """
+
         do {
             let response = try await SupabaseManager.shared.client
-                .from("items")
-                .select()
+                .from("requests")
+                .select(select)
                 .eq("owner_id", value: userId)
-                .eq("is_active", value: true)
                 .order("created_at", ascending: false)
-                .limit(1)
                 .execute()
 
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .iso8601
-            let items = try decoder.decode([Item].self, from: response.data)
+            let requests = try JSONDecoder().decode([RequestWithItem].self, from: response.data)
 
-            if let item = items.first {
-                let row = HistoryRow(
-                    title: item.title,
-                    ratePerDay: item.price_per_day,
-                    borrowerName: "To: —",
-                    imagePath: item.images.first
-                )
-                await MainActor.run {
-                    self.historyRows = [row]
-                    self.tableView.reloadData()
-                    self.loadEmptyStateIfNeeded()
-                }
-            } else {
-                await MainActor.run {
-                    self.historyRows = []
-                    self.tableView.reloadData()
-                    self.loadEmptyStateIfNeeded()
-                }
+            // Map to the existing HistoryRow UI:
+            let mapped: [HistoryRow] = requests.map { req in
+                let title = req.items?.title ?? req.item_id
+                let rate = req.items?.price_per_day ?? 0
+                let borrowerOrStatus = req.status.capitalized
+                let imagePath = req.items?.images.first
+                return HistoryRow(title: title, ratePerDay: rate, borrowerName: borrowerOrStatus, imagePath: imagePath)
+            }
+
+            await MainActor.run {
+                self.ownerHistoryRequests = requests
+                self.historyRows = mapped
+                self.tableView.reloadData()
+                self.loadEmptyStateIfNeeded()
             }
         } catch {
             await MainActor.run {
                 self.historyRows = []
+                self.ownerHistoryRequests = []
                 self.tableView.reloadData()
                 self.loadEmptyStateIfNeeded()
             }
@@ -384,8 +388,36 @@ extension DashboardViewController: UITableViewDelegate {
             }
 
         case .history:
-            // For now, no detail on history row tap
-            break
+            // New: open BookingApprovalViewController in history mode
+            guard indexPath.section < ownerHistoryRequests.count else { return }
+            let req = ownerHistoryRequests[indexPath.section]
+
+            let nibName = "BookingApprovalViewController"
+            let bookingVC: BookingApprovalViewController
+            if Bundle.main.path(forResource: nibName, ofType: "nib") != nil ||
+                Bundle.main.path(forResource: "BookingApprovalViewController", ofType: "xib") != nil {
+                bookingVC = BookingApprovalViewController(nibName: nibName, bundle: nil)
+            } else {
+                bookingVC = BookingApprovalViewController()
+            }
+
+            bookingVC.title = "Booking Approval"
+            bookingVC.hidesBottomBarWhenPushed = true
+            bookingVC.mode = .history
+            bookingVC.request = req
+
+            if let tab = self.tabBarController {
+                tab.tabBar.isHidden = true
+            }
+
+            if let nav = self.navigationController {
+                nav.setNavigationBarHidden(false, animated: true)
+                nav.pushViewController(bookingVC, animated: true)
+            } else {
+                let nav = UINavigationController(rootViewController: bookingVC)
+                nav.modalPresentationStyle = .fullScreen
+                present(nav, animated: true)
+            }
         }
     }
 }

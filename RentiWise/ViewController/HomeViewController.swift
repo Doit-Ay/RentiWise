@@ -228,6 +228,9 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
         // Style the search bar for a modern rounded look
         styleSearchBar()
 
+        // Ensure the location button truncates within its space
+        configureLocationButtonAppearance()
+
         setupProductTap()
         setupFeaturedItemTaps()
 
@@ -369,6 +372,26 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
         // Optional thin border for definition on light backgrounds
         tf.layer.borderWidth = 0.5
         tf.layer.borderColor = UIColor.separator.withAlphaComponent(0.5).cgColor
+    }
+
+    // MARK: - Location button text behavior (truncate within given space)
+    private func configureLocationButtonAppearance() {
+        guard let btn = locationTapped else { return }
+        // Keep single line and truncate at tail with ellipsis
+        btn.titleLabel?.numberOfLines = 1
+        btn.titleLabel?.lineBreakMode = .byTruncatingTail
+        btn.titleLabel?.adjustsFontSizeToFitWidth = false
+        // Keep text left-aligned within its bounds
+        btn.contentHorizontalAlignment = .leading
+        // Optional: small horizontal padding
+        btn.contentEdgeInsets = UIEdgeInsets(top: 0, left: 4, bottom: 0, right: 4)
+        // Prefer truncation over expanding horizontally
+        btn.setContentCompressionResistancePriority(.required, for: .horizontal)
+        // If the button has an image, ensure room between image and text
+        if btn.image(for: .normal) != nil {
+            btn.semanticContentAttribute = .forceLeftToRight
+            btn.imageEdgeInsets = UIEdgeInsets(top: 0, left: 0, bottom: 0, right: 6)
+        }
     }
 
     // MARK: - Product tap setup
@@ -720,6 +743,9 @@ private extension HomeViewController {
         locationTapped?.setTitle(selected, for: .normal)
         locationTapped?.setTitleColor(UIColor(red: 112/255, green: 167/255, blue: 180/255, alpha: 1.0), for: .normal) // brand blue
         locationTapped?.titleLabel?.font = .systemFont(ofSize: 14, weight: .semibold)
+
+        // Ensure truncation rules are applied after changing title
+        configureLocationButtonAppearance()
     }
 
     // Build a precise geocodable string from a backend Address
@@ -1909,21 +1935,56 @@ extension HomeViewController {
 private extension HomeViewController {
     func setBottomTagline() {
         guard let label = Homepagelastline else { return }
-        let heart = "❤️"
-        let full = "You \(heart) RentiWise"
 
         let brandTeal = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0)
         let baseColor = label.textColor ?? .label
         let baseFont = label.font ?? UIFont.systemFont(ofSize: 14)
 
-        let attr = NSMutableAttributedString(string: full, attributes: [
+        // Build the base attributed text: "You  RentiWise" (two spaces to host the attachment)
+        let text = "You  RentiWise"
+        let attr = NSMutableAttributedString(string: text, attributes: [
             .foregroundColor: baseColor,
             .font: baseFont
         ])
-        if let r = full.range(of: heart) {
-            let ns = NSRange(r, in: full)
-            attr.addAttribute(.foregroundColor, value: brandTeal, range: ns)
+
+        // Create a tinted SF Symbol heart as an attachment
+        let heartAttachment = NSTextAttachment()
+        // Use heart.fill symbol; render as template so we can tint
+        let pointSize = baseFont.pointSize
+        let config = UIImage.SymbolConfiguration(pointSize: pointSize, weight: .regular)
+        if let heartImage = UIImage(systemName: "heart.fill", withConfiguration: config)?
+            .withRenderingMode(.alwaysTemplate) {
+
+            // Render the symbol tinted to brandTeal
+            let tinted = heartImage.withTintColor(brandTeal, renderingMode: .alwaysOriginal)
+            heartAttachment.image = tinted
+
+            // Align the attachment vertically with text baseline
+            // Make it roughly cap-height: scale to line height minus a small inset
+            let lineHeight = baseFont.lineHeight
+            let imageHeight = lineHeight * 0.9
+            let imageWidth = tinted.size.width * (imageHeight / tinted.size.height)
+
+            heartAttachment.bounds = CGRect(
+                x: 0,
+                y: (baseFont.descender).rounded(), // slight baseline alignment
+                width: imageWidth,
+                height: imageHeight
+            )
         }
+
+        let heartString = NSAttributedString(attachment: heartAttachment)
+
+        // Find the spot between the two spaces after "You "
+        if let rangeOfYou = (attr.string as NSString).range(of: "You ").toRange() {
+            let insertIndex = rangeOfYou.upperBound // right after "You "
+            attr.replaceCharacters(in: NSRange(location: insertIndex, length: 0), with: heartString)
+        } else {
+            // Fallback: insert near start if "You " not found
+            attr.insert(heartString, at: 4)
+        }
+
         label.attributedText = attr
     }
 }
+
