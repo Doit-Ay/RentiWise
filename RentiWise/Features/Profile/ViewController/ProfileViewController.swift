@@ -9,6 +9,10 @@ import UIKit
 import SwiftUI
 import Supabase
 import UniformTypeIdentifiers
+import PhotosUI
+import AVFoundation
+import CoreLocation
+import UserNotifications
 
 final class ProfileViewController: UIViewController {
 
@@ -617,7 +621,6 @@ private struct ManageDataViews: View {
 
             Section("Data") {
                 NavigationLink("Profile Information") { ProfileInformationView() }
-                NavigationLink("Booking History") { BookingHistoryView() }
                 NavigationLink("Payment History") { PaymentHistoryView() }
             }
 
@@ -967,7 +970,7 @@ private struct PrivacySecurityPage: View {
         List {
             Section("Privacy") {
                 NavigationLink("Manage Data") { ManageDataViews() }
-                NavigationLink("App Permissions") { Text("App Permissions") }
+                NavigationLink("App Permissions") { AppPermissionsView() }
             }
             Section("Security") {
                 NavigationLink("Change Password") { Text("Change Password") }
@@ -995,6 +998,189 @@ private struct HelpSupportPage: View {
         .navigationTitle("Help & Support")
         .navigationBarTitleDisplayMode(.inline)
         .background(Color(.systemGroupedBackground))
+    }
+}
+
+private struct AppPermissionsView: View {
+    @State private var locationEnabled = false
+    @State private var cameraEnabled = false
+    @State private var photosEnabled = false
+    @State private var notificationsEnabled = false
+
+    @State private var showSettingsAlert = false
+    @State private var settingsAlertMessage = ""
+
+    private let brandTeal = Color(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0)
+
+    var body: some View {
+        Form {
+            Section("App Permissions") {
+                Toggle("Location", isOn: Binding(
+                    get: { locationEnabled },
+                    set: { newValue in handleLocationToggle(newValue) }
+                ))
+                .tint(brandTeal)
+
+                Toggle("Camera", isOn: Binding(
+                    get: { cameraEnabled },
+                    set: { newValue in handleCameraToggle(newValue) }
+                ))
+                .tint(brandTeal)
+
+                Toggle("Photos", isOn: Binding(
+                    get: { photosEnabled },
+                    set: { newValue in handlePhotosToggle(newValue) }
+                ))
+                .tint(brandTeal)
+
+                Toggle("Notifications", isOn: Binding(
+                    get: { notificationsEnabled },
+                    set: { newValue in handleNotificationsToggle(newValue) }
+                ))
+                .tint(brandTeal)
+            }
+        }
+        .onAppear { refreshStatuses() }
+        .navigationTitle("App Permissions")
+        .navigationBarTitleDisplayMode(.inline)
+        .background(Color(.systemGroupedBackground))
+        .alert("Change Permissions", isPresented: $showSettingsAlert, actions: {
+            Button("Cancel", role: .cancel) {}
+            Button("Open Settings") { openAppSettings() }
+        }, message: {
+            Text(settingsAlertMessage)
+        })
+    }
+
+    // MARK: - Status refresh
+    private func refreshStatuses() {
+        // Location
+        let locStatus = CLLocationManager.authorizationStatus()
+        locationEnabled = (locStatus == .authorizedAlways || locStatus == .authorizedWhenInUse)
+        // Camera
+        let camStatus = AVCaptureDevice.authorizationStatus(for: .video)
+        cameraEnabled = (camStatus == .authorized)
+
+        // Photos (read-write path for pickers)
+        let phStatus = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+        photosEnabled = (phStatus == .authorized || phStatus == .limited)
+
+        // Notifications
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            DispatchQueue.main.async {
+                notificationsEnabled = (settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional)
+            }
+        }
+    }
+
+    // MARK: - Toggles
+    private func handleLocationToggle(_ newValue: Bool) {
+        let status = CLLocationManager.authorizationStatus()
+        if newValue {
+            switch status {
+            case .notDetermined:
+                let manager = CLLocationManager()
+                manager.requestWhenInUseAuthorization()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { refreshStatuses() }
+            case .denied, .restricted:
+                settingsAlertMessage = "Location access is disabled. You can enable it in Settings."
+                showSettingsAlert = true
+                // Revert UI
+                locationEnabled = false
+            default:
+                refreshStatuses()
+            }
+        } else {
+            settingsAlertMessage = "To turn off Location access, please use the Settings app."
+            showSettingsAlert = true
+            // Reflect current system state again
+            refreshStatuses()
+        }
+    }
+
+    private func handleCameraToggle(_ newValue: Bool) {
+        let status = AVCaptureDevice.authorizationStatus(for: .video)
+        if newValue {
+            switch status {
+            case .notDetermined:
+                Task { @MainActor in
+                    let granted = await AVCaptureDevice.requestAccess(for: .video)
+                    cameraEnabled = granted
+                }
+            case .denied, .restricted:
+                settingsAlertMessage = "Camera access is disabled. You can enable it in Settings."
+                showSettingsAlert = true
+                cameraEnabled = false
+            case .authorized:
+                cameraEnabled = true
+            @unknown default:
+                cameraEnabled = false
+            }
+        } else {
+            settingsAlertMessage = "To turn off Camera access, please use the Settings app."
+            showSettingsAlert = true
+            refreshStatuses()
+        }
+    }
+
+    private func handlePhotosToggle(_ newValue: Bool) {
+        let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+        if newValue {
+            switch status {
+            case .notDetermined:
+                Task { @MainActor in
+                    let newStatus = await PHPhotoLibrary.requestAuthorization(for: .readWrite)
+                    photosEnabled = (newStatus == .authorized || newStatus == .limited)
+                }
+            case .denied, .restricted:
+                settingsAlertMessage = "Photos access is disabled. You can enable it in Settings."
+                showSettingsAlert = true
+                photosEnabled = false
+            case .limited, .authorized:
+                photosEnabled = true
+            @unknown default:
+                photosEnabled = false
+            }
+        } else {
+            settingsAlertMessage = "To turn off Photos access, please use the Settings app."
+            showSettingsAlert = true
+            refreshStatuses()
+        }
+    }
+
+    private func handleNotificationsToggle(_ newValue: Bool) {
+        if newValue {
+            UNUserNotificationCenter.current().getNotificationSettings { settings in
+                switch settings.authorizationStatus {
+                case .notDetermined:
+                    UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, _ in
+                        DispatchQueue.main.async {
+                            notificationsEnabled = granted
+                        }
+                    }
+                case .denied:
+                    DispatchQueue.main.async {
+                        settingsAlertMessage = "Notifications are disabled. You can enable them in Settings."
+                        showSettingsAlert = true
+                        notificationsEnabled = false
+                    }
+                case .authorized, .provisional, .ephemeral:
+                    DispatchQueue.main.async { notificationsEnabled = true }
+                @unknown default:
+                    DispatchQueue.main.async { notificationsEnabled = false }
+                }
+            }
+        } else {
+            settingsAlertMessage = "To turn off Notifications, please use the Settings app."
+            showSettingsAlert = true
+            refreshStatuses()
+        }
+    }
+
+    // MARK: - Helpers
+    private func openAppSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString), UIApplication.shared.canOpenURL(url) else { return }
+        UIApplication.shared.open(url)
     }
 }
 

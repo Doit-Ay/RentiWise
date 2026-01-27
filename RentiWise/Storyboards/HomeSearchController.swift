@@ -15,8 +15,20 @@ final class HomeSearchController: NSObject {
     private var results: [Item] = [] {
         didSet {
             onResultsChanged?(results)
-            tableView.reloadData()
-            tableView.isHidden = results.isEmpty
+            // Avoid laying out/reloading while not in hierarchy to silence UIKit warning
+            if tableView.window != nil {
+                tableView.isHidden = results.isEmpty
+                tableView.reloadData()
+            } else {
+                // Defer to next runloop; will no-op if still not in window
+                DispatchQueue.main.async { [weak tableView] in
+                    guard let tv = tableView else { return }
+                    if tv.window != nil {
+                        tv.isHidden = self.results.isEmpty
+                        tv.reloadData()
+                    }
+                }
+            }
         }
     }
 
@@ -123,8 +135,10 @@ final class HomeSearchController: NSObject {
             tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
 
-        // Initial top anchor set once we can compute the search bar’s frame
-        layoutForSearchBarBelow()
+        // Defer initial top anchor set to next runloop to ensure view hierarchy readiness
+        DispatchQueue.main.async { [weak self] in
+            self?.layoutForSearchBarBelow()
+        }
     }
 
     // Call in viewDidLayoutSubviews (or after rotations) if you want to keep alignment perfect
@@ -142,7 +156,9 @@ final class HomeSearchController: NSObject {
         top.priority = .required
         top.isActive = true
 
-        view.layoutIfNeeded()
+        if tableView.window != nil {
+            view.layoutIfNeeded()
+        }
     }
 
     // MARK: - Keyboard

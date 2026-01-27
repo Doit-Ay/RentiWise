@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSCameraUsageDescription</key>
+	<string>This app requires camera access to let you take photos for your listings.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>This app requires photo library access to let you add photos to your listings.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>This app may save selected photos to your library when needed.</string>
+</dict>
+</plist>

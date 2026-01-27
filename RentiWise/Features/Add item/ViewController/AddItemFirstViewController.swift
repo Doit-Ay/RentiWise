@@ -19,6 +19,59 @@ class AddItemFirstViewController: UIViewController,
                                   UICollectionViewDataSource,
                                   UICollectionViewDelegateFlowLayout {
 
+    // MARK: - Permission helpers (Photos & Camera)
+    private enum PhotoPermissionResult { case authorized, limited, denied }
+    private enum CameraPermissionResult { case authorized, denied }
+
+    @MainActor
+    private func ensurePhotoLibraryPermission() async -> PhotoPermissionResult {
+        let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+        switch status {
+        case .authorized:
+            return .authorized
+        case .limited:
+            return .limited
+        case .denied, .restricted:
+            return .denied
+        case .notDetermined:
+            let newStatus = await PHPhotoLibrary.requestAuthorization(for: .readWrite)
+            switch newStatus {
+            case .authorized: return .authorized
+            case .limited: return .limited
+            case .denied, .restricted: return .denied
+            default: return .denied
+            }
+        @unknown default:
+            return .denied
+        }
+    }
+
+    @MainActor
+    private func ensureCameraPermission() async -> CameraPermissionResult {
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            return .authorized
+        case .notDetermined:
+            let granted = await AVCaptureDevice.requestAccess(for: .video)
+            return granted ? .authorized : .denied
+        case .denied, .restricted:
+            return .denied
+        @unknown default:
+            return .denied
+        }
+    }
+
+    @MainActor
+    private func presentGoToSettingsAlert(title: String, message: String) {
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Open Settings", style: .default, handler: { _ in
+            guard let url = URL(string: UIApplication.openSettingsURLString), UIApplication.shared.canOpenURL(url) else { return }
+            UIApplication.shared.open(url)
+        }))
+        present(alert, animated: true)
+    }
+
     @IBOutlet weak var gridContainer: UIView?
     @IBOutlet weak var continueButton: UIButton!
 
@@ -216,14 +269,21 @@ class AddItemFirstViewController: UIViewController,
 
     // MARK: - Photo Library (PHPickerViewControllerDelegate)
     private func presentPhotoLibrary() {
-        var config = PHPickerConfiguration()
-        config.filter = .images
-        // Allow selecting up to remaining slots (max total 4)
-        let remaining = max(0, maxImages - images.count)
-        config.selectionLimit = remaining == 0 ? 0 : remaining
-        let picker = PHPickerViewController(configuration: config)
-        picker.delegate = self
-        present(picker, animated: true)
+        Task { @MainActor in
+            let permission = await ensurePhotoLibraryPermission()
+            switch permission {
+            case .authorized, .limited:
+                var config = PHPickerConfiguration()
+                config.filter = .images
+                let remaining = max(0, maxImages - images.count)
+                config.selectionLimit = remaining == 0 ? 0 : remaining
+                let picker = PHPickerViewController(configuration: config)
+                picker.delegate = self
+                self.present(picker, animated: true)
+            case .denied:
+                self.presentGoToSettingsAlert(title: "Photo Library Access Needed", message: "Please allow access to your photos to add images.")
+            }
+        }
     }
 
     func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
@@ -265,21 +325,24 @@ class AddItemFirstViewController: UIViewController,
 
     // MARK: - Camera (UIImagePickerControllerDelegate)
     private func presentCamera() {
-        guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
-            showAlert(title: "Camera not available", message: "This device has no camera.")
-            return
-        }
-        let status = AVCaptureDevice.authorizationStatus(for: .video)
-        if status == .denied || status == .restricted {
-            showAlert(title: "Camera Access Denied", message: "Enable camera access in Settings to take a photo.")
-            return
-        }
+        Task { @MainActor in
+            guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
+                self.showAlert(title: "Camera not available", message: "This device has no camera.")
+                return
+            }
 
-        let picker = UIImagePickerController()
-        picker.sourceType = .camera
-        picker.delegate = self
-        picker.allowsEditing = false
-        present(picker, animated: true)
+            let permission = await ensureCameraPermission()
+            switch permission {
+            case .authorized:
+                let picker = UIImagePickerController()
+                picker.sourceType = .camera
+                picker.delegate = self
+                picker.allowsEditing = false
+                self.present(picker, animated: true)
+            case .denied:
+                self.presentGoToSettingsAlert(title: "Camera Access Needed", message: "Please allow camera access to take photos.")
+            }
+        }
     }
 
     func imagePickerController(_ picker: UIImagePickerController,
@@ -473,3 +536,4 @@ private final class AddCell: UICollectionViewCell {
         // Reserved for future styling if needed.
     }
 }
+
