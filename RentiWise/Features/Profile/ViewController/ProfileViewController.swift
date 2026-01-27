@@ -973,7 +973,7 @@ private struct PrivacySecurityPage: View {
                 NavigationLink("App Permissions") { AppPermissionsView() }
             }
             Section("Security") {
-                NavigationLink("Change Password") { Text("Change Password") }
+                NavigationLink("Change Password") { ChangePasswordView() }
                 NavigationLink("Two-Factor Authentication") { Text("Two-Factor Authentication") }
             }
         }
@@ -998,6 +998,114 @@ private struct HelpSupportPage: View {
         .navigationTitle("Help & Support")
         .navigationBarTitleDisplayMode(.inline)
         .background(Color(.systemGroupedBackground))
+    }
+}
+
+private struct ChangePasswordView: View {
+    @State private var currentPassword: String = ""
+    @State private var newPassword: String = ""
+    @State private var confirmPassword: String = ""
+
+    @State private var showCurrent: Bool = false
+    @State private var showNew: Bool = false
+    @State private var showConfirm: Bool = false
+
+    @State private var isUpdating: Bool = false
+    @State private var statusMessage: String?
+
+    private let brandTeal = Color(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0)
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Form {
+                Section("Change Password") {
+                    // Current Password
+                    passwordRow(title: "Current Password", text: $currentPassword, isSecure: !showCurrent, toggle: { showCurrent.toggle() })
+
+                    // New Password
+                    passwordRow(title: "New Password", text: $newPassword, isSecure: !showNew, toggle: { showNew.toggle() })
+
+                    // Confirm New Password
+                    passwordRow(title: "Confirm New Password", text: $confirmPassword, isSecure: !showConfirm, toggle: { showConfirm.toggle() })
+                }
+
+                if let statusMessage {
+                    Section {
+                        Text(statusMessage)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .background(Color(.systemGroupedBackground))
+
+            Button(action: { Task { await updatePassword() } }) {
+                if isUpdating {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                        Text("Updating…")
+                            .font(.system(size: 18, weight: .semibold))
+                    }
+                    .frame(height: 44)
+                    .frame(maxWidth: .infinity)
+                } else {
+                    Text("Update Password")
+                        .font(.system(size: 18, weight: .semibold))
+                        .frame(height: 44)
+                        .frame(maxWidth: .infinity)
+                }
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(brandTeal)
+            .padding(.horizontal)
+            .padding(.bottom, 16)
+        }
+        .navigationTitle("Change Password")
+        .navigationBarTitleDisplayMode(.inline)
+        .background(Color(.systemGroupedBackground))
+    }
+
+    // MARK: - Row helper
+    @ViewBuilder
+    private func passwordRow(title: String, text: Binding<String>, isSecure: Bool, toggle: @escaping () -> Void) -> some View {
+        HStack {
+            VStack(alignment: .leading) {
+                Text(title)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                if isSecure {
+                    SecureField(title, text: text)
+                        .textContentType(.password)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                } else {
+                    TextField(title, text: text)
+                        .textContentType(.password)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                }
+            }
+            Spacer(minLength: 8)
+            Button(action: toggle) {
+                Image(systemName: isSecure ? "eye.slash" : "eye")
+                    .foregroundStyle(brandTeal)
+            }
+            .accessibilityLabel(isSecure ? "Show Password" : "Hide Password")
+        }
+    }
+
+    // MARK: - Supabase update (no validation logic)
+    private func updatePassword() async {
+        await MainActor.run { isUpdating = true; statusMessage = nil }
+        defer { Task { await MainActor.run { isUpdating = false } } }
+        do {
+            // UI-only per request: no validation. Attempt password update via Supabase.
+            try await SupabaseManager.shared.client.auth.update(user: .init(password: newPassword))
+            await MainActor.run { statusMessage = "Password updated." }
+        } catch {
+            await MainActor.run { statusMessage = error.localizedDescription }
+        }
     }
 }
 
