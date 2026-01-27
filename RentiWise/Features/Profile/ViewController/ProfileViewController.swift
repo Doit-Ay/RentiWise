@@ -501,10 +501,11 @@ private struct WishlistPage: View {
             }
         }
         .listStyle(.insetGrouped)
+        .refreshable { await loadWishlist() }
+        .background(Color(.systemGroupedBackground))
         .navigationTitle("Wishlist")
         .navigationBarTitleDisplayMode(.inline)
         .task { await loadWishlist() }
-        .refreshable { await loadWishlist() }
     }
 
     private func priceText(for item: Item) -> String {
@@ -644,6 +645,7 @@ private struct ManageDataViews: View {
         } message: {
             Text("This will permanently delete your profile, bookings, and payments. This action cannot be undone.")
         }
+        .background(Color(.systemGroupedBackground))
     }
 
     private func deleteAccount() async {
@@ -692,6 +694,7 @@ private struct ProfileInformationView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
         .refreshable { await load() }
+        .background(Color(.systemGroupedBackground))
     }
 
     private func load() async {
@@ -729,6 +732,7 @@ private struct BookingHistoryView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
         .refreshable { await load() }
+        .background(Color(.systemGroupedBackground))
     }
 
     private func load() async {
