@@ -144,19 +144,32 @@ final class ChatServiceV2 {
             .execute()
     }
 
-    func subscribeToMessages(conversationId: String, onMessage: @escaping (ChatMessage) -> Void) -> RealtimeChannel {
+    func subscribeToMessages(conversationId: String, onMessage: @escaping (ChatMessage) -> Void) -> RealtimeChannelV2 {
         let channel = client.channel("public:chat_messages:conversation_id=eq.\(conversationId)")
-        let inserted = channel.on("postgres_changes", filter: .init(event: "INSERT", schema: "public", table: "chat_messages", filter: "conversation_id=eq.\(conversationId)")) { message in
-             guard let record = message.payload["new"] as? [String: Any] else { return }
-             do {
-                 let data = try JSONSerialization.data(withJSONObject: record)
-                 let decoder = JSONDecoder()
-                 decoder.dateDecodingStrategy = .iso8601
-                 let chatMessage = try decoder.decode(ChatMessage.self, from: data)
-                 onMessage(chatMessage)
-             } catch {
-                 print("Error decoding realtime chat message: \(error)")
-             }
+        
+        let changeStream = channel.postgresChange(
+            AnyAction.self,
+            schema: "public",
+            table: "chat_messages",
+            filter: "conversation_id=eq.\(conversationId)"
+        )
+        
+        Task {
+            for await change in changeStream {
+                switch change {
+                case .insert(let record):
+                    do {
+                        let data = try JSONEncoder().encode(record.record)
+                        let decoder = JSONDecoder()
+                        decoder.dateDecodingStrategy = .iso8601
+                        let chatMessage = try decoder.decode(ChatMessage.self, from: data)
+                        onMessage(chatMessage)
+                    } catch {
+                        print("Error decoding realtime chat message: \(error)")
+                    }
+                default: break
+                }
+            }
         }
         
         Task {

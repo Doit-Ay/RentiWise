@@ -20,7 +20,7 @@ class ChatViewController: UIViewController {
     private var conversation: ChatConversation?
     private var messages: [ChatMessage] = []
     private var currentUserId: String?
-    private var realtimeChannel: RealtimeChannel?
+    private var realtimeChannel: RealtimeChannelV2?
     
     // MARK: - UI Elements
     
@@ -199,8 +199,6 @@ class ChatViewController: UIViewController {
                     self.tableView.reloadData()
                     self.scrollToBottom()
                     
-                    // Mark read if we are looking at it
-                    // In a real app check if view is visible
                     if let currentUserId = self.currentUserId, message.sender_id != currentUserId {
                          try? await ChatServiceV2.shared.markMessagesAsRead(conversationId: conversationId)
                     }

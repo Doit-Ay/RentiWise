@@ -19,7 +19,7 @@ final class SupportChatViewController: UIViewController {
     private var currentTicket: SupportTicket?
     private var messages: [SupportMessage] = []
     private var currentUserId: String?
-    private var realtimeChannel: RealtimeChannel?
+    private var realtimeChannel: RealtimeChannelV2?
     
     private let quickActionTopics = ["Refund", "Booking Issue", "Damage Report", "Account Help", "Other"]
     

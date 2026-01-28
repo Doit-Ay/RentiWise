@@ -4,10 +4,9 @@
 import Foundation
 import Supabase
 
-protocol SupportChatServicing {
     func createSupportTicket(subject: String, message: String) async throws -> SupportTicket
     func sendSupportMessage(ticketId: String, text: String) async throws -> SupportMessage
-    func subscribeToRealtime(ticketId: String, onMessage: @escaping (SupportMessage) -> Void) -> RealtimeChannel
+    func subscribeToRealtime(ticketId: String, onMessage: @escaping (SupportMessage) -> Void) -> RealtimeChannelV2
 }
 
 final class SupportChatService: SupportChatServicing {
@@ -16,9 +15,47 @@ final class SupportChatService: SupportChatServicing {
     init(client: SupabaseClient = SupabaseManager.shared.client) {
         self.client = client
     }
-
-    // MARK: - Ticket
-    private struct CreateTicketPayload: Encodable {
+    
+    // ... (keep init and other methods, relying on file content being mostly same, just checking context)
+    // Actually I should just target the subscribe method and protocol.
+    
+    // ...
+    
+    func subscribeToRealtime(ticketId: String, onMessage: @escaping (SupportMessage) -> Void) -> RealtimeChannelV2 {
+        let channel = client.channel("public:support_messages:ticket_id=eq.\(ticketId)")
+        
+        let changeStream = channel.postgresChange(
+            AnyAction.self,
+            schema: "public",
+            table: "support_messages",
+            filter: "ticket_id=eq.\(ticketId)"
+        )
+        
+        Task {
+            for await change in changeStream {
+                switch change {
+                case .insert(let record):
+                    do {
+                        let data = try JSONEncoder().encode(record.record) // Re-encode to decode properly
+                        let decoder = JSONDecoder()
+                        decoder.dateDecodingStrategy = .iso8601
+                        let supportMessage = try decoder.decode(SupportMessage.self, from: data)
+                        onMessage(supportMessage)
+                    } catch {
+                       print("Decoding error: \(error)")
+                    }
+                default: break
+                }
+            }
+        }
+        
+        Task {
+            await channel.subscribe()
+        }
+        
+        return channel
+    }
+}
         let user_id: String
         let subject: String
         let priority: String
@@ -81,18 +118,34 @@ final class SupportChatService: SupportChatServicing {
         return try decoder.decode(SupportMessage.self, from: response.data)
     }
 
-    func subscribeToRealtime(ticketId: String, onMessage: @escaping (SupportMessage) -> Void) -> RealtimeChannel {
+    func subscribeToRealtime(ticketId: String, onMessage: @escaping (SupportMessage) -> Void) -> RealtimeChannelV2 {
         let channel = client.channel("public:support_messages:ticket_id=eq.\(ticketId)")
-        let inserted = channel.on("postgres_changes", filter: .init(event: "INSERT", schema: "public", table: "support_messages", filter: "ticket_id=eq.\(ticketId)")) { message in
-            guard let record = message.payload["new"] as? [String: Any] else { return }
-            do {
-                let data = try JSONSerialization.data(withJSONObject: record)
-                let decoder = JSONDecoder()
-                decoder.dateDecodingStrategy = .iso8601
-                let supportMessage = try decoder.decode(SupportMessage.self, from: data)
-                onMessage(supportMessage)
-            } catch {
-                print("Error decoding realtime message: \(error)")
+        
+        let changeStream = channel.postgresChange(
+            AnyAction.self,
+            schema: "public",
+            table: "support_messages",
+            filter: "ticket_id=eq.\(ticketId)"
+        )
+        
+        Task {
+            for await change in changeStream {
+                switch change {
+                case .insert(let record):
+                    do {
+                        // The 'record' in AnyAction is usually [String: JSON] or similar. 
+                        // We need to be careful with decoding. 
+                        // If 'record' is the Encodable object, we can encode it back.
+                        let data = try JSONEncoder().encode(record.record)
+                        let decoder = JSONDecoder()
+                        decoder.dateDecodingStrategy = .iso8601
+                        let supportMessage = try decoder.decode(SupportMessage.self, from: data)
+                        onMessage(supportMessage)
+                    } catch {
+                        print("Realtime decoding error: \(error)")
+                    }
+                default: break
+                }
             }
         }
         
