@@ -367,32 +367,46 @@ class BookingApprovalViewController: UIViewController {
 
             // Decide the "other" party
             let otherUserId: String
+            let otherUserName: String
             if let me = currentUserId {
                 if me == borrower {
                     otherUserId = owner
+                    otherUserName = "Owner"
                 } else if me == owner {
                     otherUserId = borrower
+                    otherUserName = "Borrower"
                 } else {
                     otherUserId = owner
+                    otherUserName = "Owner"
                 }
             } else {
                 otherUserId = owner
+                otherUserName = "Owner"
             }
 
-            // Instantiate the new chat thread controller
-            let chatVC = ChatThreadViewController()
-            chatVC.otherUserId = otherUserId
-            chatVC.itemId = req.item_id
-            chatVC.title = "Chat"
-
-            // Present inside its own navigation controller, full screen, to guarantee no tab bar
-            let nav = UINavigationController(rootViewController: chatVC)
-            nav.modalPresentationStyle = .fullScreen
-
+            // Instantiate the GLOBAL ChatViewController (refactored)
             await MainActor.run {
-                self.present(nav, animated: true)
+                let chatVC = ChatViewController()
+                chatVC.otherUserId = otherUserId
+                chatVC.itemId = req.item_id
+                // Optionally resolve real name here if possible, but "Owner"/"Borrower" is a safe fallback
+                chatVC.otherUserName = otherUserName 
+                chatVC.title = otherUserName
+                
+                // Push if nav exists, else present
+                if let nav = self.navigationController {
+                    nav.pushViewController(chatVC, animated: true)
+                } else {
+                    let navWrapper = UINavigationController(rootViewController: chatVC)
+                    navWrapper.modalPresentationStyle = .fullScreen
+                    self.present(navWrapper, animated: true)
+                }
             }
         }
+    }
+
+    @IBAction func openChatButtonTapped(_ sender: Any) {
+        openChat()
     }
 
     @IBAction func openChatButtonTapped(_ sender: Any) {
