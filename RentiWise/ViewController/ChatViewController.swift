@@ -21,8 +21,73 @@ class ChatViewController: UIViewController {
     private var messages: [ChatMessage] = []
     private var currentUserId: String?
     private var realtimeChannel: RealtimeChannelV2?
+    private var pollingTimer: Timer?
     
     // MARK: - UI Elements
+    // ... (UI Elements remain same)
+
+    // MARK: - Lifecycle
+    
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = UIColor(red: 0.96, green: 0.97, blue: 0.98, alpha: 1.0)
+        
+        if let name = otherUserName {
+            title = name
+        } else {
+            title = "Chat"
+        }
+        
+        setupUI()
+        setupKeyboardObservers()
+        loadData()
+        startPolling()
+    }
+    
+    deinit {
+        pollingTimer?.invalidate()
+        NotificationCenter.default.removeObserver(self)
+        Task {
+            await realtimeChannel?.unsubscribe()
+        }
+    }
+    
+    private func startPolling() {
+        pollingTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] _ in
+            self?.checkForNewMessages()
+        }
+    }
+    
+    private func checkForNewMessages() {
+        guard let conversationId = conversation?.id else { return }
+        Task {
+            do {
+                // Fetch latest 20 messages to check for new ones
+                // Ideally we would fetch "after date", but fetching last 20 is a safe simple fallback
+                let latest = try await ChatServiceV2.shared.fetchMessages(conversationId: conversationId, limit: 20)
+                
+                await MainActor.run { [weak self] in
+                    guard let self = self else { return }
+                    var hasNew = false
+                    for msg in latest {
+                        if !self.messages.contains(where: { $0.id == msg.id }) {
+                            self.messages.append(msg)
+                            hasNew = true
+                        }
+                    }
+                    
+                    if hasNew {
+                        self.messages.sort(by: { $0.created_at < $1.created_at })
+                        self.tableView.reloadData()
+                        self.scrollToBottom()
+                        try? await ChatServiceV2.shared.markMessagesAsRead(conversationId: conversationId)
+                    }
+                }
+            } catch {
+                // Polling error, ignore
+            }
+        }
+    }
     
     private lazy var tableView: UITableView = {
         let tv = UITableView()

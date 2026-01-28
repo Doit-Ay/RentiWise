@@ -100,6 +100,7 @@ class DashboardLenderRequestViewController: UIViewController {
         // Prepare status row (hidden by default) and its background
         ensureStatusRow()
 
+        setupChatButton()
         applyRequestToUI()
     }
 
@@ -435,6 +436,27 @@ class DashboardLenderRequestViewController: UIViewController {
         denybutton?.alpha = enabled ? 1.0 : 0.6
         changeStatusButton?.isEnabled = enabled
         changeStatusButton?.alpha = enabled ? 1.0 : 0.6
+    }
+
+    private func setupChatButton() {
+        let chatBtn = UIBarButtonItem(image: UIImage(systemName: "message"), style: .plain, target: self, action: #selector(didTapChatButton))
+        chatBtn.tintColor = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1.0)
+        navigationItem.rightBarButtonItem = chatBtn
+    }
+
+    @objc private func didTapChatButton() {
+        guard let req = request else { return }
+        
+        let chatVC = ChatViewController()
+        chatVC.otherUserId = req.borrower_id
+        chatVC.itemId = req.item_id
+        // Try to obtain borrower name if possible, or just "Borrower"
+        // We can fetch it, or just pass nil and let ChatVC fetch/handle it.
+        // For now, let's try to pass a placeholder like "Borrower"
+        chatVC.otherUserName = "Borrower" 
+        
+        // Push
+        navigationController?.pushViewController(chatVC, animated: true)
     }
 
     private func updateStatus(to newStatus: String) async {
