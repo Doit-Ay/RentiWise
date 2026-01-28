@@ -7,6 +7,7 @@ import Supabase
 protocol SupportChatServicing {
     func createSupportTicket(subject: String, message: String) async throws -> SupportTicket
     func sendSupportMessage(ticketId: String, text: String) async throws -> SupportMessage
+    func subscribeToRealtime(ticketId: String, onMessage: @escaping (SupportMessage) -> Void) -> RealtimeChannel
 }
 
 final class SupportChatService: SupportChatServicing {
@@ -78,5 +79,27 @@ final class SupportChatService: SupportChatServicing {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         return try decoder.decode(SupportMessage.self, from: response.data)
+    }
+
+    func subscribeToRealtime(ticketId: String, onMessage: @escaping (SupportMessage) -> Void) -> RealtimeChannel {
+        let channel = client.channel("public:support_messages:ticket_id=eq.\(ticketId)")
+        let inserted = channel.on("postgres_changes", filter: .init(event: "INSERT", schema: "public", table: "support_messages", filter: "ticket_id=eq.\(ticketId)")) { message in
+            guard let record = message.payload["new"] as? [String: Any] else { return }
+            do {
+                let data = try JSONSerialization.data(withJSONObject: record)
+                let decoder = JSONDecoder()
+                decoder.dateDecodingStrategy = .iso8601
+                let supportMessage = try decoder.decode(SupportMessage.self, from: data)
+                onMessage(supportMessage)
+            } catch {
+                print("Error decoding realtime message: \(error)")
+            }
+        }
+        
+        Task {
+            await channel.subscribe()
+        }
+        
+        return channel
     }
 }

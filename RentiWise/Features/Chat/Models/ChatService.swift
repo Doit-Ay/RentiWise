@@ -133,16 +133,38 @@ final class ChatServiceV2 {
        return try decoder.decode(ChatMessage.self, from: response.data)
    }
   
-   func markMessagesAsRead(conversationId: String) async throws {
-       guard let userId = await SupabaseManager.shared.currentUserId() else { return }
-      
-       try await client
-           .from("chat_messages")
-           .update(["is_read": true])
-           .eq("conversation_id", value: conversationId)
-           .neq("sender_id", value: userId)
-           .execute()
-   }
+    func markMessagesAsRead(conversationId: String) async throws {
+        guard let userId = await SupabaseManager.shared.currentUserId() else { return }
+       
+        try await client
+            .from("chat_messages")
+            .update(["is_read": true])
+            .eq("conversation_id", value: conversationId)
+            .neq("sender_id", value: userId)
+            .execute()
+    }
+
+    func subscribeToMessages(conversationId: String, onMessage: @escaping (ChatMessage) -> Void) -> RealtimeChannel {
+        let channel = client.channel("public:chat_messages:conversation_id=eq.\(conversationId)")
+        let inserted = channel.on("postgres_changes", filter: .init(event: "INSERT", schema: "public", table: "chat_messages", filter: "conversation_id=eq.\(conversationId)")) { message in
+             guard let record = message.payload["new"] as? [String: Any] else { return }
+             do {
+                 let data = try JSONSerialization.data(withJSONObject: record)
+                 let decoder = JSONDecoder()
+                 decoder.dateDecodingStrategy = .iso8601
+                 let chatMessage = try decoder.decode(ChatMessage.self, from: data)
+                 onMessage(chatMessage)
+             } catch {
+                 print("Error decoding realtime chat message: \(error)")
+             }
+        }
+        
+        Task {
+            await channel.subscribe()
+        }
+        
+        return channel
+    }
   
    // MARK: - Support Tickets
 

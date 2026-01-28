@@ -19,6 +19,7 @@ final class SupportChatViewController: UIViewController {
     private var currentTicket: SupportTicket?
     private var messages: [SupportMessage] = []
     private var currentUserId: String?
+    private var realtimeChannel: RealtimeChannel?
     
     private let quickActionTopics = ["Refund", "Booking Issue", "Damage Report", "Account Help", "Other"]
     
@@ -364,6 +365,7 @@ final class SupportChatViewController: UIViewController {
                         UIView.animate(withDuration: 0.25) {
                             self.view.layoutIfNeeded()
                         }
+                        self.subscribeToTicket(ticket.id)
                     }
                 } else {
                     // Send message to existing ticket
@@ -422,8 +424,25 @@ final class SupportChatViewController: UIViewController {
         tableView.scrollToRow(at: indexPath, at: .bottom, animated: true)
     }
     
+    private func subscribeToTicket(_ ticketId: String) {
+        realtimeChannel = chatService.subscribeToRealtime(ticketId: ticketId) { [weak self] message in
+            guard let self = self else { return }
+            Task { @MainActor in
+                // Check if we already have this message
+                if !self.messages.contains(where: { $0.id == message.id }) {
+                    self.messages.append(message)
+                    self.tableView.reloadData()
+                    self.scrollToBottom()
+                }
+            }
+        }
+    }
+
     deinit {
         NotificationCenter.default.removeObserver(self)
+        Task {
+            await realtimeChannel?.unsubscribe()
+        }
     }
 }
 
