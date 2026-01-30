@@ -777,3 +777,94 @@ on public.wishlist (item_id);
 
 create index if not exists wishlist_created_at_idx
 on public.wishlist (created_at desc);
+
+
+create unique index if not exists uq_chat_conversation_pair_item
+on public.chat_conversations (lender_id, borrower_id, item_id);
+
+create unique index if not exists uq_chat_conversation_pair_item_nullsafe
+on public.chat_conversations (lender_id, borrower_id, coalesce(item_id, '00000000-0000-0000-0000-000000000000'::uuid));
+
+alter table public.chat_conversations enable row level security;
+alter table public.chat_messages enable row level security;
+
+drop policy if exists "chat_conversations_select_participants" on public.chat_conversations;
+create policy "chat_conversations_select_participants"
+on public.chat_conversations
+for select
+to authenticated
+using (
+  auth.uid() = lender_id OR auth.uid() = borrower_id
+);
+
+drop policy if exists "chat_conversations_insert_participants" on public.chat_conversations;
+create policy "chat_conversations_insert_participants"
+on public.chat_conversations
+for insert
+to authenticated
+with check (
+  auth.uid() = lender_id OR auth.uid() = borrower_id
+);
+
+drop policy if exists "chat_conversations_update_participants" on public.chat_conversations;
+create policy "chat_conversations_update_participants"
+on public.chat_conversations
+for update
+to authenticated
+using (
+  auth.uid() = lender_id OR auth.uid() = borrower_id
+)
+with check (
+  auth.uid() = lender_id OR auth.uid() = borrower_id
+);
+
+drop policy if exists "chat_messages_select_participants" on public.chat_messages;
+create policy "chat_messages_select_participants"
+on public.chat_messages
+for select
+to authenticated
+using (
+  exists (
+    select 1
+    from public.chat_conversations c
+    where c.id = chat_messages.conversation_id
+      and (auth.uid() = c.lender_id or auth.uid() = c.borrower_id)
+  )
+);
+
+drop policy if exists "chat_messages_insert_participants" on public.chat_messages;
+create policy "chat_messages_insert_participants"
+on public.chat_messages
+for insert
+to authenticated
+with check (
+  sender_id = auth.uid()
+  and exists (
+    select 1
+    from public.chat_conversations c
+    where c.id = conversation_id
+      and (auth.uid() = c.lender_id or auth.uid() = c.borrower_id)
+  )
+);
+
+drop policy if exists "chat_messages_update_read_receipt" on public.chat_messages;
+create policy "chat_messages_update_read_receipt"
+on public.chat_messages
+for update
+to authenticated
+using (
+  exists (
+    select 1
+    from public.chat_conversations c
+    where c.id = chat_messages.conversation_id
+      and (auth.uid() = c.lender_id or auth.uid() = c.borrower_id)
+  )
+)
+with check (
+  exists (
+    select 1
+    from public.chat_conversations c
+    where c.id = chat_messages.conversation_id
+      and (auth.uid() = c.lender_id or auth.uid() = c.borrower_id)
+  )
+);

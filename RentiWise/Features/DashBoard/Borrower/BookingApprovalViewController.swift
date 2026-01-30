@@ -99,7 +99,7 @@ class BookingApprovalViewController: UIViewController {
     @IBOutlet weak var c5view: UIView!
     @IBOutlet weak var code5Label: UILabel!
     @IBOutlet weak var c6view: UIView!
-    @IBOutlet weak var code6Label: UILabel!
+    @IBOutlet weak var code6Label: UILabel! // ADDED missing outlet
     @IBOutlet weak var price: UIView!
     @IBOutlet weak var addresscard: UIView!
     @IBOutlet weak var summary: UIView!
@@ -291,11 +291,13 @@ class BookingApprovalViewController: UIViewController {
             }
         }
         if requestsRefreshObserver == nil {
-            requestsRefreshObserver = NotificationCenter.default.addObserver(forName: Notification.Name("requestsShouldRefresh"), object: nil, queue: .main) { [weak self] _ in
-                guard let self = self else { return }
-                print("[BookingApproval] Notification received: requestsShouldRefresh -> marking Approved")
-                self.setStatus(.approved)
-                Task { await self.refreshRequestFromDBIfPossible() }
+            // Use block-based observer to get a token (previous selector-based returns Void)
+            requestsRefreshObserver = NotificationCenter.default.addObserver(
+                forName: Notification.Name("requestsShouldRefresh"),
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                self?.handleRequestsShouldRefresh()
             }
         }
 
@@ -308,6 +310,12 @@ class BookingApprovalViewController: UIViewController {
                 await refreshPaymentStatusForHistory()
             }
         }
+    }
+
+    @objc private func handleRequestsShouldRefresh() {
+        print("[BookingApproval] Notification received: requestsShouldRefresh -> marking Approved")
+        setStatus(.approved)
+        Task { await refreshRequestFromDBIfPossible() }
     }
 
     override func viewDidAppear(_ animated: Bool) {
@@ -393,40 +401,21 @@ class BookingApprovalViewController: UIViewController {
     @objc private func openChat() {
         guard let req = self.request else { return }
 
-        Task {
-            // Resolve current user
-            let currentUserId = await SupabaseManager.shared.currentUserId()
-            let borrower = req.borrower_id
-            let owner = req.owner_id
+        // Choose the "other" participant strictly by screen mode:
+        // - My Rentals: borrower chatting with owner
+        // - History: owner chatting with borrower
+        let otherUserId: String = (self.mode == .myRentals) ? req.owner_id : req.borrower_id
 
-            // Decide the "other" party
-            let otherUserId: String
-            if let me = currentUserId {
-                if me == borrower {
-                    otherUserId = owner
-                } else if me == owner {
-                    otherUserId = borrower
-                } else {
-                    otherUserId = owner
-                }
-            } else {
-                otherUserId = owner
-            }
+        // Instantiate the chat thread controller
+        let chatVC = ChatThreadViewController()
+        chatVC.otherUserId = otherUserId
+        chatVC.itemId = req.item_id
+        chatVC.title = "Chat"
 
-            // Instantiate the new chat thread controller
-            let chatVC = ChatThreadViewController()
-            chatVC.otherUserId = otherUserId
-            chatVC.itemId = req.item_id
-            chatVC.title = "Chat"
-
-            // Present inside its own navigation controller, full screen, to guarantee no tab bar
-            let nav = UINavigationController(rootViewController: chatVC)
-            nav.modalPresentationStyle = .fullScreen
-
-            await MainActor.run {
-                self.present(nav, animated: true)
-            }
-        }
+        // Present full screen to keep tab bar hidden
+        let nav = UINavigationController(rootViewController: chatVC)
+        nav.modalPresentationStyle = .fullScreen
+        self.present(nav, animated: true)
     }
 
     @IBAction func openChatButtonTapped(_ sender: Any) {
@@ -635,15 +624,18 @@ class BookingApprovalViewController: UIViewController {
             categoryitemLabel?.text = ""
         }
 
-        // Name/avatar always show owner’s name (the item owner). If in history and you instead want
-        // the requester’s name here, you can switch to borrower_id.
+        // Name/avatar:
+        // - My Rentals: show the owner (item owner)
+        // - History: show the borrower (person who wants the item)
         Task { [weak self] in
             guard let self = self else { return }
-            let userIdToShowName = req.owner_id
+            let userIdToShowName = (self.mode == .history) ? req.borrower_id : req.owner_id
             await self.fetchAndDisplayOwnerUnified(for: userIdToShowName)
         }
 
-        // Address: owner for myRentals, borrower for history
+        // Address:
+        // - My Rentals: show owner address
+        // - History: show borrower address (person who wants the item)
         Task { [weak self] in
             guard let self = self else { return }
             let userIdForAddress = (self.mode == .history) ? req.borrower_id : req.owner_id
@@ -701,7 +693,6 @@ class BookingApprovalViewController: UIViewController {
 
     // MARK: - Address (generic)
 
-    // Full address row from "addresses" table
     private struct OwnerAddressRow: Decodable {
         let address_line1: String
         let address_line2: String?
@@ -736,16 +727,11 @@ class BookingApprovalViewController: UIViewController {
         return parts.joined(separator: ", ")
     }
 
-    // New generic address fetcher (reuses previous logic)
     private func fetchAndDisplayAddress(for userId: String) async {
-        // Clear first to avoid stale text
         await MainActor.run { self.addressLabel?.text = nil }
-
-        // 1) Try full address from "addresses" table (default first; else latest)
         do {
             let client = SupabaseManager.shared.client
 
-            // Try default row
             if let data = try? await client
                 .from("addresses")
                 .select("address_line1,address_line2,city,state,postal_code,country,is_default,created_at")
@@ -760,7 +746,6 @@ class BookingApprovalViewController: UIViewController {
                 return
             }
 
-            // If no default, pick the most recent one
             if let data = try? await client
                 .from("addresses")
                 .select("address_line1,address_line2,city,state,postal_code,country,is_default,created_at")
@@ -779,7 +764,6 @@ class BookingApprovalViewController: UIViewController {
             // continue to fallback
         }
 
-        // 2) Fallback to public view "user_default_address" (existing logic)
         do {
             let client = SupabaseManager.shared.client
             let response = try await client
@@ -792,7 +776,6 @@ class BookingApprovalViewController: UIViewController {
             if let data = response.data as? Data {
                 let row = try JSONDecoder().decode(OwnerDefaultAddressRow.self, from: data)
 
-                // Prefer textual fields we have
                 let parts = [row.city, row.state, row.country]
                     .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
                     .filter { !$0.isEmpty }
@@ -803,7 +786,6 @@ class BookingApprovalViewController: UIViewController {
                     return
                 }
 
-                // If no textual fields, try reverse geocoding coordinates
                 if let lat = row.latitude, let lon = row.longitude {
                     let display = await reverseGeocodeIfNeeded(lat: lat, lon: lon, fallbackText: "Address unavailable")
                     await MainActor.run { self.addressLabel?.text = display }
@@ -811,7 +793,6 @@ class BookingApprovalViewController: UIViewController {
                 }
             }
 
-            // Nothing found -> placeholder
             await MainActor.run { self.addressLabel?.text = "Address unavailable" }
         } catch {
             await MainActor.run { self.addressLabel?.text = "Address unavailable" }
@@ -824,7 +805,6 @@ class BookingApprovalViewController: UIViewController {
         do {
             let placemarks = try await geocoder.reverseGeocodeLocation(location)
             if let p = placemarks.first {
-                // Build a more detailed address if available
                 let streetNumber = p.subThoroughfare
                 let street = p.thoroughfare
                 let subLocality = p.subLocality
@@ -878,13 +858,10 @@ class BookingApprovalViewController: UIViewController {
                 if let p = latest, p.status.lowercased() == "succeeded", let code = p.pickup_code, !code.isEmpty {
                     self.hasCompletedPayment = true
                     self.setCodeDigits(from: code)
-                    // Also reflect paid amounts if present
                     self.updateAmountLabels(rental: p.rental_fee, deposit: p.deposit_amount, total: p.total_amount)
                 } else {
                     self.hasCompletedPayment = false
-                    // Clear code digits visually
                     self.setCodeDigits(from: "000000")
-                    // Recompute from request for display
                     Task { [weak self] in
                         guard let self = self, let req = self.request else { return }
                         let amounts = await self.computeAmounts(for: req)
@@ -900,7 +877,6 @@ class BookingApprovalViewController: UIViewController {
                 self.currentPayment = nil
                 self.hasCompletedPayment = false
                 self.setCodeDigits(from: "000000")
-                // Fall back to computed values
                 Task { [weak self] in
                     guard let self = self, let req = self.request else { return }
                     let amounts = await self.computeAmounts(for: req)
@@ -913,7 +889,6 @@ class BookingApprovalViewController: UIViewController {
         }
     }
 
-    // Lightweight fetch to only update the status label in history mode
     private func refreshPaymentStatusForHistory() async {
         guard mode == .history, let req = request else { return }
         do {
@@ -929,7 +904,6 @@ class BookingApprovalViewController: UIViewController {
             let rows = try decoder.decode([StatusRow].self, from: response.data)
             let latestStatus = rows.first?.status.lowercased()
             await MainActor.run {
-                // Do not change buttons/code visibility here; only label
                 if let latestStatus = latestStatus {
                     if latestStatus == "succeeded" {
                         self.paymentStatus?.text = "Payment Successful"
@@ -966,7 +940,6 @@ class BookingApprovalViewController: UIViewController {
             }
         }
 
-        // 1) If already succeeded, just refresh UI
         await refreshPaymentFromDB()
         if let p = currentPayment, p.status.lowercased() == "succeeded" {
             await MainActor.run {
@@ -975,18 +948,15 @@ class BookingApprovalViewController: UIViewController {
             return
         }
 
-        // 2) Compute amounts (days * price_per_day + deposit)
         let amounts = await computeAmounts(for: req)
         let rentalFee = amounts.rentalFee
         let deposit = amounts.deposit
         let total = rentalFee + deposit
 
-        // Update labels immediately while we proceed
         await MainActor.run {
             self.updateAmountLabels(rental: rentalFee, deposit: deposit, total: total)
         }
 
-        // 3) INSERT pending payment
         let insert = PaymentInsert(
             request_id: req.id,
             item_id: req.item_id,
@@ -1014,7 +984,6 @@ class BookingApprovalViewController: UIViewController {
             return
         }
 
-        // 4) UPDATE to succeeded with pickup_code (simulate capture/confirmation)
         let code = generatePickupCode()
         let update = PaymentUpdate(status: "succeeded", pickup_code: code, provider_payment_id: nil, provider_receipt_url: nil, failure_reason: nil)
 
@@ -1036,12 +1005,10 @@ class BookingApprovalViewController: UIViewController {
             return
         }
 
-        // 5) Re-read from DB and update UI
         await refreshPaymentFromDB()
     }
 
     private func computeAmounts(for req: RequestWithItem) async -> (rentalFee: Double, deposit: Double) {
-        // Rental fee: (days * price_per_day)
         var days = 1
         if let s = sqlDateFormatter.date(from: req.start_date),
            let e = sqlDateFormatter.date(from: req.end_date) {
@@ -1050,7 +1017,6 @@ class BookingApprovalViewController: UIViewController {
         let pricePerDay = req.items?.price_per_day ?? 0
         let rentalFee = Double(days) * pricePerDay
 
-        // Deposit: fetch from items.deposit_amount
         var depositAmount: Double = 0
         do {
             struct DepositDTO: Decodable { let deposit_amount: Double }
@@ -1075,9 +1041,9 @@ class BookingApprovalViewController: UIViewController {
         let depositText = currencyFormatter.string(from: NSNumber(value: deposit)) ?? String(format: "%.2f", deposit)
         let totalText = currencyFormatter.string(from: NSNumber(value: total)) ?? String(format: "%.2f", total)
 
-        fee?.text = rentalText                 // Rental total fee
-        seclabel?.text = depositText           // Security Deposit
-        totamountlabel?.text = totalText       // Total = rental + deposit
+        fee?.text = rentalText
+        seclabel?.text = depositText
+        totamountlabel?.text = totalText
     }
 
     // MARK: - Owner resolution
@@ -1247,7 +1213,6 @@ class BookingApprovalViewController: UIViewController {
             paymentStatus?.isHidden = true
             return
         }
-        // Prefer currentPayment if we have it; else leave as-is (refreshPaymentStatusForHistory will fill it)
         if let p = currentPayment {
             if p.status.lowercased() == "succeeded" {
                 paymentStatus?.text = "Payment Successful"
@@ -1257,7 +1222,6 @@ class BookingApprovalViewController: UIViewController {
                 paymentStatus?.textColor = .secondaryLabel
             }
         } else {
-            // Leave whatever was set by refreshPaymentStatusForHistory or set a neutral default
             if paymentStatus?.text?.isEmpty ?? true {
                 paymentStatus?.text = "No Payment"
                 paymentStatus?.textColor = .secondaryLabel

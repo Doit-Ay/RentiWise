@@ -14,6 +14,11 @@ final class ChatServiceV2 {
   
    private let client: SupabaseClient
    private let decoder: JSONDecoder
+   private let iso8601WithFS: ISO8601DateFormatter = {
+       let f = ISO8601DateFormatter()
+       f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+       return f
+   }()
   
    private init() {
        self.client = SupabaseManager.shared.client
@@ -28,6 +33,8 @@ final class ChatServiceV2 {
        let borrower_id: String
        let item_id: String?
    }
+
+   private struct ItemOwnerDTO: Decodable { let owner_id: String }
   
    func fetchConversations() async throws -> [ChatConversation] {
        guard let userId = await SupabaseManager.shared.currentUserId() else {
@@ -48,35 +55,71 @@ final class ChatServiceV2 {
        guard let currentUserId = await SupabaseManager.shared.currentUserId() else {
            throw ChatServiceError.notAuthenticated
        }
-      
-       let lenderId = otherId
-       let borrowerId = currentUserId
-      
-       var foundExisting: ChatConversation? = nil
-       do {
-           let existingResponse = try await client
-               .from("chat_conversations")
-               .select()
-               .eq("lender_id", value: lenderId)
-               .eq("borrower_id", value: borrowerId)
+
+       let lenderId: String
+       let borrowerId: String
+
+       if let itemId = itemId, !itemId.isEmpty {
+           let itemResp = try await client
+               .from("items")
+               .select("owner_id")
+               .eq("id", value: itemId)
                .single()
                .execute()
-           foundExisting = try decoder.decode(ChatConversation.self, from: existingResponse.data)
-       } catch {
-           foundExisting = nil
+           let owner = try decoder.decode(ItemOwnerDTO.self, from: itemResp.data).owner_id
+
+           lenderId = owner
+           borrowerId = (currentUserId == owner) ? otherId : currentUserId
+
+           if let existing = try? await fetchSingleConversation(lenderId: lenderId, borrowerId: borrowerId, itemId: itemId) {
+               return existing
+           }
+
+           let payload = NewConversationPayload(lender_id: lenderId, borrower_id: borrowerId, item_id: itemId)
+           let createResponse = try await client
+               .from("chat_conversations")
+               .insert(payload)
+               .select()
+               .single()
+               .execute()
+           return try decoder.decode(ChatConversation.self, from: createResponse.data)
+       } else {
+           lenderId = otherId
+           borrowerId = currentUserId
+
+           if let existing = try? await fetchSingleConversation(lenderId: lenderId, borrowerId: borrowerId, itemId: nil) {
+               return existing
+           }
+
+           let payload = NewConversationPayload(lender_id: lenderId, borrower_id: borrowerId, item_id: nil)
+           let createResponse = try await client
+               .from("chat_conversations")
+               .insert(payload)
+               .select()
+               .single()
+               .execute()
+           return try decoder.decode(ChatConversation.self, from: createResponse.data)
        }
-       if let existing = foundExisting { return existing }
-      
-       let newConvo = NewConversationPayload(lender_id: lenderId, borrower_id: borrowerId, item_id: itemId)
-      
-       let createResponse = try await client
+   }
+
+   private func fetchSingleConversation(lenderId: String, borrowerId: String, itemId: String?) async throws -> ChatConversation {
+       var query = client
            .from("chat_conversations")
-           .insert(newConvo)
            .select()
-           .single()
-           .execute()
-      
-       return try decoder.decode(ChatConversation.self, from: createResponse.data)
+           .eq("lender_id", value: lenderId)
+           .eq("borrower_id", value: borrowerId)
+
+       if let itemId, !itemId.isEmpty {
+           query = query.eq("item_id", value: itemId)
+       } else {
+           // Use filter(...) with IS NULL since PostgrestFilterBuilder has no `is_` member.
+           // Option A (newer SDKs): query = query.filter("item_id", .is, "null")
+           // Option B (string operator fallback compatible across versions):
+           query = query.filter("item_id", operator: "is", value: "null")
+       }
+
+       let resp = try await query.single().execute()
+       return try decoder.decode(ChatConversation.self, from: resp.data)
    }
   
    // MARK: - Messages
@@ -124,9 +167,10 @@ final class ChatServiceV2 {
            .single()
            .execute()
       
+       let now = iso8601WithFS.string(from: Date())
        try? await client
            .from("chat_conversations")
-           .update(ConversationUpdatePayload(last_message: trimmedText, last_message_at: ISO8601DateFormatter().string(from: Date())))
+           .update(ConversationUpdatePayload(last_message: trimmedText, last_message_at: now))
            .eq("id", value: conversationId)
            .execute()
       

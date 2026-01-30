@@ -329,7 +329,7 @@
                                                 </constraints>
                                             </stackView>
                                             <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="leading" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="yCS-Qb-oIn">
-                                                <rect key="frame" x="5" y="66" width="188" height="34.333333333333343"/>
+                                                <rect key="frame" x="5" y="66" width="238" height="34.333333333333343"/>
                                                 <color key="tintColor" red="0.4392156862745098" green="0.65490196078431373" blue="0.70588235294117641" alpha="1" colorSpace="custom" customColorSpace="displayP3"/>
                                                 <state key="normal" title="Button"/>
                                                 <buttonConfiguration key="configuration" style="plain" imagePlacement="leading" title="SRMIST" imagePadding="7" titleAlignment="leading">
@@ -914,7 +914,7 @@
                                             <constraint firstAttribute="trailing" secondItem="iWW-pP-fHH" secondAttribute="trailing" constant="15" id="EGH-uf-7a8"/>
                                             <constraint firstAttribute="trailing" secondItem="Jhf-d8-gMU" secondAttribute="trailing" constant="15" id="Njg-Op-tCi"/>
                                             <constraint firstItem="iWW-pP-fHH" firstAttribute="leading" secondItem="IRg-Wa-50O" secondAttribute="leading" constant="15" id="NtR-LD-LGi"/>
-                                            <constraint firstAttribute="trailing" secondItem="yCS-Qb-oIn" secondAttribute="trailing" constant="200" id="P09-jh-g3V"/>
+                                            <constraint firstAttribute="trailing" secondItem="yCS-Qb-oIn" secondAttribute="trailing" constant="150" id="P09-jh-g3V"/>
                                             <constraint firstItem="3dg-OL-JaV" firstAttribute="top" secondItem="9Yx-3B-tEM" secondAttribute="bottom" constant="20" id="RNN-Yg-aZU"/>
                                             <constraint firstAttribute="trailing" secondItem="KZo-Xi-7Is" secondAttribute="trailing" id="UaD-sh-UTy"/>
                                             <constraint firstAttribute="trailing" secondItem="9Yx-3B-tEM" secondAttribute="trailing" constant="5" id="VOQ-T0-XdV"/>
