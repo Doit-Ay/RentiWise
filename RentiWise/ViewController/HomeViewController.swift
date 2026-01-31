@@ -260,8 +260,22 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
             self.homeSearch = hs
         }
 
+        // Add a background tap to dismiss keyboard when tapping anywhere outside the search bar/results
+        let tap = UITapGestureRecognizer(target: self, action: #selector(dismissKeyboardTap))
+        tap.cancelsTouchesInView = false
+        view.addGestureRecognizer(tap)
+
         // Set the bottom tagline "You ❤️ RentiWise" with brand-colored heart
         setBottomTagline()
+    }
+
+    @objc private func dismissKeyboardTap() {
+        // Resign first responder from the search bar / any field
+        view.endEditing(true)
+        // Optional: if you want to also hide inline results when dismissing:
+        // homeSearch?.clearResults()
+        // Keep results table aligned after any layout changes
+        homeSearch?.layoutForSearchBarBelow()
     }
 
     override func viewDidLayoutSubviews() {
