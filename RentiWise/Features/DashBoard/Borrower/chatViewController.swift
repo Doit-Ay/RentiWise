@@ -344,10 +344,11 @@ private final class BubbleCell: UITableViewCell {
         leading = bubble.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16)
         trailing = bubble.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16)
 
+        // Don't activate leading/trailing here - will be set in configure based on sender
         NSLayoutConstraint.activate([
-            leading, trailing,
             bubble.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
             bubble.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -8),
+            bubble.widthAnchor.constraint(lessThanOrEqualTo: contentView.widthAnchor, multiplier: 0.75),
 
             label.leadingAnchor.constraint(equalTo: bubble.leadingAnchor, constant: 12),
             label.trailingAnchor.constraint(equalTo: bubble.trailingAnchor, constant: -12),
