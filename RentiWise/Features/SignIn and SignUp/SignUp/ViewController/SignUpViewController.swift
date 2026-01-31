@@ -49,6 +49,18 @@ final class SignUpViewController: UIViewController {
         signUpEmailText?.autocapitalizationType = .none
         signUpPasswordText?.isSecureTextEntry = true
         signUpNumberText?.keyboardType = .phonePad
+
+        // Back to Profile button
+        navigationItem.leftBarButtonItem = UIBarButtonItem(
+            title: "Back",
+            style: .plain,
+            target: self,
+            action: #selector(backToProfile)
+        )
+    }
+
+    @objc private func backToProfile() {
+        routeToProfileTab()
     }
 
     @IBAction private func GoogleSignIn(_ sender: UIButton) {
@@ -119,6 +131,9 @@ final class SignUpViewController: UIViewController {
                     profile: profile
                 )
 
+                // Sanity-check the session is live
+                _ = try await SupabaseManager.shared.client.auth.session
+
                 routeToProfileTab()
             } else {
                 presentAlert(
@@ -131,7 +146,6 @@ final class SignUpViewController: UIViewController {
         }
     }
 
-    // MARK: - Google Sign In
 #if canImport(GoogleSignIn)
     @MainActor
     private func handleGoogleSignIn() async {
@@ -145,14 +159,9 @@ final class SignUpViewController: UIViewController {
 
         GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: clientID)
 
-        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-              let rootViewController = windowScene.windows.first?.rootViewController else {
-            presentAlert(title: "Sign In Error", message: "Unable to find a presenting view controller.")
-            return
-        }
-
         do {
-            let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: rootViewController)
+            // Present from self to avoid nil presenter issues
+            let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: self)
             guard let idToken = result.user.idToken?.tokenString else {
                 presentAlert(title: "Sign In Error", message: "Missing Google ID token.")
                 return
@@ -163,6 +172,10 @@ final class SignUpViewController: UIViewController {
                 let signInService = SignInService()
                 let session: Session = try await signInService.signInWithGoogle(idToken: idToken, accessToken: accessToken)
                 try await signInService.upsertInitialProfile(userId: session.user.id.uuidString, email: session.user.email ?? "")
+
+                // Sanity-check the session is live
+                _ = try await SupabaseManager.shared.client.auth.session
+
                 routeToProfileTab()
             } catch {
                 presentAlert(title: "Google Sign In Failed", message: error.localizedDescription)
@@ -181,7 +194,6 @@ final class SignUpViewController: UIViewController {
 
     // MARK: - Routing to Profile tab
     private func routeToProfileTab() {
-        // Replace with your actual Profile tab index
         let profileTabIndex = 1
 
         if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,

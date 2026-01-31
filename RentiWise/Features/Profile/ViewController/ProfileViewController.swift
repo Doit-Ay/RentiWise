@@ -39,6 +39,49 @@ final class ProfileViewController: UIViewController {
         ])
         host.didMove(toParent: self)
         hosting = host
+
+        // Print the tab index (if embedded in a UITabBarController)
+        if let idx = computeProfileTabIndex() {
+            print("[Profile] Tab index =", idx)
+        } else {
+            print("[Profile] Tab index not found (not inside a UITabBarController).")
+        }
+    }
+
+    // Finds the UITabBarController and returns the index of the tab that contains this ProfileViewController
+    // It checks both: the VC directly in the tab, or wrapped in a UINavigationController.
+    private func computeProfileTabIndex() -> Int? {
+        // First, try the nearest tab bar controller in the hierarchy
+        if let tab = self.tabBarController ?? findTabBarControllerFromWindow() {
+            guard let vcs = tab.viewControllers, !vcs.isEmpty else { return nil }
+            for (i, vc) in vcs.enumerated() {
+                // Case 1: ProfileViewController is directly the tab's VC
+                if vc === self { return i }
+                // Case 2: The tab hosts a UINavigationController containing ProfileViewController
+                if let nav = vc as? UINavigationController {
+                    // If Profile is the root or currently visible controller in that nav, consider it "the profile tab"
+                    if nav.viewControllers.first is ProfileViewController || nav.viewControllers.contains(where: { $0 === self }) {
+                        return i
+                    }
+                }
+            }
+        }
+        return nil
+    }
+
+    // Fallback: find the tab bar controller from the key window (covers SwiftUI hosting or unusual hierarchies)
+    private func findTabBarControllerFromWindow() -> UITabBarController? {
+        if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let window = scene.windows.first {
+            if let tab = window.rootViewController as? UITabBarController {
+                return tab
+            }
+            if let nav = window.rootViewController as? UINavigationController,
+               let tab = nav.viewControllers.first as? UITabBarController {
+                return tab
+            }
+        }
+        return nil
     }
 }
 

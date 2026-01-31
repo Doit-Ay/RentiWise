@@ -32,27 +32,6 @@ final class SignViewController: UIViewController {
     @IBOutlet private weak var signInPasswordText: UITextField!
     @IBOutlet private weak var signInButton: UIButton!
 
-    // MARK: - Actions
-    @IBAction func signUpSwitch(_ sender: UIButton) {
-        let nibName: String = "SignUpViewController"
-        let vc: SignUpViewController
-        if Bundle.main.path(forResource: nibName, ofType: "nib") != nil || Bundle.main.path(forResource: nibName, ofType: "xib") != nil {
-            vc = SignUpViewController(nibName: nibName, bundle: nil)
-        } else {
-            vc = SignUpViewController(service: SignUpService())
-        }
-        vc.title = ""
-        vc.hidesBottomBarWhenPushed = true
-
-        if let nav: UINavigationController = navigationController {
-            nav.pushViewController(vc, animated: true)
-        } else {
-            let nav = UINavigationController(rootViewController: vc)
-            nav.modalPresentationStyle = UIModalPresentationStyle.fullScreen
-            present(nav, animated: true)
-        }
-    }
-
     // MARK: - Dependencies
     private let validation = AuthValidationService()
     private lazy var signInServiceDefault: SignInServicing = SignInService()
@@ -80,6 +59,14 @@ final class SignViewController: UIViewController {
         navigationController?.setNavigationBarHidden(false, animated: false)
         title = ""
         hidesBottomBarWhenPushed = true
+
+        // Back to Profile button
+        navigationItem.leftBarButtonItem = UIBarButtonItem(
+            title: "Back",
+            style: .plain,
+            target: self,
+            action: #selector(backToProfile)
+        )
 
         signInEmailText?.keyboardType = UIKeyboardType.emailAddress
         signInEmailText?.autocapitalizationType = UITextAutocapitalizationType.none
@@ -119,7 +106,35 @@ final class SignViewController: UIViewController {
         Task { await signIn() }
     }
 
-    // MARK: - Sign In
+    // NEW: IBAction for “Sign Up” button at the bottom
+    // Connect your button’s Touch Up Inside to this action (signUpSwitch:)
+    @IBAction private func signUpSwitch(_ sender: UIButton) {
+        let nibName = "SignUpViewController"
+        let vc: SignUpViewController
+        if Bundle.main.path(forResource: nibName, ofType: "nib") != nil ||
+            Bundle.main.path(forResource: nibName, ofType: "xib") != nil {
+            vc = SignUpViewController(nibName: nibName, bundle: nil)
+        } else {
+            vc = SignUpViewController(service: SignUpService())
+        }
+        vc.title = "Sign Up"
+        vc.hidesBottomBarWhenPushed = true
+
+        if let nav = navigationController {
+            nav.pushViewController(vc, animated: true)
+        } else {
+            let nav = UINavigationController(rootViewController: vc)
+            nav.modalPresentationStyle = .fullScreen
+            present(nav, animated: true)
+        }
+    }
+
+    // MARK: - Back to Profile
+    @objc private func backToProfile() {
+        routeToProfileTab()
+    }
+
+    // MARK: - Sign In (email/password)
     private func signIn() async {
         let email: String = signInEmailText.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let password: String = signInPasswordText.text ?? ""
@@ -145,52 +160,47 @@ final class SignViewController: UIViewController {
                 email: email
             )
 
+            // Sanity-check the session is live
+            _ = try await SupabaseManager.shared.client.auth.session
+
             routeToProfileTab()
         } catch {
             presentAlert(title: "Sign In Failed", message: error.localizedDescription)
         }
     }
 
-    // MARK: - Google Sign In
+    // MARK: - Google Sign In (native token exchange)
 #if canImport(GoogleSignIn)
     @MainActor
     private func handleGoogleSignIn() async {
         isLoading = true
         defer { isLoading = false }
 
-        // Read Google Client ID from Info.plist
         guard let clientID = Bundle.main.infoDictionary?["GIDClientID"] as? String, !clientID.isEmpty else {
             presentAlert(title: "Configuration Error", message: "Google Client ID not configured.")
             return
         }
 
-        // Configure Google Sign-In
         GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: clientID)
 
-        // Presenting view controller
-        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-              let rootViewController = windowScene.windows.first?.rootViewController else {
-            presentAlert(title: "Sign In Error", message: "Unable to find a presenting view controller.")
-            return
-        }
-
         do {
-            // Start Google Sign-In
-            let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: rootViewController)
+            // Present from self to avoid nil presenter issues
+            let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: self)
 
-            // Get tokens
             guard let idToken = result.user.idToken?.tokenString else {
                 presentAlert(title: "Sign In Error", message: "Missing Google ID token.")
                 return
             }
             let accessToken = result.user.accessToken.tokenString
 
-            // Exchange with Supabase and route
             let session = try await signInService.signInWithGoogle(idToken: idToken, accessToken: accessToken)
             try await signInService.upsertInitialProfile(userId: session.user.id.uuidString, email: session.user.email ?? "")
+
+            // Sanity-check the session is live
+            _ = try await SupabaseManager.shared.client.auth.session
+
             routeToProfileTab()
         } catch {
-            // Handle cancel or failure
             if (error as NSError).code == GIDSignInError.canceled.rawValue { return }
             presentAlert(title: "Google Sign In Failed", message: error.localizedDescription)
         }
@@ -201,19 +211,15 @@ final class SignViewController: UIViewController {
     private func autoRouteIfAlreadySignedIn() async {
         do {
             let session = try await SupabaseManager.shared.client.auth.session
-            // If we have a valid user, route away from Sign In
             _ = session.user
-            print("[Auth] Existing session detected: \(session.user.id.uuidString)")
             await MainActor.run { self.routeToProfileTab() }
         } catch {
             // No session; stay on sign-in
-            print("[Auth] No existing session: \(error.localizedDescription)")
         }
     }
     
     // MARK: - Routing to Profile tab
     private func routeToProfileTab() {
-        // Replace with your actual Profile tab index
         let profileTabIndex = 1
 
         if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
