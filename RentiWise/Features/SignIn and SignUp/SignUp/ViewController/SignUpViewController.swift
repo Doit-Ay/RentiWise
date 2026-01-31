@@ -7,6 +7,10 @@
 
 import UIKit
 import Supabase
+#if canImport(GoogleSignIn)
+import GoogleSignIn
+import GoogleSignInSwift
+#endif
 
 @MainActor
 final class SignUpViewController: UIViewController {
@@ -19,6 +23,7 @@ final class SignUpViewController: UIViewController {
 
     private let validation = AuthValidationService()
     private var signUpService: SignUpServicing
+    private var isLoading: Bool = false
 
     // Designated DI initializer
     init(service: SignUpServicing) {
@@ -46,7 +51,13 @@ final class SignUpViewController: UIViewController {
         signUpNumberText?.keyboardType = .phonePad
     }
 
-    @IBAction private func GoogleSignIn(_ sender: UIButton) {}
+    @IBAction private func GoogleSignIn(_ sender: UIButton) {
+#if canImport(GoogleSignIn)
+        Task { await handleGoogleSignIn() }
+#else
+        presentAlert(title: "Unavailable", message: "Google Sign-In is not available in this build.")
+#endif
+    }
     @IBAction private func AppleSignIn(_ sender: UIButton) {}
 
     @IBAction private func signUpTapped(_ sender: UIButton) {
@@ -120,6 +131,54 @@ final class SignUpViewController: UIViewController {
         }
     }
 
+    // MARK: - Google Sign In
+#if canImport(GoogleSignIn)
+    @MainActor
+    private func handleGoogleSignIn() async {
+        isLoading = true
+        defer { isLoading = false }
+
+        guard let clientID = Bundle.main.infoDictionary?["GIDClientID"] as? String, !clientID.isEmpty else {
+            presentAlert(title: "Configuration Error", message: "Google Client ID not configured.")
+            return
+        }
+
+        GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: clientID)
+
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let rootViewController = windowScene.windows.first?.rootViewController else {
+            presentAlert(title: "Sign In Error", message: "Unable to find a presenting view controller.")
+            return
+        }
+
+        do {
+            let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: rootViewController)
+            guard let idToken = result.user.idToken?.tokenString else {
+                presentAlert(title: "Sign In Error", message: "Missing Google ID token.")
+                return
+            }
+            let accessToken = result.user.accessToken.tokenString
+
+            do {
+                let signInService = SignInService()
+                let session: Session = try await signInService.signInWithGoogle(idToken: idToken, accessToken: accessToken)
+                try await signInService.upsertInitialProfile(userId: session.user.id.uuidString, email: session.user.email ?? "")
+                routeToProfileTab()
+            } catch {
+                presentAlert(title: "Google Sign In Failed", message: error.localizedDescription)
+            }
+        } catch {
+            if (error as NSError).code == GIDSignInError.canceled.rawValue { return }
+            presentAlert(title: "Google Sign In Failed", message: error.localizedDescription)
+        }
+    }
+#else
+    @MainActor
+    private func handleGoogleSignIn() async {
+        presentAlert(title: "Unavailable", message: "Google Sign-In is not available in this build.")
+    }
+#endif
+
     // MARK: - Routing to Profile tab
     private func routeToProfileTab() {
         // Replace with your actual Profile tab index
@@ -172,3 +231,4 @@ final class SignUpViewController: UIViewController {
         present(a, animated: true)
     }
 }
+

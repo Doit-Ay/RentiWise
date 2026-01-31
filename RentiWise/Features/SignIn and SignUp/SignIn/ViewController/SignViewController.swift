@@ -7,9 +7,17 @@
 
 import UIKit
 import Supabase
+#if canImport(GoogleSignIn)
+import GoogleSignIn
+#endif
+#if canImport(GoogleSignInSwift)
+import GoogleSignInSwift
+#endif
 
 @MainActor
 final class SignViewController: UIViewController {
+
+    private var isLoading: Bool = false
 
     // MARK: - Routing Context
     enum RoutingContext {
@@ -77,9 +85,20 @@ final class SignViewController: UIViewController {
         signInEmailText?.autocapitalizationType = UITextAutocapitalizationType.none
         signInPasswordText?.isSecureTextEntry = true
     }
+    
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        Task { await autoRouteIfAlreadySignedIn() }
+    }
 
     // MARK: - Actions
-    @IBAction private func GoogleSignIn(_ sender: UIButton) {}
+    @IBAction private func GoogleSignIn(_ sender: UIButton) {
+#if canImport(GoogleSignIn)
+        Task { await handleGoogleSignIn() }
+#else
+        presentAlert(title: "Unavailable", message: "Google Sign-In isn't available in this build. Add the GoogleSignIn package to enable it.")
+#endif
+    }
     @IBAction private func AppleSignIn(_ sender: UIButton) {}
 
     @IBAction private func forgotPassword(_ sender: UIButton) {
@@ -132,6 +151,66 @@ final class SignViewController: UIViewController {
         }
     }
 
+    // MARK: - Google Sign In
+#if canImport(GoogleSignIn)
+    @MainActor
+    private func handleGoogleSignIn() async {
+        isLoading = true
+        defer { isLoading = false }
+
+        // Read Google Client ID from Info.plist
+        guard let clientID = Bundle.main.infoDictionary?["GIDClientID"] as? String, !clientID.isEmpty else {
+            presentAlert(title: "Configuration Error", message: "Google Client ID not configured.")
+            return
+        }
+
+        // Configure Google Sign-In
+        GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: clientID)
+
+        // Presenting view controller
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let rootViewController = windowScene.windows.first?.rootViewController else {
+            presentAlert(title: "Sign In Error", message: "Unable to find a presenting view controller.")
+            return
+        }
+
+        do {
+            // Start Google Sign-In
+            let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: rootViewController)
+
+            // Get tokens
+            guard let idToken = result.user.idToken?.tokenString else {
+                presentAlert(title: "Sign In Error", message: "Missing Google ID token.")
+                return
+            }
+            let accessToken = result.user.accessToken.tokenString
+
+            // Exchange with Supabase and route
+            let session = try await signInService.signInWithGoogle(idToken: idToken, accessToken: accessToken)
+            try await signInService.upsertInitialProfile(userId: session.user.id.uuidString, email: session.user.email ?? "")
+            routeToProfileTab()
+        } catch {
+            // Handle cancel or failure
+            if (error as NSError).code == GIDSignInError.canceled.rawValue { return }
+            presentAlert(title: "Google Sign In Failed", message: error.localizedDescription)
+        }
+    }
+#endif
+
+    // MARK: - Auto-route if already authenticated
+    private func autoRouteIfAlreadySignedIn() async {
+        do {
+            let session = try await SupabaseManager.shared.client.auth.session
+            // If we have a valid user, route away from Sign In
+            _ = session.user
+            print("[Auth] Existing session detected: \(session.user.id.uuidString)")
+            await MainActor.run { self.routeToProfileTab() }
+        } catch {
+            // No session; stay on sign-in
+            print("[Auth] No existing session: \(error.localizedDescription)")
+        }
+    }
+    
     // MARK: - Routing to Profile tab
     private func routeToProfileTab() {
         // Replace with your actual Profile tab index
@@ -185,3 +264,4 @@ final class SignViewController: UIViewController {
         present(a, animated: true)
     }
 }
+

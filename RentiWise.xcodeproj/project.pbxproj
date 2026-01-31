@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		1518AE152F2E3B480032BD24 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 1518AE142F2E3B480032BD24 /* GoogleSignIn */; };
+		1518AE172F2E3B480032BD24 /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 1518AE162F2E3B480032BD24 /* GoogleSignInSwift */; };
 		3FC24E382ECA663900D45808 /* Auth in Frameworks */ = {isa = PBXBuildFile; productRef = 3FC24E372ECA663900D45808 /* Auth */; };
 		3FC24E3A2ECA663900D45808 /* Functions in Frameworks */ = {isa = PBXBuildFile; productRef = 3FC24E392ECA663900D45808 /* Functions */; };
 		3FC24E3C2ECA663900D45808 /* PostgREST in Frameworks */ = {isa = PBXBuildFile; productRef = 3FC24E3B2ECA663900D45808 /* PostgREST */; };
@@ -77,9 +79,11 @@
 				3FC24E3C2ECA663900D45808 /* PostgREST in Frameworks */,
 				3FC24E3A2ECA663900D45808 /* Functions in Frameworks */,
 				3FC24E422ECA663900D45808 /* Supabase in Frameworks */,
+				1518AE172F2E3B480032BD24 /* GoogleSignInSwift in Frameworks */,
 				3FC24E382ECA663900D45808 /* Auth in Frameworks */,
 				3FC24E402ECA663900D45808 /* Storage in Frameworks */,
 				3FC24E3E2ECA663900D45808 /* Realtime in Frameworks */,
+				1518AE152F2E3B480032BD24 /* GoogleSignIn in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -100,12 +104,20 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		1518AE132F2E3B480032BD24 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		3FE49D562EA2FA5C00C11A8F = {
 			isa = PBXGroup;
 			children = (
 				3FE49D612EA2FA5C00C11A8F /* RentiWise */,
 				3FE49D782EA2FA5D00C11A8F /* RentiWiseTests */,
 				3FE49D822EA2FA5D00C11A8F /* RentiWiseUITests */,
+				1518AE132F2E3B480032BD24 /* Frameworks */,
 				3FE49D602EA2FA5C00C11A8F /* Products */,
 			);
 			sourceTree = "<group>";
@@ -146,6 +158,8 @@
 				3FC24E3D2ECA663900D45808 /* Realtime */,
 				3FC24E3F2ECA663900D45808 /* Storage */,
 				3FC24E412ECA663900D45808 /* Supabase */,
+				1518AE142F2E3B480032BD24 /* GoogleSignIn */,
+				1518AE162F2E3B480032BD24 /* GoogleSignInSwift */,
 			);
 			productName = RentiWise;
 			productReference = 3FE49D5F2EA2FA5C00C11A8F /* RentiWise.app */;
@@ -231,6 +245,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				3FC24E362ECA663800D45808 /* XCRemoteSwiftPackageReference "supabase-swift" */,
+				1518AE122F2E3B0E0032BD24 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 3FE49D602EA2FA5C00C11A8F /* Products */;
@@ -617,6 +632,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		1518AE122F2E3B0E0032BD24 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/google/GoogleSignIn-iOS";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 9.1.0;
+			};
+		};
 		3FC24E362ECA663800D45808 /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/supabase-community/supabase-swift";
@@ -628,6 +651,16 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		1518AE142F2E3B480032BD24 /* GoogleSignIn */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 1518AE122F2E3B0E0032BD24 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignIn;
+		};
+		1518AE162F2E3B480032BD24 /* GoogleSignInSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 1518AE122F2E3B0E0032BD24 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignInSwift;
+		};
 		3FC24E372ECA663900D45808 /* Auth */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 3FC24E362ECA663800D45808 /* XCRemoteSwiftPackageReference "supabase-swift" */;
