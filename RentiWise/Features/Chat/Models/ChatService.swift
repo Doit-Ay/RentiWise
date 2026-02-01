@@ -52,71 +52,143 @@ final class ChatServiceV2 {
    }
 
    // Enforce item-based conversations so lender/borrower roles are always correct.
-   // If itemId is missing, we fail instead of creating an ambiguous row.
-    func getOrCreateConversation(withUserId otherId: String, itemId: String?) async throws -> ChatConversation {
-        guard let currentUserId = await SupabaseManager.shared.currentUserId() else {
-            throw ChatServiceError.notAuthenticated
-        }
+   // If itemId is missing, we keep a generic 1:1 legacy flow but still prevent self-chat.
+   func getOrCreateConversation(withUserId otherId: String, itemId: String?) async throws -> ChatConversation {
+       guard let currentUserId = await SupabaseManager.shared.currentUserId() else {
+           throw ChatServiceError.notAuthenticated
+       }
+       
+       print("[ChatService] getOrCreateConversation - currentUserId=\(currentUserId), otherId=\(otherId), itemId=\(itemId ?? "nil")")
 
-        // If we have an item, keep strict item-based conversation (recommended)
-        if let itemId, !itemId.isEmpty {
-            // Resolve owner for the item; owner is the lender.
-            let itemResp = try await client
-                .from("items")
-                .select("owner_id")
-                .eq("id", value: itemId)
-                .single()
-                .execute()
-            let owner = try decoder.decode(ItemOwnerDTO.self, from: itemResp.data).owner_id
+       // Prevent obvious self-chat regardless of path
+       if currentUserId == otherId {
+           print("[ChatService] ERROR: Self-chat detected! currentUserId == otherId")
+           throw ChatServiceError.conversationNotFound // or a dedicated selfChat error if you prefer
+       }
 
-            let lenderId = owner
-            let borrowerId = (currentUserId == owner) ? otherId : currentUserId
+       // ITEM-BOUND CONVERSATION (recommended)
+       if let itemId, !itemId.isEmpty {
+           print("[ChatService] Item-bound conversation - fetching owner for itemId=\(itemId)")
+           
+           // 1) Resolve item owner (this is the lender, always)
+           let itemResp = try await client
+               .from("items")
+               .select("owner_id")
+               .eq("id", value: itemId)
+               .single()
+               .execute()
+           let owner = try decoder.decode(ItemOwnerDTO.self, from: itemResp.data).owner_id
+           let lenderId = owner
+           
+           print("[ChatService] Item owner (lenderId) = \(lenderId)")
 
-            print("[GetOrCreate] strict item flow currentUser=\(currentUserId) owner=\(owner) other=\(otherId) lender=\(lenderId) borrower=\(borrowerId) itemId=\(itemId)")
+           // 2) Determine borrower:
+           // - If current user is the owner, then otherId must be the borrower (and must not equal owner).
+           // - Otherwise, current user is the borrower.
+           let borrowerId: String
+           if currentUserId.lowercased() == owner.lowercased() {
+               print("[ChatService] Current user IS the owner - otherId should be borrower")
+               // Owner initiating chat: otherId must be the borrower id
+               guard otherId.lowercased() != owner.lowercased() else {
+                   print("[ChatService] ERROR: Owner trying to chat with themselves! otherId=\(otherId) == owner=\(owner)")
+                   throw ChatServiceError.conversationNotFound // refuse to create self-chat
+               }
+               borrowerId = otherId
+               print("[ChatService] borrowerId set to otherId = \(borrowerId)")
+           } else {
+               print("[ChatService] Current user is NOT the owner - they are the borrower")
+               // Borrower initiating chat: they are the borrower
+               borrowerId = currentUserId
+               print("[ChatService] borrowerId set to currentUserId = \(borrowerId)")
+               // Optional sanity: ensure otherId matches the owner we resolved
+               // If UI passed a different otherId, we still keep lender = owner.
+           }
 
-            if let existing = try? await fetchSingleConversation(lenderId: lenderId, borrowerId: borrowerId, itemId: itemId) {
-                return existing
-            }
+           // Final guard (defensive)
+           guard lenderId != borrowerId else {
+               print("[ChatService] ERROR: Final validation failed! lenderId=\(lenderId) == borrowerId=\(borrowerId)")
+               throw ChatServiceError.conversationNotFound
+           }
+           
+           print("[ChatService] Final roles: lenderId=\(lenderId), borrowerId=\(borrowerId)")
 
-            let payload = NewConversationPayload(lender_id: lenderId, borrower_id: borrowerId, item_id: itemId)
-            let createResponse = try await client
-                .from("chat_conversations")
-                .insert(payload)
-                .select()
-                .single()
-                .execute()
-            return try decoder.decode(ChatConversation.self, from: createResponse.data)
-        }
+           // 3) Try existing conversation first (unique per lender/borrower/item)
+           print("[ChatService] Checking for existing conversation...")
+           if let existing = try? await fetchSingleConversation(lenderId: lenderId, borrowerId: borrowerId, itemId: itemId) {
+               // Validate existing conversation doesn't have self-chat (corrupted data)
+               if existing.lender_id == existing.borrower_id {
+                   print("[ChatService] WARNING: Found INVALID existing conversation (self-chat). id=\(existing.id), lender=borrower=\(existing.lender_id)")
+                   print("[ChatService] Will create a new valid conversation instead.")
+                   // Don't return the bad conversation; fall through to create a new one
+               } else {
+                   print("[ChatService] Found existing conversation: id=\(existing.id), lender=\(existing.lender_id), borrower=\(existing.borrower_id)")
+                   return existing
+               }
+           }
 
-        // Fallback (legacy) when itemId is missing: try to find an existing conversation regardless of role order for null item_id
-        print("[GetOrCreate] fallback (no item) currentUser=\(currentUserId) other=\(otherId)")
-        do {
-            let resp = try await client
-                .from("chat_conversations")
-                .select()
-                .or("and(lender_id.eq.\(currentUserId),borrower_id.eq.\(otherId)),and(lender_id.eq.\(otherId),borrower_id.eq.\(currentUserId))")
-                .filter("item_id", operator: "is", value: "null")
-                .limit(1)
-                .execute()
-            let rows = try decoder.decode([ChatConversation].self, from: resp.data)
-            if let found = rows.first { return found }
-        } catch {
-            // ignore and proceed to create
-        }
+           // 4) Create new - but handle race condition where conversation was just created
+           print("[ChatService] Creating NEW conversation with lender=\(lenderId), borrower=\(borrowerId), item=\(itemId)")
+           let payload = NewConversationPayload(lender_id: lenderId, borrower_id: borrowerId, item_id: itemId)
+           
+           do {
+               let createResponse = try await client
+                   .from("chat_conversations")
+                   .insert(payload)
+                   .select()
+                   .single()
+                   .execute()
+               let newConvo = try decoder.decode(ChatConversation.self, from: createResponse.data)
+               print("[ChatService] Created conversation: id=\(newConvo.id), lender=\(newConvo.lender_id), borrower=\(newConvo.borrower_id)")
+               return newConvo
+           } catch {
+               // If creation failed (likely duplicate key), try to fetch the existing one again
+               print("[ChatService] Create failed (likely duplicate): \(error)")
+               print("[ChatService] Attempting to fetch existing conversation again...")
+               
+               if let existing = try? await fetchSingleConversation(lenderId: lenderId, borrowerId: borrowerId, itemId: itemId) {
+                   print("[ChatService] Found existing conversation on retry: id=\(existing.id)")
+                   return existing
+               }
+               
+               // If we still can't find it, throw the original error
+               throw error
+           }
+       }
 
-        // Create a new conversation with a consistent role assignment: pick the lexicographically smaller id as lender for stability
-        let lenderId = min(currentUserId, otherId)
-        let borrowerId = (lenderId == currentUserId) ? otherId : currentUserId
-        print("[GetOrCreate] creating fallback conversation lender=\(lenderId) borrower=\(borrowerId)")
-        let payload = NewConversationPayload(lender_id: lenderId, borrower_id: borrowerId, item_id: nil)
-        let createResponse = try await client
-            .from("chat_conversations")
-            .insert(payload)
-            .select()
-            .single()
-            .execute()
-        return try decoder.decode(ChatConversation.self, from: createResponse.data)
-    }
+       // LEGACY FALLBACK (no item): generic 1:1 chat with stable role assignment and self-chat prevention
+       // Keep a consistent ordering to avoid duplicates; still prevent self-chat.
+       let lenderId = min(currentUserId, otherId)
+       let borrowerId = (lenderId == currentUserId) ? otherId : currentUserId
+
+       guard lenderId != borrowerId else {
+           throw ChatServiceError.conversationNotFound
+       }
+
+       // Try to find an existing conversation (item_id IS NULL) regardless of role order
+       do {
+           let resp = try await client
+               .from("chat_conversations")
+               .select()
+               .or("and(lender_id.eq.\(currentUserId),borrower_id.eq.\(otherId)),and(lender_id.eq.\(otherId),borrower_id.eq.\(currentUserId))")
+               .filter("item_id", operator: "is", value: "null")
+               .limit(1)
+               .execute()
+           let rows = try decoder.decode([ChatConversation].self, from: resp.data)
+           if let found = rows.first { return found }
+       } catch {
+           // ignore and proceed to create
+       }
+
+       // Create a new generic conversation
+       let payload = NewConversationPayload(lender_id: lenderId, borrower_id: borrowerId, item_id: nil)
+       let createResponse = try await client
+           .from("chat_conversations")
+           .insert(payload)
+           .select()
+           .single()
+           .execute()
+       return try decoder.decode(ChatConversation.self, from: createResponse.data)
+   }
 
    private func fetchSingleConversation(lenderId: String, borrowerId: String, itemId: String?) async throws -> ChatConversation {
        var query = client
@@ -128,7 +200,6 @@ final class ChatServiceV2 {
        if let itemId, !itemId.isEmpty {
            query = query.eq("item_id", value: itemId)
        } else {
-           // Not used in enforced item-chat flow; keep null filter for safety.
            query = query.filter("item_id", operator: "is", value: "null")
        }
 
@@ -283,4 +354,3 @@ enum ChatServiceError: Error, LocalizedError {
        }
    }
 }
-

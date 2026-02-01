@@ -17,7 +17,7 @@ final class DistanceService {
     static let shared = DistanceService()
 
     // MARK: - Config
-    private let ttl: TimeInterval = 7 * 24 * 60 * 60 // 7 days
+    private let ttl: TimeInterval = 30 * 24 * 60 * 60 // 30 days (distance rarely changes)
     private let transportType: MKDirectionsTransportType = .automobile
 
     // Full geocodable default viewer address (adjust to your preferred default).
@@ -35,41 +35,22 @@ final class DistanceService {
 
     private init(client: SupabaseClient = SupabaseManager.shared.client) {
         self.client = client
-        geocodeCache.countLimit = 128
-        directionsCache.countLimit = 256
+        geocodeCache.countLimit = 256  // Increased from 128
+        directionsCache.countLimit = 512  // Increased from 256
     }
 
     // MARK: - Public API
 
     /// Returns a formatted distance string like "2.3 km" or "850 m".
     /// Owner-level cache (item_id = null).
-    func distanceText(for item: Item) async -> String? {
-        // 0) Ensure we have some viewer address; if not, seed a default one.
+    func distanceText(for item: Item) async -> String {
+        // 0) Get viewer address and user ID
         let viewerAddressString = SavedAddressesStore.shared.getDefaultSelectedAddress()?.trimmingCharacters(in: .whitespacesAndNewlines)
         let viewerAddress = (viewerAddressString?.isEmpty == false) ? viewerAddressString! : defaultViewerAddress
-
-        // 1) Resolve owner coords with fallback
-        var ownerCoord = await fetchOwnerCoordinate(ownerId: item.owner_id)
-        if ownerCoord == nil {
-            ownerCoord = fallbackOwnerCoordinate
-        }
-        let resolvedOwnerCoord = ownerCoord!
-
-        // 2) Resolve viewer coords with fallback (no await chaining)
-        var viewerCoord = await geocodeAddressString(viewerAddress)
-        if viewerCoord == nil {
-            viewerCoord = await geocodeAddressString(defaultViewerAddress)
-        }
-        if viewerCoord == nil {
-            viewerCoord = fallbackOwnerCoordinate
-        }
-        let resolvedViewerCoord = viewerCoord!
-
-        // 3) Build a stable key/hash for viewer address
         let viewerAddressHash = normalizeAddressKey(viewerAddress)
-
-        // 4) If logged in, try DB cache first
         let viewerUserId = await SupabaseManager.shared.currentUserId()
+
+        // 1) FAST PATH: Check DB cache first (no geocoding needed!)
         if let viewerUserId {
             if let cached = await fetchCachedDistanceMeters(
                 viewerUserId: viewerUserId,
@@ -83,7 +64,25 @@ final class DistanceService {
             }
         }
 
-        // 5) Try in-memory directions cache
+        // 2) SLOW PATH: Need to geocode and calculate
+        // Resolve owner coords with fallback
+        var ownerCoord = await fetchOwnerCoordinate(ownerId: item.owner_id)
+        if ownerCoord == nil {
+            ownerCoord = fallbackOwnerCoordinate
+        }
+        let resolvedOwnerCoord = ownerCoord!
+
+        // Resolve viewer coords with fallback
+        var viewerCoord = await geocodeAddressString(viewerAddress)
+        if viewerCoord == nil {
+            viewerCoord = await geocodeAddressString(defaultViewerAddress)
+        }
+        if viewerCoord == nil {
+            viewerCoord = fallbackOwnerCoordinate
+        }
+        let resolvedViewerCoord = viewerCoord!
+
+        // 3) Try in-memory directions cache
         let memKey = directionsCacheKey(viewer: resolvedViewerCoord, owner: resolvedOwnerCoord, transport: transportType)
         if let meters = directionsCache.object(forKey: memKey as NSString)?.doubleValue {
             if let viewerUserId {
@@ -101,7 +100,7 @@ final class DistanceService {
             return formatDistance(meters: meters)
         }
 
-        // 6) Compute road distance
+        // 4) Compute road distance
         if let meters = await routeDistanceMeters(from: resolvedViewerCoord, to: resolvedOwnerCoord, transport: transportType) {
             directionsCache.setObject(NSNumber(value: meters), forKey: memKey as NSString)
             if let viewerUserId {
@@ -117,7 +116,7 @@ final class DistanceService {
             return formatDistance(meters: meters)
         }
 
-        // 7) Fallback: straight-line distance (always available because we ensured both coords)
+        // 5) Fallback: straight-line distance
         let straight = resolvedViewerCoord.distance(from: resolvedOwnerCoord)
         if let viewerUserId {
             await upsertDistanceMeters(
@@ -310,10 +309,10 @@ final class DistanceService {
         do {
             _ = try await client
                 .from("user_item_distances")
-                .insert(payload)
+                .upsert(payload)
                 .execute()
         } catch {
-            // ignore
+            // ignore - cache update failures shouldn't break the app
         }
     }
 

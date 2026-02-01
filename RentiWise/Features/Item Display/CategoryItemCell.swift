@@ -217,7 +217,7 @@ final class CategoryItemCell: UITableViewCell {
         // 2) Async compute using DistanceService; it already caches geocoding/routing/DB
         Task { [weak self] in
             guard let self else { return }
-            let text = await DistanceService.shared.distanceText(for: item) ?? "—"
+            let text = await DistanceService.shared.distanceText(for: item)
             // Cache for subsequent rows with same owner
             CategoryItemCell.distanceCache.setObject(text as NSString, forKey: ownerKey)
 

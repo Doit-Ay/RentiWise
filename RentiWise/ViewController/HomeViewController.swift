@@ -1167,13 +1167,10 @@ private extension HomeViewController {
         ratingLabel?.attributedText = makeYellowStarRatingText(valueText: "4.5", reviewsText: "(23)")
 
         // Distance: fetch road distance asynchronously and update label
-        distanceLabel?.text = nil
+        distanceLabel?.text = "..."
         Task { [weak distanceLabel] in
-            if let text = await DistanceService.shared.distanceText(for: item) {
-                await MainActor.run { distanceLabel?.text = text }
-            } else {
-                await MainActor.run { distanceLabel?.text = nil }
-            }
+            let text = await DistanceService.shared.distanceText(for: item)
+            await MainActor.run { distanceLabel?.text = text }
         }
 
         if let path = item.images.first, let url = StorageURLBuilder.publicFileURL(for: path) {
@@ -1891,14 +1888,11 @@ private final class TrendingItemCell: UICollectionViewCell {
         ratingLabel.text = "4.8"
 
         // Distance: fetch road distance asynchronously
-        distanceLabel.text = nil
+        distanceLabel.text = "..."
         Task { [weak self] in
             guard let self = self else { return }
-            if let text = await DistanceService.shared.distanceText(for: item) {
-                await MainActor.run { self.distanceLabel.text = text }
-            } else {
-                await MainActor.run { self.distanceLabel.text = nil }
-            }
+            let text = await DistanceService.shared.distanceText(for: item)
+            await MainActor.run { self.distanceLabel.text = text }
         }
 
         if let path = item.images.first, let url = StorageURLBuilder.publicFileURL(for: path) {

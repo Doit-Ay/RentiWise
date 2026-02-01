@@ -375,57 +375,49 @@ class BookingApprovalViewController: UIViewController {
         // Borrower cannot deny here; status comes from owner and DB.
     }
 
-    @IBAction func ViewHideCodeButton(_ sender: UIButton) {
-        let isCurrentlyShowingCode = (sender.title(for: .normal) ?? "") == "Hide Code"
-        let shouldShowCode = !isCurrentlyShowingCode
+    // Centralized chat opener that derives the correct mode and passes the right parameters.
+    private func openChatSafely() {
+        guard let req = self.request else { return }
 
-        sender.setTitle(shouldShowCode ? "Hide Code" : "View Code", for: .normal)
+        Task {
+            // Derive role at the moment of opening to avoid stale mode
+            let me = await SupabaseManager.shared.currentUserId()
+            let isOwner = (me?.lowercased() == req.owner_id.lowercased())
+            let derivedMode: PresentationMode = isOwner ? .history : .myRentals
+            
+            print("[BookingApproval] openChatSafely - me=\(me ?? "nil"), itemOwnerId=\(req.owner_id), borrowerId=\(req.borrower_id)")
+            print("[BookingApproval] isOwner=\(isOwner), derivedMode=\(derivedMode)")
 
-        if shouldShowCode {
-            codeStackCollapseConstraint?.isActive = false
-            codestack.isHidden = false
-            viewCodeHeight?.constant = expandedViewCodeHeight
-            viewCodeHeight?.isActive = true
-        } else {
-            codeStackCollapseConstraint?.isActive = true
-            codestack.isHidden = true
-            viewCodeHeight?.constant = collapsedViewCodeHeight
-            viewCodeHeight?.isActive = true
-        }
+            await MainActor.run { self.mode = derivedMode }
 
-        UIView.animate(withDuration: 0.25) {
-            self.view.layoutIfNeeded()
+            // Borrower path: pass only itemId (helper resolves owner as other user)
+            if derivedMode == .myRentals {
+                print("[BookingApproval] Chat open as borrower. itemId=\(req.item_id)")
+                ChatThreadViewController.open(from: self, itemId: req.item_id)
+                return
+            }
+
+            // Owner path: must pass borrower_id; guard against missing/invalid
+            let borrower = req.borrower_id.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !borrower.isEmpty, borrower.lowercased() != req.owner_id.lowercased() else {
+                print("[BookingApproval] ERROR: Invalid borrower! borrower=\(borrower), owner=\(req.owner_id)")
+                let ac = UIAlertController(title: "Chat", message: "Borrower not specified for this item.", preferredStyle: .alert)
+                ac.addAction(UIAlertAction(title: "OK", style: .default))
+                await MainActor.run { self.present(ac, animated: true) }
+                return
+            }
+
+            print("[BookingApproval] Chat open as owner. itemId=\(req.item_id) borrowerId=\(borrower)")
+            ChatThreadViewController.open(from: self, itemId: req.item_id, otherUserId: borrower)
         }
     }
 
     @objc private func openChat() {
-        guard let req = self.request else { return }
-
-        // Choose the "other" participant strictly by screen mode:
-        // - My Rentals: borrower chatting with owner
-        // - History: owner chatting with borrower
-        let otherUserId: String = (self.mode == .myRentals) ? req.owner_id : req.borrower_id
-
-        // Defensive logging to track otherUserId computation
-        Task {
-            let currentUserId = await SupabaseManager.shared.currentUserId() ?? "nil"
-            print("[OpenChat] mode=\(mode) currentUser=\(currentUserId) owner=\(req.owner_id) borrower=\(req.borrower_id) other=\(otherUserId) itemId=\(req.item_id)")
-        }
-
-        // Instantiate the chat thread controller
-        let chatVC = ChatThreadViewController()
-        chatVC.otherUserId = otherUserId
-        chatVC.itemId = req.item_id
-        chatVC.title = "Chat"
-
-        // Present full screen to keep tab bar hidden
-        let nav = UINavigationController(rootViewController: chatVC)
-        nav.modalPresentationStyle = .fullScreen
-        self.present(nav, animated: true)
+        openChatSafely()
     }
 
     @IBAction func openChatButtonTapped(_ sender: Any) {
-        openChat()
+        openChatSafely()
     }
     
     @IBAction func paymentbuttontapped(_ sender: UIButton) {
@@ -1265,3 +1257,4 @@ extension UIView {
         self.layer.masksToBounds = true
     }
 }
+

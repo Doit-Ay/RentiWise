@@ -298,17 +298,12 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         ratingReviewsLabel?.text = unifiedReviewsText
 
         // Distance: compute via DistanceService for both top and right labels
-        setDistanceLabels(nil) // clear while loading
+        setDistanceLabels("...") // show loading indicator
         Task { [weak self] in
             guard let self = self else { return }
-            if let text = await DistanceService.shared.distanceText(for: item) {
-                await MainActor.run {
-                    self.setDistanceLabels(text)
-                }
-            } else {
-                await MainActor.run {
-                    self.setDistanceLabels(nil)
-                }
+            let text = await DistanceService.shared.distanceText(for: item)
+            await MainActor.run {
+                self.setDistanceLabels(text)
             }
         }
 

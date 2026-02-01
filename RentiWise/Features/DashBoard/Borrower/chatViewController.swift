@@ -11,6 +11,7 @@ import Supabase
 final class ChatThreadViewController: UIViewController {
 
     // Context passed by caller
+    // Required: otherUserId (the other participant), itemId (the item for item-bound chat)
     var otherUserId: String?
     var itemId: String?
 
@@ -200,23 +201,43 @@ final class ChatThreadViewController: UIViewController {
         let uid = await SupabaseManager.shared.currentUserId()
         await MainActor.run { self.currentUserId = uid }
 
-        guard let other = otherUserId else {
-            await MainActor.run {
-                self.presentError("Missing other user.")
-            }
+        // Validate parameters early and loudly
+        guard let me = uid else {
+            await MainActor.run { self.presentError("Please sign in to chat.") }
+            return
+        }
+
+        let other = otherUserId?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let item = itemId?.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        print("[Chat] open params -> me=\(me) other=\(other ?? "nil") itemId=\(item ?? "nil")")
+
+        // Basic validation: must have other != me; item required for item-bound chat in this app
+        if let other, !other.isEmpty, other == me {
+            await MainActor.run { self.presentError("Cannot chat with yourself.") }
+            return
+        }
+        guard let other, !other.isEmpty else {
+            await MainActor.run { self.presentError("Missing other participant.") }
+            return
+        }
+        guard let item, !item.isEmpty else {
+            await MainActor.run { self.presentError("Missing item context for chat.") }
             return
         }
 
         do {
             // Require itemId to ensure correct lender/borrower pairing
-            let convo = try await ChatServiceV2.shared.getOrCreateConversation(withUserId: other, itemId: itemId)
+            let convo = try await ChatServiceV2.shared.getOrCreateConversation(withUserId: other, itemId: item)
             await MainActor.run {
                 self.conversation = convo
+                print("[Chat] conversation id=\(convo.id) item=\(convo.item_id ?? "nil") lender=\(convo.lender_id) borrower=\(convo.borrower_id)")
             }
 
             // Load messages
             let loaded = try await ChatServiceV2.shared.fetchMessages(conversationId: convo.id)
             await MainActor.run {
+                print("[Chat] loaded messages count=\(loaded.count)")
                 self.messages = loaded
                 self.tableView.reloadData()
                 self.scrollToBottom(animated: false)
@@ -238,7 +259,10 @@ final class ChatThreadViewController: UIViewController {
         Task {
             let text = (inputField.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             guard !text.isEmpty else { return }
-            guard let convoId = conversation?.id else { return }
+            guard let convoId = conversation?.id else {
+                await MainActor.run { self.presentError("Chat is not ready yet.") }
+                return
+            }
 
             // Optimistic UX: clear input immediately
             await MainActor.run { self.inputField.text = nil }
@@ -246,6 +270,7 @@ final class ChatThreadViewController: UIViewController {
             do {
                 let sent = try await ChatServiceV2.shared.sendMessage(conversationId: convoId, text: text)
                 await MainActor.run {
+                    print("[Chat] sent message id=\(sent.id) convo=\(sent.conversation_id)")
                     self.messages.append(sent)
                     self.tableView.reloadData()
                     self.scrollToBottom(animated: true)
@@ -263,11 +288,13 @@ final class ChatThreadViewController: UIViewController {
     private func scrollToBottom(animated: Bool) {
         guard !messages.isEmpty else { return }
         let last = IndexPath(row: messages.count - 1, section: 0)
-        tableView.scrollToRow(at: last, at: .bottom, animated: animated)
+        if tableView.numberOfSections > 0 && tableView.numberOfRows(inSection: 0) > last.row {
+            tableView.scrollToRow(at: last, at: .bottom, animated: animated)
+        }
     }
 
     private func presentError(_ message: String) {
-        let ac = UIAlertController(title: "Chat Error", message: message, preferredStyle: .alert)
+        let ac = UIAlertController(title: "Chat", message: message, preferredStyle: .alert)
         ac.addAction(UIAlertAction(title: "OK", style: .default))
         present(ac, animated: true)
     }
@@ -296,13 +323,14 @@ final class ChatThreadViewController: UIViewController {
                     if self.messages.contains(where: { $0.id == msg.id }) { continue }
 
                     await MainActor.run {
+                        print("[Chat] realtime insert id=\(msg.id)")
                         self.messages.append(msg)
                         self.tableView.reloadData()
                         self.scrollToBottom(animated: true)
                     }
 
                     // If the message is from the other participant, mark as read
-                    if let me = self.currentUserId, msg.sender_id != me {
+                    if let me = self.currentUserId, msg.sender_id.lowercased() != me.lowercased() {
                         try? await ChatServiceV2.shared.markMessagesAsRead(conversationId: conversationId)
                     }
                 } catch {
@@ -341,6 +369,7 @@ final class ChatThreadViewController: UIViewController {
                     await MainActor.run {
                         // Only update if there are new messages
                         if fresh.count != self.messages.count {
+                            print("[Chat] periodic refresh updated \(fresh.count) messages")
                             self.messages = fresh
                             self.tableView.reloadData()
                             self.scrollToBottom(animated: true)
@@ -364,10 +393,8 @@ final class ChatThreadViewController: UIViewController {
         showStatusBanner("Conversation ID copied")
     }
 
-    // Add showStatusBanner method if needed (not shown in original code but assumed to exist)
+    // Minimal banner
     private func showStatusBanner(_ message: String) {
-        // Implementation assumed to show a banner with the message
-        // This is a placeholder
         let banner = UILabel()
         banner.text = message
         banner.textAlignment = .center
@@ -404,7 +431,7 @@ extension ChatThreadViewController: UITableViewDataSource, UITableViewDelegate {
                    cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: BubbleCell.reuseID, for: indexPath) as! BubbleCell
         let msg = messages[indexPath.row]
-        let isMe = (currentUserId != nil) ? (msg.sender_id == currentUserId!) : false
+        let isMe = (currentUserId != nil) ? (msg.sender_id.lowercased() == currentUserId!.lowercased()) : false
         cell.configure(text: msg.text, isCurrentUser: isMe)
         return cell
     }
@@ -492,3 +519,77 @@ private final class BubbleCell: UITableViewCell {
     }
 }
 
+// MARK: - Safe open helper
+extension ChatThreadViewController {
+    // Use this from anywhere to guarantee correct pairing.
+    // - If caller is borrower (not owner), you can pass only itemId; we'll resolve owner and set otherUserId.
+    // - If caller is owner, you must pass borrowerId as otherUserId; if missing, we'll alert and do nothing.
+    static func open(from presentingVC: UIViewController, itemId: String, otherUserId: String? = nil) {
+        print("[ChatThread.open] itemId=\(itemId), otherUserId=\(otherUserId ?? "nil")")
+        
+        Task {
+            guard let me = await SupabaseManager.shared.currentUserId() else {
+                print("[ChatThread.open] ERROR: Not signed in")
+                await MainActor.run {
+                    let ac = UIAlertController(title: "Chat", message: "Please sign in to chat.", preferredStyle: .alert)
+                    ac.addAction(UIAlertAction(title: "OK", style: .default))
+                    presentingVC.present(ac, animated: true)
+                }
+                return
+            }
+            
+            print("[ChatThread.open] Current user: \(me)")
+
+            // Resolve item owner
+            struct OwnerDTO: Decodable { let owner_id: String }
+            do {
+                let resp = try await SupabaseManager.shared.client
+                    .from("items")
+                    .select("owner_id")
+                    .eq("id", value: itemId)
+                    .single()
+                    .execute()
+                let owner = try JSONDecoder().decode(OwnerDTO.self, from: resp.data).owner_id
+                
+                print("[ChatThread.open] Item owner: \(owner)")
+
+                let vc = ChatThreadViewController()
+                vc.itemId = itemId
+
+                if me.lowercased() == owner.lowercased() {
+                    print("[ChatThread.open] Current user IS the owner")
+                    // Current user is owner → must have a borrower id
+                    guard let borrower = otherUserId, !borrower.isEmpty, borrower.lowercased() != me.lowercased() else {
+                        print("[ChatThread.open] ERROR: Borrower not specified or invalid. otherUserId=\(otherUserId ?? "nil")")
+                        await MainActor.run {
+                            let ac = UIAlertController(title: "Chat", message: "Borrower not specified for this item.", preferredStyle: .alert)
+                            ac.addAction(UIAlertAction(title: "OK", style: .default))
+                            presentingVC.present(ac, animated: true)
+                        }
+                        return
+                    }
+                    vc.otherUserId = borrower
+                    print("[ChatThread.open] Setting otherUserId=\(borrower) (borrower)")
+                } else {
+                    print("[ChatThread.open] Current user is NOT the owner - they are borrower")
+                    // Current user is borrower → other = owner
+                    vc.otherUserId = owner
+                    print("[ChatThread.open] Setting otherUserId=\(owner) (owner)")
+                }
+
+                await MainActor.run {
+                    let nav = UINavigationController(rootViewController: vc)
+                    nav.modalPresentationStyle = .fullScreen
+                    presentingVC.present(nav, animated: true)
+                }
+            } catch {
+                print("[ChatThread.open] ERROR: Unable to fetch item owner - \(error)")
+                await MainActor.run {
+                    let ac = UIAlertController(title: "Chat", message: "Unable to open chat for this item.", preferredStyle: .alert)
+                    ac.addAction(UIAlertAction(title: "OK", style: .default))
+                    presentingVC.present(ac, animated: true)
+                }
+            }
+        }
+    }
+}
