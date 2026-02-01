@@ -50,56 +50,47 @@ final class ChatServiceV2 {
       
        return try decoder.decode([ChatConversation].self, from: response.data)
    }
-  
+
+   // Enforce item-based conversations so lender/borrower roles are always correct.
+   // If itemId is missing, we fail instead of creating an ambiguous row.
    func getOrCreateConversation(withUserId otherId: String, itemId: String?) async throws -> ChatConversation {
        guard let currentUserId = await SupabaseManager.shared.currentUserId() else {
            throw ChatServiceError.notAuthenticated
        }
-
-       let lenderId: String
-       let borrowerId: String
-
-       if let itemId = itemId, !itemId.isEmpty {
-           let itemResp = try await client
-               .from("items")
-               .select("owner_id")
-               .eq("id", value: itemId)
-               .single()
-               .execute()
-           let owner = try decoder.decode(ItemOwnerDTO.self, from: itemResp.data).owner_id
-
-           lenderId = owner
-           borrowerId = (currentUserId == owner) ? otherId : currentUserId
-
-           if let existing = try? await fetchSingleConversation(lenderId: lenderId, borrowerId: borrowerId, itemId: itemId) {
-               return existing
-           }
-
-           let payload = NewConversationPayload(lender_id: lenderId, borrower_id: borrowerId, item_id: itemId)
-           let createResponse = try await client
-               .from("chat_conversations")
-               .insert(payload)
-               .select()
-               .single()
-               .execute()
-           return try decoder.decode(ChatConversation.self, from: createResponse.data)
-       } else {
-           lenderId = otherId
-           borrowerId = currentUserId
-
-           if let existing = try? await fetchSingleConversation(lenderId: lenderId, borrowerId: borrowerId, itemId: nil) {
-               return existing
-           }
-
-           let payload = NewConversationPayload(lender_id: lenderId, borrower_id: borrowerId, item_id: nil)
-           let createResponse = try await client
-               .from("chat_conversations")
-               .insert(payload)
-               .select()
-               .single()
-               .execute()
-           return try decoder.decode(ChatConversation.self, from: createResponse.data)
+       guard let itemId, !itemId.isEmpty else {
+           throw NSError(domain: "Chat", code: 400, userInfo: [NSLocalizedDescriptionKey: "Chat requires an item context (missing itemId)."])
        }
+
+       // Resolve owner for the item; owner is the lender.
+       let itemResp = try await client
+           .from("items")
+           .select("owner_id")
+           .eq("id", value: itemId)
+           .single()
+           .execute()
+       let owner = try decoder.decode(ItemOwnerDTO.self, from: itemResp.data).owner_id
+
+       let lenderId = owner
+       // If current user is owner, the other participant is borrower; else current user is borrower.
+       let borrowerId = (currentUserId == owner) ? otherId : currentUserId
+
+       // Defensive logging to verify correct participant IDs
+       print("[GetOrCreate] currentUser=\(currentUserId) owner=\(owner) other=\(otherId) lender=\(lenderId) borrower=\(borrowerId) itemId=\(itemId)")
+
+       // Try existing conversation first
+       if let existing = try? await fetchSingleConversation(lenderId: lenderId, borrowerId: borrowerId, itemId: itemId) {
+           return existing
+       }
+
+       // Create new
+       let payload = NewConversationPayload(lender_id: lenderId, borrower_id: borrowerId, item_id: itemId)
+       let createResponse = try await client
+           .from("chat_conversations")
+           .insert(payload)
+           .select()
+           .single()
+           .execute()
+       return try decoder.decode(ChatConversation.self, from: createResponse.data)
    }
 
    private func fetchSingleConversation(lenderId: String, borrowerId: String, itemId: String?) async throws -> ChatConversation {
@@ -112,9 +103,7 @@ final class ChatServiceV2 {
        if let itemId, !itemId.isEmpty {
            query = query.eq("item_id", value: itemId)
        } else {
-           // Use filter(...) with IS NULL since PostgrestFilterBuilder has no `is_` member.
-           // Option A (newer SDKs): query = query.filter("item_id", .is, "null")
-           // Option B (string operator fallback compatible across versions):
+           // Not used in enforced item-chat flow; keep null filter for safety.
            query = query.filter("item_id", operator: "is", value: "null")
        }
 
@@ -136,7 +125,7 @@ final class ChatServiceV2 {
        let last_message_at: String
    }
   
-   func fetchMessages(conversationId: String, limit: Int = 50) async throws -> [ChatMessage] {
+   func fetchMessages(conversationId: String, limit: Int = 100) async throws -> [ChatMessage] {
        let response = try await client
            .from("chat_messages")
            .select()
@@ -167,6 +156,7 @@ final class ChatServiceV2 {
            .single()
            .execute()
       
+       // Update conversation summary for ordering in list
        let now = iso8601WithFS.string(from: Date())
        try? await client
            .from("chat_conversations")
@@ -179,16 +169,16 @@ final class ChatServiceV2 {
   
    func markMessagesAsRead(conversationId: String) async throws {
        guard let userId = await SupabaseManager.shared.currentUserId() else { return }
-      
        try await client
            .from("chat_messages")
            .update(["is_read": true])
            .eq("conversation_id", value: conversationId)
            .neq("sender_id", value: userId)
+           .eq("is_read", value: false)
            .execute()
    }
   
-   // MARK: - Support Tickets
+   // MARK: - Support tickets (unchanged)
 
    private struct NewTicketPayload: Encodable {
        let user_id: String
@@ -210,18 +200,15 @@ final class ChatServiceV2 {
        }
       
        let ticket = NewTicketPayload(user_id: userId, subject: subject, status: "open", priority: "medium")
-      
        let response = try await client
            .from("support_tickets")
            .insert(ticket)
            .select()
            .single()
            .execute()
-      
        let createdTicket = try decoder.decode(SupportTicket.self, from: response.data)
       
        let message = NewSupportMessagePayload(ticket_id: createdTicket.id, sender_id: userId, text: initialMessage, is_from_support: false)
-      
        try await client
            .from("support_messages")
            .insert(message)
@@ -236,14 +223,12 @@ final class ChatServiceV2 {
        }
       
        let message = NewSupportMessagePayload(ticket_id: ticketId, sender_id: userId, text: text, is_from_support: false)
-      
        let response = try await client
            .from("support_messages")
            .insert(message)
            .select()
            .single()
            .execute()
-      
        return try decoder.decode(SupportMessage.self, from: response.data)
    }
   
@@ -254,7 +239,6 @@ final class ChatServiceV2 {
            .eq("id", value: userId)
            .single()
            .execute()
-      
        return try decoder.decode(ParticipantInfo.self, from: response.data)
    }
 }

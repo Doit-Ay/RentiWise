@@ -406,6 +406,12 @@ class BookingApprovalViewController: UIViewController {
         // - History: owner chatting with borrower
         let otherUserId: String = (self.mode == .myRentals) ? req.owner_id : req.borrower_id
 
+        // Defensive logging to track otherUserId computation
+        Task {
+            let currentUserId = await SupabaseManager.shared.currentUserId() ?? "nil"
+            print("[OpenChat] mode=\(mode) currentUser=\(currentUserId) owner=\(req.owner_id) borrower=\(req.borrower_id) other=\(otherUserId) itemId=\(req.item_id)")
+        }
+
         // Instantiate the chat thread controller
         let chatVC = ChatThreadViewController()
         chatVC.otherUserId = otherUserId
@@ -589,6 +595,26 @@ class BookingApprovalViewController: UIViewController {
             setStatus(.approved)
         } else {
             setStatus(.pending)
+        }
+
+        // Defensive: Auto-derive mode based on current user if not explicitly set
+        // This acts as a fallback to prevent edge cases
+        Task { [weak self] in
+            guard let self = self else { return }
+            guard let currentUserId = await SupabaseManager.shared.currentUserId() else { return }
+            
+            await MainActor.run {
+                // If current user is the owner, we're in history mode (owner viewing borrower's request)
+                // Otherwise, we're in myRentals mode (borrower viewing their own request)
+                let derivedMode: PresentationMode = (currentUserId == req.owner_id) ? .history : .myRentals
+                
+                // Only auto-set if mode is still at default (.myRentals) and we detect we should be in .history
+                // This is a defensive measure; normally mode should be set by the caller
+                if self.mode == .myRentals && derivedMode == .history {
+                    print("[BookingApproval] Auto-derived mode: .history (currentUser is owner)")
+                    self.mode = .history
+                }
+            }
         }
 
         // Dates

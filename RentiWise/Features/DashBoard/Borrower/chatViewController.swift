@@ -16,7 +16,9 @@ final class ChatThreadViewController: UIViewController {
 
     // Backend models
     private var conversation: ChatConversation?
-    private var messages: [ChatMessage] = []
+    private var messages: [ChatMessage] = [] {
+        didSet { emptyStateLabel.isHidden = !messages.isEmpty }
+    }
 
     // Current user id
     private var currentUserId: String?
@@ -27,6 +29,17 @@ final class ChatThreadViewController: UIViewController {
     private let inputField = UITextField()
     private let sendButton = UIButton(type: .system)
     private var inputBottomConstraint: NSLayoutConstraint?
+
+    private let emptyStateLabel: UILabel = {
+        let l = UILabel()
+        l.translatesAutoresizingMaskIntoConstraints = false
+        l.text = "Start your conversation"
+        l.textAlignment = .center
+        l.textColor = .secondaryLabel
+        l.font = .systemFont(ofSize: 15, weight: .regular)
+        l.isHidden = true
+        return l
+    }()
 
     // Realtime channel
     private var realtimeChannel: RealtimeChannelV2?
@@ -48,6 +61,15 @@ final class ChatThreadViewController: UIViewController {
         observeKeyboard()
 
         Task { await bootstrapConversationAndLoad() }
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        // When the view is visible, mark as read if possible.
+        Task { [weak self] in
+            guard let self, let id = self.conversation?.id else { return }
+            try? await ChatServiceV2.shared.markMessagesAsRead(conversationId: id)
+        }
     }
 
     deinit {
@@ -73,6 +95,13 @@ final class ChatThreadViewController: UIViewController {
             tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             tableView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor)
+        ])
+
+        // Empty state overlay
+        view.addSubview(emptyStateLabel)
+        NSLayoutConstraint.activate([
+            emptyStateLabel.centerXAnchor.constraint(equalTo: tableView.centerXAnchor),
+            emptyStateLabel.centerYAnchor.constraint(equalTo: tableView.centerYAnchor)
         ])
     }
 
@@ -120,6 +149,14 @@ final class ChatThreadViewController: UIViewController {
         ])
     }
 
+    private func updateInsetsForKeyboard(height: CGFloat) {
+        // Add bottom inset so last message is never under the input bar/keyboard
+        var inset = tableView.contentInset
+        inset.bottom = height + 56 // keyboard + input bar height
+        tableView.contentInset = inset
+        tableView.scrollIndicatorInsets = inset
+    }
+
     private func observeKeyboard() {
         NotificationCenter.default.addObserver(self, selector: #selector(kbWillShow(_:)), name: UIResponder.keyboardWillShowNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(kbWillHide(_:)), name: UIResponder.keyboardWillHideNotification, object: nil)
@@ -133,6 +170,7 @@ final class ChatThreadViewController: UIViewController {
 
         let keyboardHeight = max(0, frame.height - view.safeAreaInsets.bottom)
         inputBottomConstraint?.constant = -keyboardHeight
+        updateInsetsForKeyboard(height: keyboardHeight)
 
         UIView.animate(withDuration: duration) {
             self.view.layoutIfNeeded()
@@ -145,6 +183,7 @@ final class ChatThreadViewController: UIViewController {
             let duration = note.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double
         else { return }
         inputBottomConstraint?.constant = 0
+        updateInsetsForKeyboard(height: 0)
         UIView.animate(withDuration: duration) {
             self.view.layoutIfNeeded()
         }
@@ -165,7 +204,7 @@ final class ChatThreadViewController: UIViewController {
         }
 
         do {
-            // Get or create conversation
+            // Require itemId to ensure correct lender/borrower pairing
             let convo = try await ChatServiceV2.shared.getOrCreateConversation(withUserId: other, itemId: itemId)
             await MainActor.run {
                 self.conversation = convo
@@ -197,7 +236,7 @@ final class ChatThreadViewController: UIViewController {
             guard !text.isEmpty else { return }
             guard let convoId = conversation?.id else { return }
 
-            // Optimistic UI: clear input immediately
+            // Optimistic UX: clear input immediately
             await MainActor.run { self.inputField.text = nil }
 
             do {
@@ -207,6 +246,8 @@ final class ChatThreadViewController: UIViewController {
                     self.tableView.reloadData()
                     self.scrollToBottom(animated: true)
                 }
+                // After sending, mark unread messages as read (keeps thread tidy)
+                try? await ChatServiceV2.shared.markMessagesAsRead(conversationId: convoId)
             } catch {
                 await MainActor.run {
                     self.presentError(error.localizedDescription)
@@ -235,12 +276,13 @@ final class ChatThreadViewController: UIViewController {
 
         let client = SupabaseManager.shared.client
         let channel = client.realtimeV2.channel("chat-\(conversationId)")
-        // Listen for Postgres INSERTs on chat_messages for this conversation
-        let stream = channel.postgresChange(InsertAction.self, schema: "public", table: "chat_messages", filter: "conversation_id=eq.\(conversationId)")
+
+        // INSERT stream for new messages
+        let insertStream = channel.postgresChange(InsertAction.self, schema: "public", table: "chat_messages", filter: "conversation_id=eq.\(conversationId)")
 
         Task.detached { [weak self] in
             guard let self else { return }
-            for await insert in stream {
+            for await insert in insertStream {
                 do {
                     let decoder = JSONDecoder()
                     decoder.dateDecodingStrategy = .iso8601
@@ -253,6 +295,11 @@ final class ChatThreadViewController: UIViewController {
                         self.messages.append(msg)
                         self.tableView.reloadData()
                         self.scrollToBottom(animated: true)
+                    }
+
+                    // If the message is from the other participant, mark as read
+                    if let me = self.currentUserId, msg.sender_id != me {
+                        try? await ChatServiceV2.shared.markMessagesAsRead(conversationId: conversationId)
                     }
                 } catch {
                     // ignore decode errors
@@ -344,7 +391,6 @@ private final class BubbleCell: UITableViewCell {
         leading = bubble.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16)
         trailing = bubble.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16)
 
-        // Don't activate leading/trailing here - will be set in configure based on sender
         NSLayoutConstraint.activate([
             bubble.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
             bubble.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -8),
@@ -373,3 +419,4 @@ private final class BubbleCell: UITableViewCell {
         layoutIfNeeded()
     }
 }
+
