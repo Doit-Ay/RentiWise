@@ -77,10 +77,10 @@ final class ChatMessageCell: UICollectionViewCell {
    func configure(with message: ChatMessage, isCurrentUser: Bool) {
        messageLabel.text = message.text
        timestampLabel.text = message.formattedTime
-      
+
        bubbleLeadingConstraint.isActive = false
        bubbleTrailingConstraint.isActive = false
-      
+
        if isCurrentUser {
            bubbleTrailingConstraint.isActive = true
            bubbleView.backgroundColor = sentBubbleColor
@@ -92,6 +92,11 @@ final class ChatMessageCell: UICollectionViewCell {
            messageLabel.textColor = .label
            timestampLabel.textAlignment = .left
        }
+   }
+
+   func configure(with message: ChatMessage, currentUserId: String) {
+       let isMe = message.isCurrentUser(currentUserId: currentUserId)
+       configure(with: message, isCurrentUser: isMe)
    }
   
    override func prepareForReuse() {

@@ -44,6 +44,8 @@ final class ChatThreadViewController: UIViewController {
     // Realtime channel
     private var realtimeChannel: RealtimeChannelV2?
 
+    private var periodicRefreshTimer: Timer?
+
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
@@ -75,6 +77,8 @@ final class ChatThreadViewController: UIViewController {
     deinit {
         NotificationCenter.default.removeObserver(self)
         Task { await unsubscribeRealtime() }
+        periodicRefreshTimer?.invalidate()
+        periodicRefreshTimer = nil
     }
 
     @objc private func closeTapped() {
@@ -310,8 +314,13 @@ final class ChatThreadViewController: UIViewController {
         do {
             try await channel.subscribeWithError()
             self.realtimeChannel = channel
+            await MainActor.run { self.stopPeriodicRefresh() }
         } catch {
-            // Fallback: no realtime; chat still works with manual refresh
+            print("[Chat] Realtime subscribe failed for conversation=\(conversationId): \(error)")
+            await MainActor.run {
+                self.showStatusBanner("Live updates unavailable. Messages will appear shortly.")
+                self.startPeriodicRefresh(conversationId: conversationId)
+            }
         }
     }
 
@@ -319,6 +328,69 @@ final class ChatThreadViewController: UIViewController {
         if let ch = realtimeChannel {
             await ch.unsubscribe()
             realtimeChannel = nil
+        }
+    }
+
+    private func startPeriodicRefresh(conversationId: String) {
+        stopPeriodicRefresh()
+        periodicRefreshTimer = Timer.scheduledTimer(withTimeInterval: 8.0, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            Task {
+                do {
+                    let fresh = try await ChatServiceV2.shared.fetchMessages(conversationId: conversationId)
+                    await MainActor.run {
+                        // Only update if there are new messages
+                        if fresh.count != self.messages.count {
+                            self.messages = fresh
+                            self.tableView.reloadData()
+                            self.scrollToBottom(animated: true)
+                        }
+                    }
+                } catch {
+                    // ignore
+                }
+            }
+        }
+    }
+
+    private func stopPeriodicRefresh() {
+        periodicRefreshTimer?.invalidate()
+        periodicRefreshTimer = nil
+    }
+
+    @objc private func copyConversationId() {
+        guard let id = conversation?.id else { return }
+        UIPasteboard.general.string = id
+        showStatusBanner("Conversation ID copied")
+    }
+
+    // Add showStatusBanner method if needed (not shown in original code but assumed to exist)
+    private func showStatusBanner(_ message: String) {
+        // Implementation assumed to show a banner with the message
+        // This is a placeholder
+        let banner = UILabel()
+        banner.text = message
+        banner.textAlignment = .center
+        banner.backgroundColor = .systemYellow
+        banner.alpha = 0
+        banner.translatesAutoresizingMaskIntoConstraints = false
+
+        view.addSubview(banner)
+        NSLayoutConstraint.activate([
+            banner.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            banner.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            banner.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            banner.heightAnchor.constraint(equalToConstant: 44)
+        ])
+
+        UIView.animate(withDuration: 0.3, animations: {
+            banner.alpha = 1
+        }) { _ in
+            UIView.animate(withDuration: 0.3, delay: 2.0, options: [], animations: {
+                banner.alpha = 0
+            }) { _ in
+                banner.removeFromSuperview()
+            }
         }
     }
 }
