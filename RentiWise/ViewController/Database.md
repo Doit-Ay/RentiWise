@@ -868,3 +868,96 @@ with check (
       and (auth.uid() = c.lender_id or auth.uid() = c.borrower_id)
   )
 );
+-- Enable Row Level Security on chat tables
+ALTER TABLE public.chat_conversations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.chat_messages ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies if any
+DROP POLICY IF EXISTS "Users can view their own conversations" ON public.chat_conversations;
+DROP POLICY IF EXISTS "Users can create conversations" ON public.chat_conversations;
+DROP POLICY IF EXISTS "Users can update their own conversations" ON public.chat_conversations;
+DROP POLICY IF EXISTS "Users can view messages in their conversations" ON public.chat_messages;
+DROP POLICY IF EXISTS "Users can send messages in their conversations" ON public.chat_messages;
+DROP POLICY IF EXISTS "Users can update messages in their conversations" ON public.chat_messages;
+
+-- Chat Conversations Policies
+-- Policy: Users can view conversations where they are either lender or borrower
+CREATE POLICY "Users can view their own conversations"
+ON public.chat_conversations
+FOR SELECT
+TO authenticated
+USING (
+  auth.uid() = lender_id OR auth.uid() = borrower_id
+);
+
+-- Policy: Users can create conversations where they are either lender or borrower
+CREATE POLICY "Users can create conversations"
+ON public.chat_conversations
+FOR INSERT
+TO authenticated
+WITH CHECK (
+  auth.uid() = lender_id OR auth.uid() = borrower_id
+);
+
+-- Policy: Users can update conversations where they are either lender or borrower
+CREATE POLICY "Users can update their own conversations"
+ON public.chat_conversations
+FOR UPDATE
+TO authenticated
+USING (
+  auth.uid() = lender_id OR auth.uid() = borrower_id
+)
+WITH CHECK (
+  auth.uid() = lender_id OR auth.uid() = borrower_id
+);
+
+-- Chat Messages Policies
+-- Policy: Users can view messages in conversations they participate in
+CREATE POLICY "Users can view messages in their conversations"
+ON public.chat_messages
+FOR SELECT
+TO authenticated
+USING (
+  EXISTS (
+    SELECT 1 FROM public.chat_conversations
+    WHERE id = conversation_id
+    AND (lender_id = auth.uid() OR borrower_id = auth.uid())
+  )
+);
+
+-- Policy: Users can send messages in conversations they participate in
+CREATE POLICY "Users can send messages in their conversations"
+ON public.chat_messages
+FOR INSERT
+TO authenticated
+WITH CHECK (
+  sender_id = auth.uid()
+  AND EXISTS (
+    SELECT 1 FROM public.chat_conversations
+    WHERE id = conversation_id
+    AND (lender_id = auth.uid() OR borrower_id = auth.uid())
+  )
+);
+
+-- Policy: Users can update messages they sent (for marking as read)
+CREATE POLICY "Users can update messages in their conversations"
+ON public.chat_messages
+FOR UPDATE
+TO authenticated
+USING (
+  EXISTS (
+    SELECT 1 FROM public.chat_conversations
+    WHERE id = conversation_id
+    AND (lender_id = auth.uid() OR borrower_id = auth.uid())
+  )
+)
+WITH CHECK (
+  EXISTS (
+    SELECT 1 FROM public.chat_conversations
+    WHERE id = conversation_id
+    AND (lender_id = auth.uid() OR borrower_id = auth.uid())
+  )
+);
+
+-- Realtime is already enabled for chat_messages table ✅
+-- (The table is already added to supabase_realtime publication)
