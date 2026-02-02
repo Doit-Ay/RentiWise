@@ -215,6 +215,7 @@ private struct ProfileRootView: View {
                     NavigationLink {
                         // Hide tab bar while this destination is shown
                         MyRentalsHostView()
+                            .ignoresSafeArea(.all, edges: .bottom)
                             .background(TabBarHider(hidden: true))
                             .navigationTitle("My Rentals")
                             .navigationBarTitleDisplayMode(.inline)
@@ -232,12 +233,30 @@ private struct ProfileRootView: View {
 
                     NavigationLink {
                         WishlistPage()
+                            .ignoresSafeArea(.all, edges: .bottom)
+                            .background(TabBarHider(hidden: true))
+                            .onDisappear {
+                                if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                                   let window = scene.windows.first,
+                                   let tab = window.rootViewController as? UITabBarController {
+                                    tab.tabBar.isHidden = false
+                                }
+                            }
                     } label: {
                         Label("Wishlist", systemImage: "heart")
                     }
 
                     NavigationLink {
                         PrivacySecurityPage()
+                            .ignoresSafeArea(.all, edges: .bottom)
+                            .background(TabBarHider(hidden: true))
+                            .onDisappear {
+                                if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                                   let window = scene.windows.first,
+                                   let tab = window.rootViewController as? UITabBarController {
+                                    tab.tabBar.isHidden = false
+                                }
+                            }
                     } label: {
                         Label("Privacy & Security", systemImage: "lock.shield")
                     }
@@ -245,6 +264,7 @@ private struct ProfileRootView: View {
                     // Contact Us now routes to SupportChatViewController
                     NavigationLink {
                         SupportChatHost()
+                            .ignoresSafeArea(.all, edges: .bottom)
                             .navigationTitle("Support")
                             .navigationBarTitleDisplayMode(.inline)
                             .background(TabBarHider(hidden: true))
@@ -528,6 +548,7 @@ private struct WishlistPage: View {
                 NavigationLink {
                     ProductHostView(item: item)
                         .navigationBarTitleDisplayMode(.inline)
+                        .toolbar(.hidden, for: .tabBar)  // Hide tab bar like Home screen
                 } label: {
                     HStack(spacing: 12) {
                         WishlistImage(path: item.images.first)
@@ -553,6 +574,7 @@ private struct WishlistPage: View {
         .navigationTitle("Wishlist")
         .navigationBarTitleDisplayMode(.inline)
         .task { await loadWishlist() }
+        .toolbar(.hidden, for: .tabBar)  // Keep tab bar hidden in Wishlist and nested screens
     }
 
     private func priceText(for item: Item) -> String {
@@ -692,6 +714,7 @@ private struct ManageDataViews: View {
             Text("This will permanently delete your profile, bookings, and payments. This action cannot be undone.")
         }
         .background(Color(.systemGroupedBackground))
+        .toolbar(.hidden, for: .tabBar)  // Keep tab bar hidden in nested screen
     }
 
     private func deleteAccount() async {
@@ -741,6 +764,7 @@ private struct ProfileInformationView: View {
         .task { await load() }
         .refreshable { await load() }
         .background(Color(.systemGroupedBackground))
+        .toolbar(.hidden, for: .tabBar)  // Keep tab bar hidden
     }
 
     private func load() async {
@@ -894,6 +918,7 @@ private struct PaymentHistoryView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
         .refreshable { await load() }
+        .toolbar(.hidden, for: .tabBar)  // Keep tab bar hidden
     }
 
     private func load() async {
@@ -1017,12 +1042,13 @@ private struct PrivacySecurityPage: View {
             }
             Section("Security") {
                 NavigationLink("Change Password") { ChangePasswordView() }
-                NavigationLink("Two-Factor Authentication") { Text("Two-Factor Authentication") }
+                NavigationLink("Two-Factor Authentication") { Text("Two-Factor Authentication").toolbar(.hidden, for: .tabBar) }
             }
         }
         .navigationTitle("Privacy & Security")
         .navigationBarTitleDisplayMode(.inline)
         .background(Color(.systemGroupedBackground))
+        .toolbar(.hidden, for: .tabBar)  // Keep tab bar hidden
     }
 }
 
@@ -1107,6 +1133,7 @@ private struct ChangePasswordView: View {
         .navigationTitle("Change Password")
         .navigationBarTitleDisplayMode(.inline)
         .background(Color(.systemGroupedBackground))
+        .toolbar(.hidden, for: .tabBar)  // Keep tab bar hidden
     }
 
     // MARK: - Row helper
@@ -1195,6 +1222,7 @@ private struct AppPermissionsView: View {
         .navigationTitle("App Permissions")
         .navigationBarTitleDisplayMode(.inline)
         .background(Color(.systemGroupedBackground))
+        .toolbar(.hidden, for: .tabBar)  // Keep tab bar hidden
         .alert("Change Permissions", isPresented: $showSettingsAlert, actions: {
             Button("Cancel", role: .cancel) {}
             Button("Open Settings") { openAppSettings() }

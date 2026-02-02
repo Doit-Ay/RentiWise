@@ -126,9 +126,10 @@ final class MyRentalsViewController: UIViewController {
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        // Keep bottom insets zero so the table reaches the very bottom
-        tableView.contentInset.bottom = 0
-        tableView.verticalScrollIndicatorInsets.bottom = 0
+        // Table extends below safe area, but add bottom inset so content can scroll above home indicator
+        let bottomSafeArea = view.safeAreaInsets.bottom
+        tableView.contentInset.bottom = bottomSafeArea
+        tableView.verticalScrollIndicatorInsets.bottom = bottomSafeArea
     }
 
     // MARK: - UI Setup
@@ -467,8 +468,8 @@ extension MyRentalsViewController: UITableViewDataSource {
 
 // MARK: - UITableViewDelegate
 extension MyRentalsViewController: UITableViewDelegate {
-    // Keep your 125pt spacing between cards via section footer
-    func tableView(_ tableView: UITableView, heightForFooterInSection section: Int) -> CGFloat { 125 }
+    // Spacing between cards reduced to 16pt instead of massive 125pt
+    func tableView(_ tableView: UITableView, heightForFooterInSection section: Int) -> CGFloat { 16 }
     func tableView(_ tableView: UITableView, viewForFooterInSection section: Int) -> UIView? {
         let v = UIView()
         v.backgroundColor = .clear

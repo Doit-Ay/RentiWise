@@ -87,7 +87,7 @@ final class SupportChatViewController: UIViewController {
     private let inputContainerView: UIView = {
         let view = UIView()
         view.translatesAutoresizingMaskIntoConstraints = false
-        view.backgroundColor = UIColor(red: 0.96, green: 0.97, blue: 0.98, alpha: 1.0)
+        view.backgroundColor = .white  // White box like iOS Messages
         return view
     }()
     
@@ -97,7 +97,7 @@ final class SupportChatViewController: UIViewController {
         tf.placeholder = "Describe your issue..."
         tf.font = .systemFont(ofSize: 16)
         tf.borderStyle = .none
-        tf.backgroundColor = .white
+        tf.backgroundColor = UIColor(red: 0.96, green: 0.97, blue: 0.98, alpha: 1.0)
         tf.layer.cornerRadius = 20
         tf.layer.shadowColor = UIColor.black.cgColor
         tf.layer.shadowOpacity = 0.05
@@ -129,6 +129,7 @@ final class SupportChatViewController: UIViewController {
     }()
     
     private var inputContainerBottomConstraint: NSLayoutConstraint!
+    private var inputContainerHeightConstraint: NSLayoutConstraint!
     private var ticketStatusHeightConstraint: NSLayoutConstraint!
     
     // Two alternate top constraints for the table
@@ -162,7 +163,14 @@ final class SupportChatViewController: UIViewController {
         inputContainerView.addSubview(sendButton)
         view.addSubview(loadingIndicator)
         
-        inputContainerBottomConstraint = inputContainerView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor)
+        // Input container extends below safe area like iOS Messages
+        inputContainerBottomConstraint = inputContainerView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        
+        // Dynamic height: 70pt + safe area bottom inset (more space at bottom)
+        let safeBottom = view.safeAreaInsets.bottom
+        let totalHeight = 70 + safeBottom
+        inputContainerHeightConstraint = inputContainerView.heightAnchor.constraint(equalToConstant: totalHeight)
+        
         ticketStatusHeightConstraint = ticketStatusCard.heightAnchor.constraint(equalToConstant: 50)
         
         // Build constraints
@@ -200,19 +208,20 @@ final class SupportChatViewController: UIViewController {
             quickActionsStack.centerYAnchor.constraint(equalTo: quickActionsScrollView.centerYAnchor),
             quickActionsStack.heightAnchor.constraint(equalToConstant: 36),
             
-            // Input container
+            // Input container - extends below safe area with white background
             inputContainerView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             inputContainerView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             inputContainerBottomConstraint,
-            inputContainerView.heightAnchor.constraint(equalToConstant: 60),
+            inputContainerHeightConstraint,
             
+            // Input field - pinned to top with safe area padding at bottom
             inputTextField.leadingAnchor.constraint(equalTo: inputContainerView.leadingAnchor, constant: 16),
-            inputTextField.centerYAnchor.constraint(equalTo: inputContainerView.centerYAnchor),
+            inputTextField.topAnchor.constraint(equalTo: inputContainerView.topAnchor, constant: 10),
             inputTextField.heightAnchor.constraint(equalToConstant: 40),
             
             sendButton.leadingAnchor.constraint(equalTo: inputTextField.trailingAnchor, constant: 12),
             sendButton.trailingAnchor.constraint(equalTo: inputContainerView.trailingAnchor, constant: -16),
-            sendButton.centerYAnchor.constraint(equalTo: inputContainerView.centerYAnchor),
+            sendButton.centerYAnchor.constraint(equalTo: inputTextField.centerYAnchor),
             sendButton.widthAnchor.constraint(equalToConstant: 36),
             sendButton.heightAnchor.constraint(equalToConstant: 36),
             
@@ -259,12 +268,19 @@ final class SupportChatViewController: UIViewController {
         NotificationCenter.default.addObserver(self, selector: #selector(keyboardWillHide(_:)), name: UIResponder.keyboardWillHideNotification, object: nil)
     }
     
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        // Update height dynamically to account for safe area
+        let safeBottom = view.safeAreaInsets.bottom
+        inputContainerHeightConstraint.constant = 70 + safeBottom
+    }
+    
     @objc private func keyboardWillShow(_ notification: Notification) {
         guard let frame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect,
               let duration = notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double else { return }
         
-        let keyboardHeight = frame.height - view.safeAreaInsets.bottom
-        inputContainerBottomConstraint.constant = -keyboardHeight
+        // Move entire input container up by keyboard height
+        inputContainerBottomConstraint.constant = -frame.height
         
         UIView.animate(withDuration: duration) {
             self.view.layoutIfNeeded()
@@ -274,6 +290,7 @@ final class SupportChatViewController: UIViewController {
     @objc private func keyboardWillHide(_ notification: Notification) {
         guard let duration = notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double else { return }
         
+        // Return to bottom of screen
         inputContainerBottomConstraint.constant = 0
         
         UIView.animate(withDuration: duration) {
@@ -403,16 +420,22 @@ final class SupportChatViewController: UIViewController {
     private func generateBotResponse(for query: String) -> String {
         let lowercased = query.lowercased()
         
-        if lowercased.contains("refund") {
-            return "I understand you're inquiring about a refund. Refunds are processed within 5-7 business days after the rental return is confirmed. If you haven't received your refund, please provide your booking ID and we'll look into it."
-        } else if lowercased.contains("booking") || lowercased.contains("issue") {
-            return "I'm sorry to hear you're having issues with your booking. Could you please describe the specific problem? Common issues include scheduling conflicts, item availability, or payment problems."
-        } else if lowercased.contains("damage") {
-            return "For damage reports, please provide photos of the damage along with your booking ID. Our team will review the case within 24 hours and contact you with next steps."
-        } else if lowercased.contains("account") {
-            return "For account-related issues, I can help with password reset, profile updates, or verification problems. What specific account issue are you experiencing?"
+        if lowercased.contains("refund") || lowercased.contains("money back") {
+            return "🔄 Refund Information\n\nRefunds are processed within 5-7 business days after the rental return is confirmed. Here's what happens next:\n\n✓ Item inspection (1-2 days)\n✓ Refund approval\n✓ Payment processing (3-5 days)\n\nIf you haven't received your refund after 7 days, please provide your booking ID and I'll escalate this to our finance team immediately."
+        } else if lowercased.contains("booking") || lowercased.contains("reservation") {
+            return "📅 Booking Assistance\n\nI can help you with:\n• Modifying booking dates\n• Checking item availability\n• Understanding pricing\n• Cancellation policies\n\nPlease tell me your booking ID or describe the specific issue you're facing."
+        } else if lowercased.contains("damage") || lowercased.contains("broken") {
+            return "⚠️ Damage Report\n\nThank you for reporting this. To process your claim:\n\n1. Take clear photos of the damage\n2. Provide your booking ID\n3. Describe when/how it happened\n\nOur team will review within 24 hours and contact you. For items damaged during rental, insurance may cover the cost."
+        } else if lowercased.contains("account") || lowercased.contains("profile") || lowercased.contains("password") {
+            return "👤 Account Support\n\nI can help you with:\n• Password reset\n• Profile updates\n• Email/phone verification\n• Account security\n\nWhat specific account issue are you experiencing? I'll guide you through the solution."
+        } else if lowercased.contains("payment") || lowercased.contains("card") || lowercased.contains("charge") {
+            return "💳 Payment Help\n\nFor payment issues:\n• We accept all major credit/debit cards\n• Payments are processed securely\n• You'll receive a receipt via email\n\nIf you see an unexpected charge or payment failed, please provide your booking ID and I'll investigate immediately."
+        } else if lowercased.contains("cancel") {
+            return "❌ Cancellation Policy\n\nYou can cancel your booking:\n• Free cancellation up to 48 hours before rental\n• 50% refund if cancelled 24-48 hours before\n• No refund within 24 hours of rental\n\nPlease provide your booking ID if you'd like to proceed with cancellation."
+        } else if lowercased.contains("hi") || lowercased.contains("hello") || lowercased.contains("hey") {
+            return "👋 Hello! Welcome to RentiWise Support.\n\nHow can I help you today? Common topics:\n\n📦 Bookings & Rentals\n💰 Payments & Refunds\n⚙️ Account Issues\n📞 Report a Problem\n\nFeel free to ask anything or choose a topic above!"
         } else {
-            return "Thank you for reaching out! A support representative will review your inquiry shortly. In the meantime, you can check our FAQ section for common questions, or provide more details about your issue."
+            return "✨ Thank you for contacting RentiWise Support!\n\nA support representative will review your inquiry and respond within 2-4 hours. For faster assistance, please provide:\n\n• Your booking ID (if applicable)\n• Detailed description of the issue\n• Any relevant screenshots\n\nYou can also check our FAQ in the app settings while you wait."
         }
     }
     
