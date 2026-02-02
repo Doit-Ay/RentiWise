@@ -12,11 +12,19 @@ final class CategoriesViewController: UIViewController {
     // MARK: - Inputs
     var category: String?
 
+    @IBOutlet weak var categorySearchBar: UISearchBar!
     // MARK: - Outlets (wired in AppStarting storyboard, ID: "Categories")
+    
     @IBOutlet weak var tableViewForItem: UITableView!
     
     // MARK: - Private state
     private var items: [Item] = []
+    private var filteredItems: [Item] = []
+    private var isFiltering: Bool {
+        guard let text = categorySearchBar?.text?.trimmingCharacters(in: .whitespacesAndNewlines) else { return false }
+        return !text.isEmpty
+    }
+
     private let service: ItemsServicing = ItemsService()
     private let currencyFormatter: NumberFormatter = {
         let f = NumberFormatter()
@@ -61,7 +69,7 @@ final class CategoriesViewController: UIViewController {
         tableViewForItem?.backgroundColor = .systemGroupedBackground
 
         // Add consistent 16pt spacing above first card and below last card
-        tableViewForItem?.contentInset = UIEdgeInsets(top: 16, left: 0, bottom: 16, right: 0)
+        tableViewForItem?.contentInset = UIEdgeInsets(top: 0, left: 0, bottom: 16, right: 0)
 
         // Prepare empty state view (backgroundView) now so constraints can be applied
         if let table = tableViewForItem {
@@ -78,6 +86,9 @@ final class CategoriesViewController: UIViewController {
             container.isHidden = true
             table.backgroundView = container
         }
+
+        // Search bar setup and styling
+        setupSearchBar()
 
         // IMPORTANT: Do not register UITableViewCell.self for "ItemCell" anywhere,
         // or you will override the storyboard prototype cell.
@@ -116,11 +127,17 @@ final class CategoriesViewController: UIViewController {
 
     private func updateEmptyState() {
         guard let table = tableViewForItem else { return }
-        // If there are no items, show the label; otherwise hide.
-        let shouldShow = items.isEmpty
+        // If there are no items in the current data source, show the label; otherwise hide.
+        let current = isFiltering ? filteredItems : items
+        let shouldShow = current.isEmpty
         table.backgroundView?.isHidden = !shouldShow
 
-        // Customize the message per category if desired
+        // Customize the message per category and filter
+        if isFiltering, let text = categorySearchBar?.text, !text.isEmpty {
+            emptyStateLabel.text = "No results for “\(text)”"
+            return
+        }
+
         if let cat = category, !cat.isEmpty {
             emptyStateLabel.text = "No items in \(cat)"
         } else {
@@ -136,6 +153,8 @@ final class CategoriesViewController: UIViewController {
             let cat = category ?? ""
             let fetched = try await service.fetchItems(category: cat)
             self.items = fetched
+            // Re-apply any active filter
+            applyFilter(text: categorySearchBar?.text)
             await MainActor.run { self.reloadUI() }
         } catch {
             await MainActor.run {
@@ -147,6 +166,129 @@ final class CategoriesViewController: UIViewController {
     }
 }
 
+// MARK: - Search
+private extension CategoriesViewController {
+    func setupSearchBar() {
+        guard let sb = categorySearchBar else { return }
+        sb.delegate = self
+        sb.placeholder = "Search items"
+        sb.showsCancelButton = false
+        sb.searchBarStyle = .minimal
+        sb.isTranslucent = true
+        sb.backgroundColor = .clear
+        sb.setBackgroundImage(UIImage(), for: .any, barMetrics: .default)
+        sb.setSearchFieldBackgroundImage(UIImage(), for: .normal)
+        sb.tintColor = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0) // brand teal for cursor
+
+        // Deeper styling for rounded pill look (iOS 13+)
+        let tf = sb.searchTextField
+        tf.backgroundColor = UIColor.secondarySystemBackground.withAlphaComponent(0.9)
+        tf.textColor = .label
+        tf.tintColor = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0)
+        tf.clearButtonMode = .whileEditing
+        tf.borderStyle = .none
+        tf.layer.masksToBounds = false
+        tf.leftView?.tintColor = .tertiaryLabel
+
+        // Placeholder subtle color
+        let placeholder = tf.placeholder ?? "Search items"
+        tf.attributedPlaceholder = NSAttributedString(
+            string: placeholder,
+            attributes: [.foregroundColor: UIColor.secondaryLabel]
+        )
+
+        // Rounded pill corner radius adjusted after layout
+        DispatchQueue.main.async { [weak self] in
+            self?.layoutSearchBarRounded()
+        }
+
+        // Subtle shadow to lift the pill
+        tf.layer.shadowColor = UIColor.black.cgColor
+        tf.layer.shadowOpacity = 0.08
+        tf.layer.shadowRadius = 6
+        tf.layer.shadowOffset = CGSize(width: 0, height: 3)
+
+        // Dismiss keyboard by tapping outside
+        let tap = UITapGestureRecognizer(target: self, action: #selector(dismissKeyboardTap))
+        tap.cancelsTouchesInView = false
+        view.addGestureRecognizer(tap)
+    }
+
+    func layoutSearchBarRounded() {
+        guard let sb = categorySearchBar else { return }
+        let tf = sb.searchTextField
+        let h = tf.bounds.height > 0 ? tf.bounds.height : 36
+        tf.layer.cornerRadius = h / 2
+        tf.layer.borderWidth = 0.5
+        tf.layer.borderColor = UIColor.separator.withAlphaComponent(0.5).cgColor
+    }
+
+    @objc func dismissKeyboardTap() {
+        view.endEditing(true)
+    }
+
+    func applyFilter(text: String?) {
+        let q = (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty else {
+            filteredItems = []
+            return
+        }
+
+        // Case and diacritic insensitive search on title + description + category
+        let normalizedQuery = q.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+        filteredItems = items.filter { item in
+            func norm(_ s: String?) -> String {
+                (s ?? "").folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+            }
+            if norm(item.title).contains(normalizedQuery) { return true }
+            if norm(item.description).contains(normalizedQuery) { return true }
+            if norm(item.category).contains(normalizedQuery) { return true }
+            return false
+        }
+    }
+}
+
+// MARK: - UISearchBarDelegate
+extension CategoriesViewController: UISearchBarDelegate {
+    func searchBarTextDidBeginEditing(_ searchBar: UISearchBar) {
+        // Ensure cancel button never appears
+        searchBar.showsCancelButton = false
+    }
+
+    func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
+        // Keep cancel hidden even while editing
+        searchBar.showsCancelButton = false
+        applyFilter(text: searchText)
+        reloadUI()
+    }
+
+    func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
+        // Keep cancel hidden and dismiss keyboard
+        searchBar.showsCancelButton = false
+        searchBar.resignFirstResponder()
+    }
+
+    func searchBarCancelButtonClicked(_ searchBar: UISearchBar) {
+        // Defensive: if the system ever shows it, clear and hide
+        searchBar.text = nil
+        filteredItems = []
+        searchBar.showsCancelButton = false
+        searchBar.resignFirstResponder()
+        reloadUI()
+    }
+
+    func searchBarTextDidEndEditing(_ searchBar: UISearchBar) {
+        // Ensure cancel stays hidden after editing
+        searchBar.showsCancelButton = false
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        // Keep rounded shape in sync with current height
+        layoutSearchBarRounded()
+    }
+}
+
 // MARK: - UITableViewDataSource
 extension CategoriesViewController: UITableViewDataSource {
 
@@ -154,16 +296,18 @@ extension CategoriesViewController: UITableViewDataSource {
     func numberOfSections(in tableView: UITableView) -> Int { 1 }
 
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        items.count
+        (isFiltering ? filteredItems : items).count
     }
 
     func tableView(_ tableView: UITableView,
                    cellForRowAt indexPath: IndexPath) -> UITableViewCell {
 
+        let data = isFiltering ? filteredItems : items
+
         guard let cell = tableView.dequeueReusableCell(withIdentifier: "ItemCell", for: indexPath) as? CategoryItemCell else {
             // Fallback if the storyboard isn’t configured yet
             let fallback = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
-            let item = items[indexPath.row]
+            let item = data[indexPath.row]
             fallback.textLabel?.text = item.title
             fallback.detailTextLabel?.text = formattedPricePerDay(item.price_per_day)
             // No accessory arrow
@@ -177,7 +321,7 @@ extension CategoriesViewController: UITableViewDataSource {
             return fallback
         }
 
-        let item = items[indexPath.row]
+        let item = data[indexPath.row]
         cell.configure(with: item, currencyFormatter: currencyFormatter)
         cell.delegate = self
 
@@ -202,7 +346,8 @@ extension CategoriesViewController: UITableViewDelegate {
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
 
-        let selectedItem = items[indexPath.row]
+        let data = isFiltering ? filteredItems : items
+        let selectedItem = data[indexPath.row]
 
         let nibName = "ProductViewController"
         let productVC: ProductViewController
@@ -230,8 +375,14 @@ extension CategoriesViewController: UITableViewDelegate {
 
 extension CategoriesViewController: CategoryItemCellDelegate {
     func categoryItemCellDidTapRent(_ cell: CategoryItemCell) {
-        guard let indexPath = tableViewForItem.indexPath(for: cell) else { return }
-        let item = items[indexPath.row]
+        print("✅ CategoriesViewController: Rent delegate called!")
+        guard let indexPath = tableViewForItem.indexPath(for: cell) else {
+            print("❌ Could not find indexPath for cell")
+            return
+        }
+        let data = isFiltering ? filteredItems : items
+        let item = data[indexPath.row]
+        print("📦 Opening RequestVC for item: \(item.title)")
 
         let nibName = "RequestViewController"
         let requestVC: RequestViewController

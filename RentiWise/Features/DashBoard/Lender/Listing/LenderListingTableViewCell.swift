@@ -105,8 +105,25 @@ final class LenderListingTableViewCell: UITableViewCell {
         let priceText = (currencyFormatter.string(from: amount) ?? "\(item.price_per_day)") + " / day"
         itemRateListing.text = priceText
 
-        // No rating field in your schema; show a placeholder or hide
-        itemRatingListing.text = "★ 4.5 (23)" // TODO: replace when rating data exists
+        // Rating display: be forgiving if only one of the fields is present
+        let avg = item.average_rating
+        let count = item.review_count
+
+        if let a = avg, let c = count, c > 0, a > 0 {
+            // Both available
+            let ratingText = String(format: "%.1f", a)
+            applyYellowStarRating(valueText: ratingText, reviewCount: c)
+        } else if let a = avg, a > 0 {
+            // Average only
+            let ratingText = String(format: "%.1f", a)
+            applyYellowStarRating(valueText: ratingText, reviewCount: nil)
+        } else if let c = count, c > 0 {
+            // Count only
+            applyYellowStarCountOnly(count: c)
+        } else {
+            // Nothing available
+            applyYellowStarRating(valueText: "New", reviewCount: nil)
+        }
 
         // Load first image if present
         if let firstPath = item.images.first,
@@ -143,6 +160,51 @@ final class LenderListingTableViewCell: UITableViewCell {
             }
         }
         imageLoadTask?.resume()
+    }
+    
+    // MARK: - Rating Display Helpers
+    private func applyYellowStarRating(valueText: String, reviewCount: Int?) {
+        let star = "★"
+        let space = " "
+        
+        let full: String
+        if let count = reviewCount {
+            let reviewWord = count == 1 ? "review" : "reviews"
+            full = star + space + valueText + " (\(count) \(reviewWord))"
+        } else {
+            full = star + space + valueText
+        }
+        
+        let attr = NSMutableAttributedString(string: full, attributes: [
+            .foregroundColor: UIColor.label,
+            .font: itemRatingListing?.font ?? UIFont.systemFont(ofSize: 14, weight: .regular)
+        ])
+        
+        // Color only the star in systemYellow
+        if let starRange = full.range(of: star) {
+            let nsRange = NSRange(starRange, in: full)
+            attr.addAttribute(.foregroundColor, value: UIColor.systemYellow, range: nsRange)
+        }
+        
+        itemRatingListing?.attributedText = attr
+    }
+
+    private func applyYellowStarCountOnly(count: Int) {
+        let star = "★"
+        let reviewWord = count == 1 ? "review" : "reviews"
+        let full = "\(star) (\(count) \(reviewWord))"
+
+        let attr = NSMutableAttributedString(string: full, attributes: [
+            .foregroundColor: UIColor.label,
+            .font: itemRatingListing?.font ?? UIFont.systemFont(ofSize: 14, weight: .regular)
+        ])
+
+        if let starRange = full.range(of: star) {
+            let nsRange = NSRange(starRange, in: full)
+            attr.addAttribute(.foregroundColor, value: UIColor.systemYellow, range: nsRange)
+        }
+
+        itemRatingListing?.attributedText = attr
     }
 }
 

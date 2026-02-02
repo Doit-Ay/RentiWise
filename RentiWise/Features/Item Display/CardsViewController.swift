@@ -112,7 +112,9 @@ final class CardsViewController: UIViewController {
                 images: [demo.imagePath],
                 is_active: true,
                 created_at: now,
-                updated_at: now
+                updated_at: now,
+                average_rating: nil,
+                review_count: nil
             )
             itemMap[constructed.id] = constructed
             rentButton.accessibilityValue = constructed.id

@@ -23,6 +23,8 @@ final class CategoryItemCell: UITableViewCell {
     weak var delegate: CategoryItemCellDelegate?
 
     @IBAction func rentButtonTapped(_ sender: UIButton) {
+        print("🔘 CategoryItemCell: Rent button tapped!")
+        print("🔘 Delegate is: \(delegate != nil ? "SET" : "NIL")")
         delegate?.categoryItemCellDidTapRent(self)
     }
     
@@ -82,26 +84,28 @@ final class CategoryItemCell: UITableViewCell {
         itemimage?.clipsToBounds = true
         itemimage?.contentMode = .scaleAspectFill
 
-        // Rent button: light glass with subtle shadow so it separates on light backgrounds
+        // Rent button: simple solid background with shadow (no glass effect to avoid blocking touches)
         if let b = rentbutton {
+            // CRITICAL: Ensure button can receive touches
+            b.isUserInteractionEnabled = true
+            
             b.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
-            b.setTitleColor(.label, for: .normal)
+            b.setTitleColor(UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0), for: .normal) // Teal text
             b.contentEdgeInsets = UIEdgeInsets(top: 8, left: 14, bottom: 8, right: 14)
-            b.applyGlassEffect(
-                cornerRadius: 12,
-                style: .systemThickMaterial,
-                addsVibrancy: false,
-                showsShadow: true,     // subtle separation, like Home buttons
-                borderAlpha: 0.30,
-                tintColorOverride: .white,
-                tintAlpha: 0.20,
-                showsHighlight: true,
-                highlightAlpha: 0.16
-            )
-            // Slightly reduce button shadow as well for consistency
-            b.layer.shadowOpacity = 0.10
+            
+            // Soft off-white background (less bright than pure white)
+            b.backgroundColor = UIColor(white: 0.96, alpha: 1.0)
+            b.layer.cornerRadius = 12
+            b.clipsToBounds = false
+            
+            // Subtle shadow to make it stand out
+            b.layer.shadowColor = UIColor.black.cgColor
+            b.layer.shadowOpacity = 0.15
             b.layer.shadowRadius = 6
             b.layer.shadowOffset = CGSize(width: 0, height: 3)
+            
+            // Ensure button is on top
+            contentView.bringSubviewToFront(b)
         }
 
         // Add insets around the card by constraining it inside contentView
@@ -155,8 +159,16 @@ final class CategoryItemCell: UITableViewCell {
         let currency = currencyFormatter.string(from: amount) ?? "\(item.price_per_day)"
         itemRate?.text = "\(currency) / day"
 
-        // Defaults so nothing looks blank if backend doesn’t provide values
-        applyYellowStarRating(valueText: "3.5")           // ★ in yellow, number in black
+        // Rating: show real stats if present, else “New”
+        if let avg = item.average_rating, let count = item.review_count, count > 0 {
+            let value = String(format: "%.1f", avg)
+            // Show only star + number (no “review(s)”)
+            applyYellowStarRatingWithCount(valueText: value, count: count)
+        } else {
+            itemRating?.attributedText = nil
+            itemRating?.text = "New"
+            itemRating?.textColor = .secondaryLabel
+        }
 
         // Distance placeholder while loading
         itemDistance?.text = "…"
@@ -305,7 +317,7 @@ final class CategoryItemCell: UITableViewCell {
         }
     }
 
-    // MARK: - Rating styling helper
+    // MARK: - Rating styling helpers
     private func applyYellowStarRating(valueText: String) {
         // Build "★ 3.5" with yellow star and black number
         let star = "★"
@@ -325,14 +337,10 @@ final class CategoryItemCell: UITableViewCell {
 
         itemRating?.attributedText = attr
     }
-}
 
-// MARK: - Lightweight remote image loading
-private extension UIImageView {
-    func setImage(from url: URL) {
-        UIImageView.loadImage(from: url) { [weak self] image in
-            self?.image = image
-        }
+    private func applyYellowStarRatingWithCount(valueText: String, count: Int) {
+        // Updated: show only star + number (remove “review/reviews” suffix)
+        applyYellowStarRating(valueText: valueText)
     }
 }
 

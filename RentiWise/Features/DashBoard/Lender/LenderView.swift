@@ -211,20 +211,24 @@ final class LenderView: UIView {
         }
 
         do {
-            // Fetch only this owner's items; newest first
-            let response = try await SupabaseManager.shared.client
-                .from("items")
-                .select()
-                .eq("owner_id", value: userId)
-                .order("created_at", ascending: false)
-                .execute()
+            // Use ItemsService to fetch with rating stats, then filter to owner's items
+            let itemsService = ItemsService()
+            let allItems = try await itemsService.fetchItems(category: "")
+            
+            print("🔍 LenderView: Fetched \(allItems.count) total items")
+            
+            // Filter to only this owner's items, newest first
+            let ownerItems = allItems
+                .filter { $0.owner_id.lowercased() == userId.lowercased() }
+                .sorted { ($0.created_at ?? Date.distantPast) > ($1.created_at ?? Date.distantPast) }
 
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .iso8601
-            let items = try decoder.decode([Item].self, from: response.data)
+            print("📦 LenderView: Filtered to \(ownerItems.count) owner items")
+            for (index, item) in ownerItems.enumerated() {
+                print("   Item \(index): \(item.title) - avg: \(item.average_rating ?? 0), count: \(item.review_count ?? 0)")
+            }
 
             await MainActor.run {
-                self.myItems = items
+                self.myItems = ownerItems
                 self.tableView.reloadData()
                 self.updateEmptyStateIfNeeded()
             }

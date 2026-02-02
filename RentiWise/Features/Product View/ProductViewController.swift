@@ -52,10 +52,11 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         return f
     }()
 
-    // Unified rating to display everywhere for now
-    private let unifiedRating: Double = 4.5
-    private let unifiedReviewsText: String = "(23 reviews)"
+    // Brand color
     private let brandTeal = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1.0)
+
+    // Services
+    private let reviewService: ReviewServicing = ReviewService()
 
     @IBOutlet weak var heroImageView: UIImageView!
     @IBOutlet weak var productNameLabel: UILabel?
@@ -63,7 +64,6 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
     @IBOutlet weak var priceLabel: UILabel?
     @IBOutlet weak var distanceLabel: UILabel?
     @IBOutlet weak var ratingValueLabel: UILabel?
-    @IBOutlet weak var ratingReviewsLabel: UILabel?
 
     // MARK: - Description card
     @IBOutlet weak var descriptionCard: UIView!
@@ -293,9 +293,8 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         let priceText = (currencyFormatter.string(from: amount) ?? "\(item.price_per_day)") + " / day"
         priceLabel?.text = priceText
 
-        // Unified Rating & Reviews
-        ratingValueLabel?.text = String(format: "%.1f", unifiedRating)
-        ratingReviewsLabel?.text = unifiedReviewsText
+        // Rating & Reviews from item if present, else fetch via ReviewService
+        applyRatingFromItemOrFetch(item)
 
         // Distance: compute via DistanceService for both top and right labels
         setDistanceLabels("...") // show loading indicator
@@ -363,6 +362,65 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         Task { [weak self] in
             await self?.loadReviews()
         }
+    }
+
+    private func applyRatingFromItemOrFetch(_ item: Item) {
+        // If the item already carries stats (preferred path), use them
+        if let avg = item.average_rating, let count = item.review_count {
+            if count > 0 {
+                applyYellowStarRating(valueText: String(format: "%.1f", avg), reviewCount: count)
+            } else {
+                applyYellowStarRating(valueText: "No reviews", reviewCount: nil)
+            }
+            return
+        }
+
+        // Otherwise fetch from ReviewService
+        ratingValueLabel?.text = "…"    // loading indicator
+        Task { [weak self] in
+            guard let self = self, let id = self.selectedItem?.id else { return }
+            do {
+                let stats = try await self.reviewService.fetchItemStats(itemId: id)
+                await MainActor.run {
+                    if let avg = stats.average_rating, stats.review_count > 0 {
+                        self.applyYellowStarRating(valueText: String(format: "%.1f", avg), reviewCount: stats.review_count)
+                    } else {
+                        self.applyYellowStarRating(valueText: "No reviews", reviewCount: nil)
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    self.applyYellowStarRating(valueText: "No reviews", reviewCount: nil)
+                }
+            }
+        }
+    }
+    
+    // MARK: - Rating Display Helper
+    private func applyYellowStarRating(valueText: String, reviewCount: Int?) {
+        let star = "★"
+        let space = " "
+        
+        let full: String
+        if let count = reviewCount {
+            let reviewWord = count == 1 ? "review" : "reviews"
+            full = star + space + valueText + " (\(count) \(reviewWord))"
+        } else {
+            full = star + space + valueText
+        }
+        
+        let attr = NSMutableAttributedString(string: full, attributes: [
+            .foregroundColor: UIColor.label,
+            .font: ratingValueLabel?.font ?? UIFont.systemFont(ofSize: 16, weight: .semibold)
+        ])
+        
+        // Color only the star in systemYellow
+        if let starRange = full.range(of: star) {
+            let nsRange = NSRange(starRange, in: full)
+            attr.addAttribute(.foregroundColor, value: UIColor.systemYellow, range: nsRange)
+        }
+        
+        ratingValueLabel?.attributedText = attr
     }
 
     private func setDistanceLabels(_ text: String?) {
@@ -1420,6 +1478,20 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
                 Task { [weak self] in
                     await self?.loadReviews()
                 }
+
+                // Refresh rating stats at the top after insertion
+                Task { [weak self] in
+                    guard let self = self, let id = self.selectedItem?.id else { return }
+                    if let stats = try? await self.reviewService.fetchItemStats(itemId: id) {
+                        await MainActor.run {
+                            if let avg = stats.average_rating, stats.review_count > 0 {
+                                self.applyYellowStarRating(valueText: String(format: "%.1f", avg), reviewCount: stats.review_count)
+                            } else {
+                                self.applyYellowStarRating(valueText: "No reviews", reviewCount: nil)
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -1433,3 +1505,4 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         }
     }
 }
+

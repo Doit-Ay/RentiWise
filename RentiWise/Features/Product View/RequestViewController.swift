@@ -776,10 +776,9 @@ extension UIColor {
 extension UIImageView {
     static func rw_loadImage(from url: URL, completion: @escaping (UIImage?) -> Void) {
         let task = URLSession.shared.dataTask(with: url) { data, _, _ in
-            if let data = data, let img = UIImage(data: data) {
-                completion(img)
-            } else {
-                completion(nil)
+            let image: UIImage? = if let data = data { UIImage(data: data) } else { nil }
+            DispatchQueue.main.async {
+                completion(image)
             }
         }
         task.resume()

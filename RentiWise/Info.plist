@@ -51,5 +51,7 @@
 			</array>
 		</dict>
 	</dict>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>RentiWise needs your location to show nearby items and calculate distances to help you find rentals close to you.</string>
 </dict>
 </plist>

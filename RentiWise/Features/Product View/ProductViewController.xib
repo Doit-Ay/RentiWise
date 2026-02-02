@@ -23,7 +23,6 @@
                 <outlet property="ownerNameLabel" destination="j4T-0G-1jd" id="FfJ-Tj-yhu"/>
                 <outlet property="priceLabel" destination="8j9-OS-B7I" id="mRD-xM-OvC"/>
                 <outlet property="productNameLabel" destination="h6f-Zu-B6F" id="YxM-pO-Uty"/>
-                <outlet property="ratingReviewsLabel" destination="vk1-8g-TnB" id="3rw-sC-vNm"/>
                 <outlet property="ratingValueLabel" destination="3Mu-TS-J4j" id="LnM-Jf-URn"/>
                 <outlet property="rentNowoutlet" destination="Nks-vK-Gic" id="J9v-rZ-dqz"/>
                 <outlet property="review1Card" destination="UsS-9e-3NG" id="iXR-oY-dc5"/>
@@ -163,32 +162,18 @@
                                 <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="5Pd-cM-hKM" userLabel="ratingview">
                                     <rect key="frame" x="24" y="341" width="166" height="29"/>
                                     <subviews>
-                                        <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="(No.Reviews)" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="vk1-8g-TnB">
-                                            <rect key="frame" x="86" y="5" width="99" height="20"/>
-                                            <fontDescription key="fontDescription" type="system" weight="medium" pointSize="16"/>
-                                            <nil key="textColor"/>
-                                            <nil key="highlightedColor"/>
-                                        </label>
                                         <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Rating" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="3Mu-TS-J4j">
                                             <rect key="frame" x="12" y="5" width="48" height="19.666666666666668"/>
                                             <fontDescription key="fontDescription" type="system" weight="medium" pointSize="16"/>
                                             <nil key="textColor"/>
                                             <nil key="highlightedColor"/>
                                         </label>
-                                        <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="star.fill" catalog="system" translatesAutoresizingMaskIntoConstraints="NO" id="Uzn-4S-2Mk">
-                                            <rect key="frame" x="62" y="4.3333333333333535" width="22" height="19.999999999999996"/>
-                                            <color key="tintColor" systemColor="systemYellowColor"/>
-                                        </imageView>
                                     </subviews>
                                     <color key="backgroundColor" systemColor="systemGray5Color"/>
                                     <constraints>
                                         <constraint firstAttribute="height" constant="29" id="02L-Ag-XhF"/>
                                         <constraint firstItem="3Mu-TS-J4j" firstAttribute="top" secondItem="5Pd-cM-hKM" secondAttribute="top" constant="5" id="GGS-vw-1JG"/>
-                                        <constraint firstItem="Uzn-4S-2Mk" firstAttribute="centerY" secondItem="3Mu-TS-J4j" secondAttribute="centerY" id="RGg-MN-HHN"/>
-                                        <constraint firstItem="vk1-8g-TnB" firstAttribute="leading" secondItem="3Mu-TS-J4j" secondAttribute="trailing" constant="26" id="Uet-8x-hn1"/>
-                                        <constraint firstItem="vk1-8g-TnB" firstAttribute="top" secondItem="5Pd-cM-hKM" secondAttribute="top" constant="5" id="ZMQ-Pq-n7Y"/>
                                         <constraint firstItem="3Mu-TS-J4j" firstAttribute="leading" secondItem="5Pd-cM-hKM" secondAttribute="leading" constant="12" id="c8K-QR-jl1"/>
-                                        <constraint firstItem="Uzn-4S-2Mk" firstAttribute="leading" secondItem="3Mu-TS-J4j" secondAttribute="trailing" constant="2" id="wdM-UI-YEa"/>
                                     </constraints>
                                     <userDefinedRuntimeAttributes>
                                         <userDefinedRuntimeAttribute type="number" keyPath="ibCornerRadius">
@@ -197,7 +182,7 @@
                                     </userDefinedRuntimeAttributes>
                                 </view>
                                 <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="VgB-tA-HB5" userLabel="distview">
-                                    <rect key="frame" x="207" y="341" width="86" height="29"/>
+                                    <rect key="frame" x="207" y="341" width="96" height="29"/>
                                     <subviews>
                                         <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="mappin.and.ellipse" catalog="system" translatesAutoresizingMaskIntoConstraints="NO" id="0qC-Ss-W0P">
                                             <rect key="frame" x="13" y="3.6666666666666643" width="19" height="20.333333333333336"/>
@@ -292,7 +277,7 @@
                                 <constraint firstAttribute="trailing" secondItem="UsS-9e-3NG" secondAttribute="trailing" constant="16" id="4jA-jv-Sje"/>
                                 <constraint firstItem="UsS-9e-3NG" firstAttribute="top" secondItem="Ns8-kv-Kze" secondAttribute="bottom" constant="10" id="5Kl-wm-Z0z"/>
                                 <constraint firstItem="8j9-OS-B7I" firstAttribute="top" secondItem="h6f-Zu-B6F" secondAttribute="bottom" constant="8" id="6mR-0l-tSO"/>
-                                <constraint firstAttribute="trailing" secondItem="VgB-tA-HB5" secondAttribute="trailing" constant="100" id="8Vc-K5-VJB"/>
+                                <constraint firstAttribute="trailing" secondItem="VgB-tA-HB5" secondAttribute="trailing" constant="90" id="8Vc-K5-VJB"/>
                                 <constraint firstItem="UsS-9e-3NG" firstAttribute="leading" secondItem="HTq-vE-ojZ" secondAttribute="leading" constant="16" id="8js-qP-bRS"/>
                                 <constraint firstAttribute="trailing" secondItem="mOc-DY-2VR" secondAttribute="trailing" constant="30" id="9WO-8F-2Wh"/>
                                 <constraint firstAttribute="trailing" secondItem="qbW-Ks-r2M" secondAttribute="trailing" constant="16" id="IBi-mc-28U"/>
@@ -377,7 +362,6 @@
         <image name="heart" catalog="system" width="128" height="107"/>
         <image name="mappin.and.ellipse" catalog="system" width="110" height="128"/>
         <image name="shield" catalog="system" width="121" height="128"/>
-        <image name="star.fill" catalog="system" width="128" height="116"/>
         <systemColor name="labelColor">
             <color white="0.0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
         </systemColor>
@@ -389,9 +373,6 @@
         </systemColor>
         <systemColor name="systemGroupedBackgroundColor">
             <color red="0.94901960780000005" green="0.94901960780000005" blue="0.96862745100000003" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
-        </systemColor>
-        <systemColor name="systemYellowColor">
-            <color red="1" green="0.80000000000000004" blue="0.0" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
         </systemColor>
     </resources>
 </document>

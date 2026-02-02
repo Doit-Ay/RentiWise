@@ -205,6 +205,9 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
     // MARK: - Search helper
     private var homeSearch: HomeSearchController?
 
+    // MARK: - Services
+    private let itemsService = ItemsService()
+
     override func viewDidLoad() {
         super.viewDidLoad()
 
@@ -504,6 +507,30 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
             present(productVC, animated: true)
         }
     }
+    
+    // Helper to open RequestViewController directly from rent button
+    private func openRequestView(for item: Item) {
+        let nibName = "RequestViewController"
+        let requestVC: RequestViewController
+        if Bundle.main.path(forResource: nibName, ofType: "nib") != nil ||
+            Bundle.main.path(forResource: nibName, ofType: "xib") != nil {
+            requestVC = RequestViewController(nibName: nibName, bundle: nil)
+        } else {
+            requestVC = RequestViewController()
+        }
+        requestVC.configure(with: item)
+        requestVC.title = "Request"
+        requestVC.hidesBottomBarWhenPushed = true
+
+        if let nav = navigationController {
+            nav.setNavigationBarHidden(false, animated: true)
+            nav.pushViewController(requestVC, animated: true)
+        } else {
+            let nav = UINavigationController(rootViewController: requestVC)
+            nav.modalPresentationStyle = .fullScreen
+            present(nav, animated: true)
+        }
+    }
 
     @objc private func didTapProductView() {
         // Instantiate ProductViewController from XIB if available, else fallback to code
@@ -576,6 +603,7 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
         if let categoriesVC = vc as? CategoriesViewController {
             categoriesVC.category = title
             categoriesVC.title = title
+            categoriesVC.hidesBottomBarWhenPushed = true
             navigationController?.setNavigationBarHidden(false, animated: true)
             navigationController?.pushViewController(categoriesVC, animated: true)
         } else {
@@ -746,19 +774,36 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
 // MARK: - Location handling (sheet + persistence)
 private extension HomeViewController {
     func refreshLocationButtonTitle() {
-        // Ensure we have a persisted default so DistanceService can compute immediately.
+        // Always use full geocodable address for accurate distance calculations
         if SavedAddressesStore.shared.getDefaultSelectedAddress() == nil {
-            // Use a full geocodable default string (adjust to your campus/location as needed).
+            // Use full geocodable default for DistanceService (same for all users)
             let defaultGeocodable = "SRM Institute of Science and Technology, Kattankulathur, Tamil Nadu, India"
             SavedAddressesStore.shared.setDefaultSelectedAddress(defaultGeocodable)
         }
 
-        let selected = SavedAddressesStore.shared.getDefaultSelectedAddress() ?? "SRMIST"
-        locationTapped?.setTitle(selected, for: .normal)
+        let storedAddress = SavedAddressesStore.shared.getDefaultSelectedAddress() ?? "SRMIST"
+        
+        // Extract only the city or label (first meaningful component) for display
+        let displayText: String = {
+            let trimmed = storedAddress.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return "SRMIST" }
+            
+            // Split by comma and take the first non-empty part (typically city or label)
+            let components = trimmed.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            
+            // Return the first meaningful component
+            if let firstComponent = components.first(where: { !$0.isEmpty }) {
+                return firstComponent
+            }
+            
+            return trimmed
+        }()
+        
+        locationTapped?.setTitle(displayText, for: .normal)
         locationTapped?.setTitleColor(UIColor(red: 112/255, green: 167/255, blue: 180/255, alpha: 1.0), for: .normal) // brand blue
         locationTapped?.titleLabel?.font = .systemFont(ofSize: 14, weight: .semibold)
 
-        // Ensure truncation rules are applied after changing title
+        // Ensure single-line display with truncation
         configureLocationButtonAppearance()
     }
 
@@ -1101,18 +1146,10 @@ private extension HomeViewController {
 
     func loadFeaturedItems() async {
         do {
-            // newest first, limit 4; RLS already restricts to is_active = true for public
-            let response = try await SupabaseManager.shared.client
-                .from("items")
-                .select()
-                .order("created_at", ascending: false)
-                .limit(4)
-                .execute()
-
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .iso8601
-            let items = try decoder.decode([Item].self, from: response.data)
-
+            // Use ItemsService to fetch active items and enrich with rating stats from public.reviews
+            // Fetch latest items, then take up to 4 for featured.
+            let allItems = try await itemsService.fetchItems(category: "")
+            let items = Array(allItems.prefix(4))
             await MainActor.run {
                 self.applyFeatured(items: items)
             }
@@ -1163,8 +1200,19 @@ private extension HomeViewController {
         rateLabel?.textColor = .label
         rateLabel?.font = .systemFont(ofSize: 14, weight: .regular)
 
-        // Rating: yellow star + normal text
-        ratingLabel?.attributedText = makeYellowStarRatingText(valueText: "4.5", reviewsText: "(23)")
+        // Rating: yellow star + actual rating from database
+        if let avgRating = item.average_rating, let count = item.review_count, count > 0 {
+            let ratingText = String(format: "%.1f", avgRating)
+            // Show only the number (no "review/reviews" text)
+            ratingLabel?.attributedText = makeYellowStarRatingText(valueText: ratingText, reviewsText: nil)
+        } else {
+            // No reviews yet - show placeholder
+            ratingLabel?.attributedText = nil
+            ratingLabel?.text = "No reviews"
+            ratingLabel?.textColor = .secondaryLabel
+            ratingLabel?.font = .systemFont(ofSize: 13, weight: .regular)
+        }
+
 
         // Distance: fetch road distance asynchronously and update label
         distanceLabel?.text = "..."
@@ -1635,9 +1683,23 @@ private extension HomeViewController {
     }
 
     func updateTrendingItems(from items: [Item]) {
-        // Approximate "trending": currently just take the latest items you fetched for featured.
-        // You could later sort by real rating/distance when available.
-        trendingItems = Array(items.prefix(5))
+        // Sort by highest rating first, then take top 6
+        // Items with no reviews (nil rating) go to the end
+        let sortedByRating = items.sorted { item1, item2 in
+            let rating1 = item1.average_rating ?? 0
+            let rating2 = item2.average_rating ?? 0
+            let count1 = item1.review_count ?? 0
+            let count2 = item2.review_count ?? 0
+            
+            // Prioritize items with reviews
+            if count1 > 0 && count2 == 0 { return true }
+            if count1 == 0 && count2 > 0 { return false }
+            
+            // Both have reviews or both don't - sort by rating
+            return rating1 > rating2
+        }
+        
+        trendingItems = Array(sortedByRating.prefix(6))
         trendingCollectionView?.reloadData()
     }
 
@@ -1807,27 +1869,26 @@ private final class TrendingItemCell: UICollectionViewCell {
         distanceStack.addArrangedSubview(distanceIcon)
         distanceStack.addArrangedSubview(distanceLabel)
 
-        // Rent button (pill)
+        // Rent button (pill) - solid background instead of glass effect
         rentButton.translatesAutoresizingMaskIntoConstraints = false
         rentButton.setTitle("Rent", for: .normal)
         rentButton.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
-        // Keep Rent button text in brand teal
+        // Teal text on off-white background
         rentButton.setTitleColor(brandTeal, for: .normal)
         rentButton.contentEdgeInsets = UIEdgeInsets(top: 8, left: 18, bottom: 8, right: 18)
-        rentButton.applyGlassEffect(
-            cornerRadius: 16,
-            style: .systemThickMaterial,
-            addsVibrancy: false,
-            showsShadow: true,
-            borderAlpha: 0.28,
-            tintColorOverride: .white,
-            tintAlpha: 0.20,
-            showsHighlight: true,
-            highlightAlpha: 0.16
-        )
-        rentButton.layer.shadowOpacity = 0.10
+        
+        // CRITICAL: Enable user interaction and use solid background
+        rentButton.isUserInteractionEnabled = true
+        rentButton.backgroundColor = UIColor(white: 0.96, alpha: 1.0) // Soft off-white
+        rentButton.layer.cornerRadius = 16
+        rentButton.clipsToBounds = false
+        
+        // Subtle shadow
+        rentButton.layer.shadowColor = UIColor.black.cgColor
+        rentButton.layer.shadowOpacity = 0.15
         rentButton.layer.shadowRadius = 6
         rentButton.layer.shadowOffset = CGSize(width: 0, height: 3)
+        
         rentButton.addTarget(self, action: #selector(rentTapped), for: .touchUpInside)
 
         // Meta rows
@@ -1885,7 +1946,11 @@ private final class TrendingItemCell: UICollectionViewCell {
         priceSuffixLabel.text = "/ day"
 
         // Rating placeholder
-        ratingLabel.text = "4.8"
+        if let avgRating = item.average_rating, let count = item.review_count, count > 0 {
+            ratingLabel.text = String(format: "%.1f", avgRating)
+        } else {
+            ratingLabel.text = "New"
+        }
 
         // Distance: fetch road distance asynchronously
         distanceLabel.text = "..."
@@ -1920,22 +1985,22 @@ extension HomeViewController {
 
     @IBAction func rentButton1Tapped(_ sender: UIButton) {
         guard featuredItems.indices.contains(0) else { return }
-        openItem(featuredItems[0])
+        openRequestView(for: featuredItems[0])
     }
 
     @IBAction func rentButton2Tapped(_ sender: UIButton) {
         guard featuredItems.indices.contains(1) else { return }
-        openItem(featuredItems[1])
+        openRequestView(for: featuredItems[1])
     }
 
     @IBAction func rentButton3Tapped(_ sender: UIButton) {
         guard featuredItems.indices.contains(2) else { return }
-        openItem(featuredItems[2])
+        openRequestView(for: featuredItems[2])
     }
 
     @IBAction func rentButton4Tapped(_ sender: UIButton) {
         guard featuredItems.indices.contains(3) else { return }
-        openItem(featuredItems[3])
+        openRequestView(for: featuredItems[3])
     }
 }
 

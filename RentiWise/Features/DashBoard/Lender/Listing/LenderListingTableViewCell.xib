@@ -18,7 +18,7 @@
                 <autoresizingMask key="autoresizingMask"/>
                 <subviews>
                     <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="oZZ-Fx-YBT">
-                        <rect key="frame" x="19.666666666666657" y="30" width="350" height="130"/>
+                        <rect key="frame" x="16" y="30" width="350" height="130"/>
                         <subviews>
                             <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="Image 1" translatesAutoresizingMaskIntoConstraints="NO" id="Jtu-sJ-1fC">
                                 <rect key="frame" x="16" y="16" width="120" height="98"/>
@@ -69,8 +69,10 @@
                     </view>
                 </subviews>
                 <constraints>
+                    <constraint firstAttribute="trailing" secondItem="oZZ-Fx-YBT" secondAttribute="trailing" constant="16" id="GZT-pw-ifv"/>
                     <constraint firstItem="oZZ-Fx-YBT" firstAttribute="centerX" secondItem="H2p-sc-9uM" secondAttribute="centerX" id="Icl-nK-CIe"/>
                     <constraint firstItem="oZZ-Fx-YBT" firstAttribute="centerY" secondItem="H2p-sc-9uM" secondAttribute="centerY" id="hd2-Z9-eKY"/>
+                    <constraint firstItem="oZZ-Fx-YBT" firstAttribute="leading" secondItem="H2p-sc-9uM" secondAttribute="leading" constant="16" id="nLh-lx-Qow"/>
                 </constraints>
             </tableViewCellContentView>
             <viewLayoutGuide key="safeArea" id="njF-e1-oar"/>

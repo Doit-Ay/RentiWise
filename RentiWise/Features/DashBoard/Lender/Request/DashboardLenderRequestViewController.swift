@@ -405,7 +405,9 @@ class DashboardLenderRequestViewController: UIViewController {
             images: images,
             is_active: true,
             created_at: nil,
-            updated_at: nil
+            updated_at: nil,
+            average_rating: nil,
+            review_count: nil
         )
     }
 
