@@ -469,7 +469,7 @@ extension MyRentalsViewController: UITableViewDataSource {
 // MARK: - UITableViewDelegate
 extension MyRentalsViewController: UITableViewDelegate {
     // Spacing between cards reduced to 16pt instead of massive 125pt
-    func tableView(_ tableView: UITableView, heightForFooterInSection section: Int) -> CGFloat { 16 }
+    func tableView(_ tableView: UITableView, heightForFooterInSection section: Int) -> CGFloat { 125 }
     func tableView(_ tableView: UITableView, viewForFooterInSection section: Int) -> UIView? {
         let v = UIView()
         v.backgroundColor = .clear

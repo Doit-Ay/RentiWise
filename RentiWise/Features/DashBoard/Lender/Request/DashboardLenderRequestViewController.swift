@@ -219,10 +219,19 @@ class DashboardLenderRequestViewController: UIViewController {
         itemNameLabel?.text = req.items?.title ?? req.item_id
 
         // Category from joined item if available
-        if let cat = req.items?.category, !cat.isEmpty {
+        if let cat = req.items?.category, !cat.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             categoryLabel?.text = cat
         } else {
             categoryLabel?.text = "—"
+            // Fallback: fetch category directly if missing in the injected request
+            Task { [weak self] in
+                guard let self = self else { return }
+                if let fresh = await self.fetchItemCategory(itemId: req.item_id) {
+                    await MainActor.run {
+                        self.categoryLabel?.text = fresh
+                    }
+                }
+            }
         }
 
         // Dates and duration
@@ -297,7 +306,17 @@ class DashboardLenderRequestViewController: UIViewController {
 
         // Owner placeholders (ratings/distance can be refined later)
         if ownRatingLabel?.text?.isEmpty ?? true { ownRatingLabel?.text = "★ 4.7" }
-        if ownDistLabel?.text?.isEmpty ?? true { ownDistLabel?.text = "2.3 km" }
+
+        // Distance: compute via DistanceService using a lightweight Item built from the request
+        ownDistLabel?.text = "..."
+        Task { [weak self] in
+            guard let self = self, let req = self.request else { return }
+            let shim = self.makeShimItem(from: req)
+            let text = await DistanceService.shared.distanceText(for: shim)
+            await MainActor.run {
+                self.ownDistLabel?.text = text
+            }
+        }
 
         // Pricing: need deposit_amount from items; fetch if we don’t have it yet
         computeAndDisplayTotals(days: days, pricePerDay: req.items?.price_per_day, itemId: req.item_id)
@@ -364,6 +383,54 @@ class DashboardLenderRequestViewController: UIViewController {
         let firstChar = String(first).uppercased()
         let remainder = String(s.unicodeScalars.dropFirst())
         return firstChar + remainder
+    }
+
+    // MARK: - Build a lightweight Item to feed DistanceService
+
+    private func makeShimItem(from req: RequestWithItem) -> Item {
+        // Fill from joined item when available; otherwise minimal safe defaults
+        let title = req.items?.title ?? req.item_id
+        let images = req.items?.images ?? []
+        let pricePerDay = req.items?.price_per_day ?? 0
+        // Item requires many fields; populate sensible defaults where unknown
+        return Item(
+            id: req.item_id,
+            owner_id: req.owner_id,
+            title: title,
+            description: nil,
+            category: req.items?.category,
+            condition: nil,
+            price_per_day: pricePerDay,
+            deposit_amount: 0,
+            images: images,
+            is_active: true,
+            created_at: nil,
+            updated_at: nil
+        )
+    }
+
+    // MARK: - Category fallback fetch
+
+    private func fetchItemCategory(itemId: String) async -> String? {
+        do {
+            let response = try await SupabaseManager.shared.client
+                .from("items")
+                .select("category")
+                .eq("id", value: itemId)
+                .single()
+                .execute()
+
+            struct Row: Decodable { let category: String? }
+            if let data = response.data as? Data {
+                let row = try JSONDecoder().decode(Row.self, from: data)
+                if let cat = row.category, !cat.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    return cat
+                }
+            }
+        } catch {
+            // ignore; keep "—"
+        }
+        return nil
     }
 
     // MARK: - Pricing

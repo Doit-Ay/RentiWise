@@ -166,14 +166,16 @@ final class DistanceService {
                     .filter { !$0.isEmpty }
                     .joined(separator: ", ")
                 if !parts.isEmpty {
-                    return await geocodeAddressString(parts)
+                    if let geocoded = await geocodeAddressString(parts) {
+                        return geocoded
+                    }
                 }
             }
         } catch {
             // ignore and continue to fallback
         }
-        // Final fallback so a distance is always shown
-        return fallbackOwnerCoordinate
+        // Final fallback: only return fallback if all attempts failed
+        return nil
     }
 
     // MARK: - Viewer geocoding
