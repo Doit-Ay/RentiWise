@@ -420,6 +420,29 @@ class BookingApprovalViewController: UIViewController {
         openChatSafely()
     }
     
+    @IBAction func ViewHideCodeButton(_ sender: UIButton) {
+        // Toggle the code stack visibility with animation
+        UIView.animate(withDuration: 0.3) {
+            let isCurrentlyHidden = self.codestack.isHidden
+            
+            if isCurrentlyHidden {
+                // Expand: show the code stack
+                self.codestack.isHidden = false
+                self.codeStackCollapseConstraint?.isActive = false
+                self.viewCodeHeight?.constant = self.expandedViewCodeHeight
+                sender.setTitle("Hide Code", for: .normal)
+            } else {
+                // Collapse: hide the code stack
+                self.codestack.isHidden = true
+                self.codeStackCollapseConstraint?.isActive = true
+                self.viewCodeHeight?.constant = self.collapsedViewCodeHeight
+                sender.setTitle("View Code", for: .normal)
+            }
+            
+            self.view.layoutIfNeeded()
+        }
+    }
+    
     @IBAction func paymentbuttontapped(_ sender: UIButton) {
         guard mode == .myRentals else { return } // no payment in history
         guard let req = request else { return }
@@ -443,10 +466,73 @@ class BookingApprovalViewController: UIViewController {
         present(actionSheet, animated: true)
     }
     
+    
+    @IBAction func getDirectionsButtonTapped(_ sender: UIButton) {
+        openDirections()
+    }
+    
+    private func openDirections() {
+        // Get the address text from the label
+        guard let addressText = addressLabel?.text, !addressText.isEmpty, addressText != "Address unavailable" else {
+            showToast(message: "Address not available", fromBottom: false)
+            return
+        }
+        
+        // Try to open in Apple Maps with the address
+        let encodedAddress = addressText.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        
+        // Build the Maps URL
+        if let url = URL(string: "http://maps.apple.com/?q=\(encodedAddress)") {
+            if UIApplication.shared.canOpenURL(url) {
+                UIApplication.shared.open(url, options: [:]) { success in
+                    if !success {
+                        // Fallback to Google Maps in browser
+                        if let webURL = URL(string: "https://www.google.com/maps/search/?api=1&query=\(encodedAddress)") {
+                            UIApplication.shared.open(webURL, options: [:], completionHandler: nil)
+                        }
+                    }
+                }
+            } else {
+                // Fallback to Google Maps in browser
+                if let webURL = URL(string: "https://www.google.com/maps/search/?api=1&query=\(encodedAddress)") {
+                    UIApplication.shared.open(webURL, options: [:], completionHandler: nil)
+                }
+            }
+        }
+    }
+    
+    @IBAction func copyAddressButtonTapped(_ sender: UIButton) {
+        // Copy the address to clipboard
+        guard let addressText = addressLabel?.text, !addressText.isEmpty, addressText != "Address unavailable" else {
+            showToast(message: "Address not available", fromBottom: true)
+            return
+        }
+        
+        UIPasteboard.general.string = addressText
+        
+        // Show a brief confirmation with haptic feedback
+        let generator = UINotificationFeedbackGenerator()
+        generator.notificationOccurred(.success)
+        
+        // Visual feedback: briefly change button appearance
+        let originalAlpha = sender.alpha
+        UIView.animate(withDuration: 0.15, animations: {
+            sender.alpha = 0.5
+        }) { _ in
+            UIView.animate(withDuration: 0.15) {
+                sender.alpha = originalAlpha
+            }
+        }
+        
+        // Show bottom toast notification
+        showToast(message: "Address copied", fromBottom: true)
+    }
+    
     @IBAction func debugForceApprove(_ sender: Any) {
         print("[BookingApproval] debugForceApprove tapped")
         setStatus(.approved)
     }
+
     
     deinit {
         NotificationCenter.default.removeObserver(self, name: BookingApprovalViewController.requestApprovedNotification, object: nil)
@@ -455,25 +541,19 @@ class BookingApprovalViewController: UIViewController {
     // MARK: - Private helpers
 
     private func applyModeUI() {
-        // Hide payment controls and code UI entirely in history mode
+        // Hide payment button in history mode (owner doesn't pay)
         let hidePayment = (mode == .history)
 
         paymentButton.isHidden = hidePayment
         paymentButton.isEnabled = hidePayment ? false : paymentButton.isEnabled
 
-        viewCodeUIView.isHidden = true // never show code section in history
-        viewCodeHeight?.constant = hidePayment ? 0 : viewCodeHeight?.constant ?? 0
-        viewCodeHeight?.isActive = true
-        statusToViewCodeTop?.constant = 0
-
-        // Also collapse code stack
-        codestack.isHidden = true
-        codeStackCollapseConstraint?.isActive = true
-
+        // Code section visibility depends on payment status, not mode
+        // Don't force hide in history - let updateStatusUI() control it based on payment
+        
         // Payment status label visibility
         paymentStatus?.isHidden = (mode == .myRentals)
 
-        // If history, ensure amounts still visible (rent + deposit) but no payment actions
+        // Update UI based on current payment and approval status
         updateStatusUI()
         view.setNeedsLayout()
         view.layoutIfNeeded()
@@ -545,8 +625,10 @@ class BookingApprovalViewController: UIViewController {
         tickimage.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 22, weight: .regular)
         tickimage.contentMode = .scaleAspectFit
 
-        // Show/hide View Code container depending on DB payment status (never show in history)
-        let shouldShowCode = hasCompletedPayment && mode == .myRentals
+        // Show/hide View Code container depending on DB payment status
+        // Show in BOTH myRentals and history modes when payment is completed
+        // (Borrower needs code to show owner, Owner needs code to verify)
+        let shouldShowCode = hasCompletedPayment
         viewCodeUIView.isHidden = !shouldShowCode
         if shouldShowCode {
             viewCodeHeight?.constant = collapsedViewCodeHeight
@@ -556,19 +638,21 @@ class BookingApprovalViewController: UIViewController {
             statusToViewCodeTop?.constant = 0
         }
 
-        // Button title from payment state (ignored if hidden)
-        if hasCompletedPayment && mode == .myRentals {
-            paymentButton.setTitle("Payment Successful", for: .normal)
-            paymentButton.setTitleColor(.black, for: .normal)
-            paymentButton.setTitleColor(.black, for: .disabled)
-            paymentButton.isEnabled = false
-            paymentButton.alpha = 0.6
-        } else if mode == .myRentals {
-            paymentButton.setTitle("Proceed to Payment", for: .normal)
-            paymentButton.setTitleColor(.label, for: .normal)
-            paymentButton.setTitleColor(.secondaryLabel, for: .disabled)
-            paymentButton.isEnabled = (status == .approved)
-            paymentButton.alpha = paymentButton.isEnabled ? 1.0 : 0.5
+        // Button title from payment state (only applies in myRentals mode where button is visible)
+        if mode == .myRentals {
+            if hasCompletedPayment {
+                paymentButton.setTitle("Payment Successful", for: .normal)
+                paymentButton.setTitleColor(.black, for: .normal)
+                paymentButton.setTitleColor(.black, for: .disabled)
+                paymentButton.isEnabled = false
+                paymentButton.alpha = 0.6
+            } else {
+                paymentButton.setTitle("Proceed to Payment", for: .normal)
+                paymentButton.setTitleColor(.label, for: .normal)
+                paymentButton.setTitleColor(.secondaryLabel, for: .disabled)
+                paymentButton.isEnabled = (status == .approved)
+                paymentButton.alpha = paymentButton.isEnabled ? 1.0 : 0.5
+            }
         }
 
         // Update payment status label visibility/text per mode
@@ -669,16 +753,17 @@ class BookingApprovalViewController: UIViewController {
             }
         }
 
-        // Only for myRentals, reflect latest payment from DB
+        // Refresh payment data for both modes
+        // In myRentals: full payment refresh with code
+        // In history: fetch payment to show code and status label
         if mode == .myRentals {
             Task { await self.refreshPaymentFromDB() }
         } else {
-            // In history, ensure code/flags are reset and update payment status label
-            hasCompletedPayment = false
-            currentPayment = nil
-            setCodeDigits(from: "000000")
-            updateStatusUI()
-            Task { await self.refreshPaymentStatusForHistory() }
+            // In history mode, also fetch the payment to display the code
+            Task { 
+                await self.refreshPaymentFromDBForHistory()
+                await self.refreshPaymentStatusForHistory() 
+            }
         }
     }
 
@@ -903,6 +988,42 @@ class BookingApprovalViewController: UIViewController {
                         self.updateStatusUI()
                     }
                 }
+            }
+        }
+    }
+
+    private func refreshPaymentFromDBForHistory() async {
+        guard mode == .history, let req = request else { return }
+        do {
+            let response = try await SupabaseManager.shared.client
+                .from("payments")
+                .select()
+                .eq("request_id", value: req.id)
+                .order("created_at", ascending: false)
+                .limit(1)
+                .execute()
+            let decoder = JSONDecoder()
+            let rows = try decoder.decode([PaymentRow].self, from: response.data)
+            let latest = rows.first
+
+            await MainActor.run {
+                self.currentPayment = latest
+                if let p = latest, p.status.lowercased() == "succeeded", let code = p.pickup_code, !code.isEmpty {
+                    self.hasCompletedPayment = true
+                    self.setCodeDigits(from: code)
+                    self.updateAmountLabels(rental: p.rental_fee, deposit: p.deposit_amount, total: p.total_amount)
+                } else {
+                    self.hasCompletedPayment = false
+                    self.setCodeDigits(from: "000000")
+                }
+                self.updateStatusUI()
+            }
+        } catch {
+            await MainActor.run {
+                self.currentPayment = nil
+                self.hasCompletedPayment = false
+                self.setCodeDigits(from: "000000")
+                self.updateStatusUI()
             }
         }
     }
@@ -1246,6 +1367,49 @@ class BookingApprovalViewController: UIViewController {
             }
         }
         paymentStatus?.isHidden = false
+    }
+    
+    // MARK: - Toast notification helper
+    
+    private func showToast(message: String, fromBottom: Bool = true) {
+        // Create a label for the toast
+        let toastLabel = UILabel()
+        toastLabel.backgroundColor = UIColor.black.withAlphaComponent(0.8)
+        toastLabel.textColor = .white
+        toastLabel.textAlignment = .center
+        toastLabel.font = UIFont.systemFont(ofSize: 14, weight: .medium)
+        toastLabel.text = message
+        toastLabel.numberOfLines = 0
+        toastLabel.alpha = 0
+        toastLabel.layer.cornerRadius = 10
+        toastLabel.clipsToBounds = true
+        
+        // Size the label
+        let maxSize = CGSize(width: view.bounds.width - 80, height: 100)
+        let expectedSize = toastLabel.sizeThatFits(maxSize)
+        let width = min(expectedSize.width + 40, view.bounds.width - 40)
+        let height = expectedSize.height + 20
+        
+        toastLabel.frame = CGRect(
+            x: (view.bounds.width - width) / 2,
+            y: fromBottom ? view.bounds.height - 100 : view.safeAreaInsets.top + 20,
+            width: width,
+            height: height
+        )
+        
+        view.addSubview(toastLabel)
+        
+        // Animate in
+        UIView.animate(withDuration: 0.3, delay: 0, options: .curveEaseOut, animations: {
+            toastLabel.alpha = 1
+        }) { _ in
+            // Animate out after delay
+            UIView.animate(withDuration: 0.3, delay: 1.5, options: .curveEaseIn, animations: {
+                toastLabel.alpha = 0
+            }) { _ in
+                toastLabel.removeFromSuperview()
+            }
+        }
     }
 }
 

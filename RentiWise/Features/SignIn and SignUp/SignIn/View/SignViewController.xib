@@ -151,7 +151,7 @@
                     </subviews>
                 </stackView>
                 <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="trailing" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="E4X-NV-ASb">
-                    <rect key="frame" x="250" y="442.66666666666669" width="135.66666666666663" height="29.666666666666686"/>
+                    <rect key="frame" x="249.33333333333337" y="442.66666666666669" width="135.66666666666663" height="29.666666666666686"/>
                     <color key="tintColor" red="0.43921568630000002" green="0.65490196079999996" blue="0.70588235290000001" alpha="1" colorSpace="custom" customColorSpace="displayP3"/>
                     <state key="normal" title="Button"/>
                     <buttonConfiguration key="configuration" style="plain" title="Forgot Password ?">
@@ -165,6 +165,7 @@
             <viewLayoutGuide key="safeArea" id="vUN-kp-3ea"/>
             <color key="backgroundColor" systemColor="systemBackgroundColor"/>
             <constraints>
+                <constraint firstItem="vUN-kp-3ea" firstAttribute="trailing" secondItem="E4X-NV-ASb" secondAttribute="trailing" constant="8" id="6iD-Gb-Pvh"/>
                 <constraint firstItem="YKm-RI-HXf" firstAttribute="centerX" secondItem="vUN-kp-3ea" secondAttribute="centerX" id="CLM-LO-L0o"/>
                 <constraint firstAttribute="bottom" secondItem="tzd-7Z-Lcp" secondAttribute="bottom" constant="80" id="IBk-Ay-hnj"/>
                 <constraint firstItem="tzd-7Z-Lcp" firstAttribute="centerX" secondItem="vUN-kp-3ea" secondAttribute="centerX" id="K9m-Ji-mWq"/>
@@ -177,7 +178,6 @@
                 <constraint firstItem="YKm-RI-HXf" firstAttribute="top" secondItem="dci-21-th7" secondAttribute="bottom" constant="90" id="jc8-ol-ltV"/>
                 <constraint firstItem="dci-21-th7" firstAttribute="top" secondItem="B9z-FI-eGM" secondAttribute="bottom" constant="70" id="ntQ-uP-J6u"/>
                 <constraint firstItem="dci-21-th7" firstAttribute="leading" secondItem="vUN-kp-3ea" secondAttribute="leading" constant="20" id="w6r-3y-2JB"/>
-                <constraint firstItem="E4X-NV-ASb" firstAttribute="leading" secondItem="vUN-kp-3ea" secondAttribute="leading" constant="250" id="zhI-7M-6OE"/>
             </constraints>
             <point key="canvasLocation" x="138.1679389312977" y="153.52112676056339"/>
         </view>

@@ -215,7 +215,7 @@ class AddItemFirstViewController: UIViewController,
         }
 
         if images.isEmpty {
-            let side: CGFloat = 200
+            let side: CGFloat = 150
             return CGSize(width: side, height: side)
         }
 
@@ -237,12 +237,20 @@ class AddItemFirstViewController: UIViewController,
         var insets = UIEdgeInsets(top: 16, left: 16, bottom: 16, right: 16)
 
         if images.isEmpty {
+            // Vertical centering (existing logic)
             let side: CGFloat = 200
             let availableHeight = collectionView.bounds.inset(by: collectionView.adjustedContentInset).height
             let remaining = max(0, (availableHeight - side)) / 2
             let verticalOffset: CGFloat = 150
             insets.top = max(16, remaining - verticalOffset)
             insets.bottom = max(16, remaining + verticalOffset)
+
+            // NEW: Horizontal centering for a single 150pt cell
+            let cellWidth: CGFloat = 150
+            let availableWidth = collectionView.bounds.inset(by: collectionView.adjustedContentInset).width
+            let horizontalPadding = max(16, (availableWidth - cellWidth) / 2)
+            insets.left = horizontalPadding
+            insets.right = horizontalPadding
         }
         return insets
     }
@@ -536,4 +544,3 @@ private final class AddCell: UICollectionViewCell {
         // Reserved for future styling if needed.
     }
 }
-

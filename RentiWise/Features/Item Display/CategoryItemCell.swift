@@ -30,7 +30,7 @@ final class CategoryItemCell: UITableViewCell {
     
     // Controls the spacing around the card; use 8 top/bottom so two cells make 16 between cards
     private let verticalInset: CGFloat = 8
-    private let horizontalInset: CGFloat = 16
+    private let horizontalInset: CGFloat = 20
 
     private var addedInsetConstraints = false
 

@@ -56,7 +56,7 @@
                 </viewController>
                 <placeholder placeholderIdentifier="IBFirstResponder" id="O54-6k-Vn0" userLabel="First Responder" customClass="UIResponder" sceneMemberID="firstResponder"/>
             </objects>
-            <point key="canvasLocation" x="2785" y="846"/>
+            <point key="canvasLocation" x="2785" y="892"/>
         </scene>
         <!--Profile-->
         <scene sceneID="i3S-tt-U7k">
@@ -122,7 +122,7 @@
                                             <autoresizingMask key="autoresizingMask"/>
                                             <subviews>
                                                 <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="6pE-he-O1L">
-                                                    <rect key="frame" x="21.666666666666657" y="15" width="350" height="140"/>
+                                                    <rect key="frame" x="30" y="15" width="333" height="140"/>
                                                     <subviews>
                                                         <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="Image 1" translatesAutoresizingMaskIntoConstraints="NO" id="NPJ-Mb-tvd">
                                                             <rect key="frame" x="16" y="16" width="130" height="108"/>
@@ -139,7 +139,7 @@
                                                             </userDefinedRuntimeAttributes>
                                                         </imageView>
                                                         <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Item Name" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="edx-jz-A7Q">
-                                                            <rect key="frame" x="162" y="18" width="168" height="18"/>
+                                                            <rect key="frame" x="162" y="18" width="151" height="18"/>
                                                             <fontDescription key="fontDescription" type="system" weight="semibold" pointSize="15"/>
                                                             <nil key="textColor"/>
                                                             <nil key="highlightedColor"/>
@@ -162,12 +162,12 @@
                                                             <imageReference key="image" image="mappin.and.ellipse" catalog="system" symbolScale="small"/>
                                                         </imageView>
                                                         <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Distance" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="ith-t5-HKG">
-                                                            <rect key="frame" x="250.33333333333337" y="72" width="53" height="15.666666666666671"/>
+                                                            <rect key="frame" x="250.33333333333331" y="72" width="53" height="15.666666666666671"/>
                                                             <fontDescription key="fontDescription" type="system" pointSize="13"/>
                                                             <nil key="highlightedColor"/>
                                                         </label>
                                                         <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="iST-D2-d5B">
-                                                            <rect key="frame" x="270" y="98" width="70" height="32"/>
+                                                            <rect key="frame" x="253" y="98" width="70" height="32"/>
                                                             <color key="backgroundColor" systemColor="secondarySystemBackgroundColor"/>
                                                             <constraints>
                                                                 <constraint firstAttribute="width" constant="70" id="L66-b3-orN"/>
@@ -198,7 +198,6 @@
                                                     </subviews>
                                                     <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                                     <constraints>
-                                                        <constraint firstAttribute="width" constant="350" id="32I-ao-9Bs"/>
                                                         <constraint firstAttribute="trailing" secondItem="iST-D2-d5B" secondAttribute="trailing" constant="10" id="5i7-4W-yEo"/>
                                                         <constraint firstItem="1ni-Dz-tHm" firstAttribute="centerY" secondItem="ZtR-LN-eLX" secondAttribute="centerY" id="7Ge-Cb-NmY"/>
                                                         <constraint firstItem="wLe-bU-ITd" firstAttribute="top" secondItem="edx-jz-A7Q" secondAttribute="bottom" constant="8" id="9OK-A2-gGa"/>
@@ -239,8 +238,9 @@
                                                 </view>
                                             </subviews>
                                             <constraints>
-                                                <constraint firstItem="6pE-he-O1L" firstAttribute="centerX" secondItem="v1P-Hy-iXJ" secondAttribute="centerX" id="Cwt-3t-vem"/>
+                                                <constraint firstAttribute="trailingMargin" secondItem="6pE-he-O1L" secondAttribute="trailing" constant="10" id="0ZF-IU-f44"/>
                                                 <constraint firstItem="6pE-he-O1L" firstAttribute="top" secondItem="v1P-Hy-iXJ" secondAttribute="topMargin" id="YFk-sg-wGs"/>
+                                                <constraint firstItem="6pE-he-O1L" firstAttribute="leading" secondItem="v1P-Hy-iXJ" secondAttribute="leadingMargin" constant="10" id="dmh-ky-v3X"/>
                                             </constraints>
                                         </tableViewCellContentView>
                                         <color key="backgroundColor" systemColor="secondarySystemBackgroundColor"/>
@@ -957,6 +957,7 @@
                         <outlet property="Homepagelastline" destination="WoF-qY-8HN" id="Nqz-CM-lqq"/>
                         <outlet property="additemHome" destination="rq3-nI-iLi" id="Xuz-RB-B4W"/>
                         <outlet property="collectionView" destination="9Yx-3B-tEM" id="QLS-SX-c26"/>
+                        <outlet property="greetingTop" destination="vWb-9u-qw4" id="3PY-gF-sXa"/>
                         <outlet property="homeBG" destination="IRg-Wa-50O" id="zGR-qi-Tds"/>
                         <outlet property="item1CardView" destination="4J3-FZ-2ZT" id="P3T-5e-dxa"/>
                         <outlet property="item1Distance" destination="hcA-XO-1ut" id="HM5-fw-ZpI"/>

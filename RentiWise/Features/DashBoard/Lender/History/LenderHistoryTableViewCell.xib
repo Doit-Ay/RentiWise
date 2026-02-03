@@ -17,7 +17,7 @@
                 <autoresizingMask key="autoresizingMask"/>
                 <subviews>
                     <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="vsr-mU-GD4">
-                        <rect key="frame" x="20" y="23" width="350" height="130"/>
+                        <rect key="frame" x="0.0" y="23" width="390" height="130"/>
                         <subviews>
                             <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="Image 1" translatesAutoresizingMaskIntoConstraints="NO" id="Mx7-67-njt">
                                 <rect key="frame" x="16" y="16" width="120" height="98"/>
@@ -26,7 +26,7 @@
                                 </constraints>
                             </imageView>
                             <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Item Name" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="QHi-x9-4VS">
-                                <rect key="frame" x="156" y="24" width="174" height="18"/>
+                                <rect key="frame" x="156" y="24" width="218" height="18"/>
                                 <fontDescription key="fontDescription" type="system" weight="semibold" pointSize="15"/>
                                 <nil key="textColor"/>
                                 <nil key="highlightedColor"/>
@@ -53,8 +53,7 @@
                         <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                         <constraints>
                             <constraint firstItem="Mx7-67-njt" firstAttribute="top" secondItem="vsr-mU-GD4" secondAttribute="top" constant="16" id="K1w-nE-VSc"/>
-                            <constraint firstAttribute="width" constant="350" id="Ne8-yR-j2P"/>
-                            <constraint firstAttribute="trailing" secondItem="QHi-x9-4VS" secondAttribute="trailing" constant="20" id="OuC-yr-mll"/>
+                            <constraint firstAttribute="trailing" secondItem="QHi-x9-4VS" secondAttribute="trailing" constant="16" id="OuC-yr-mll"/>
                             <constraint firstItem="8ls-rb-yZt" firstAttribute="leading" secondItem="EY5-aH-hbo" secondAttribute="trailing" constant="2" id="Qpe-u7-3dZ"/>
                             <constraint firstItem="xFw-dA-Nwu" firstAttribute="leading" secondItem="QHi-x9-4VS" secondAttribute="leading" id="Uzp-82-g87"/>
                             <constraint firstItem="EY5-aH-hbo" firstAttribute="leading" secondItem="xFw-dA-Nwu" secondAttribute="leading" id="be4-Op-wVp"/>
@@ -76,7 +75,9 @@
                     </view>
                 </subviews>
                 <constraints>
+                    <constraint firstAttribute="trailing" secondItem="vsr-mU-GD4" secondAttribute="trailing" id="Pfd-Ls-STN"/>
                     <constraint firstItem="vsr-mU-GD4" firstAttribute="centerX" secondItem="H2p-sc-9uM" secondAttribute="centerX" id="QRG-gG-m5g"/>
+                    <constraint firstItem="vsr-mU-GD4" firstAttribute="leading" secondItem="H2p-sc-9uM" secondAttribute="leading" id="cog-d0-gbv"/>
                     <constraint firstItem="vsr-mU-GD4" firstAttribute="centerY" secondItem="H2p-sc-9uM" secondAttribute="centerY" id="ovk-Mc-Wn5"/>
                 </constraints>
             </tableViewCellContentView>

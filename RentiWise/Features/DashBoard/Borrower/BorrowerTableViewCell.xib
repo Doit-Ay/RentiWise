@@ -19,7 +19,7 @@
                 <autoresizingMask key="autoresizingMask"/>
                 <subviews>
                     <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="v7P-Fa-O1x">
-                        <rect key="frame" x="-9" y="-2.6666666666666714" width="350" height="140.33333333333337"/>
+                        <rect key="frame" x="20" y="-2.6666666666666714" width="292" height="140.33333333333337"/>
                         <subviews>
                             <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" translatesAutoresizingMaskIntoConstraints="NO" id="Vdk-KL-Uh4">
                                 <rect key="frame" x="16" y="18.333333333333329" width="120" height="104"/>
@@ -34,7 +34,7 @@
                                 </userDefinedRuntimeAttributes>
                             </imageView>
                             <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Item Name" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="Xax-rr-LFy">
-                                <rect key="frame" x="152" y="16.333333333333332" width="182" height="17.999999999999996"/>
+                                <rect key="frame" x="152" y="16.333333333333332" width="124" height="17.999999999999996"/>
                                 <fontDescription key="fontDescription" type="system" weight="medium" pointSize="15"/>
                                 <nil key="textColor"/>
                                 <nil key="highlightedColor"/>
@@ -86,7 +86,6 @@
                             <constraint firstAttribute="trailing" secondItem="Xax-rr-LFy" secondAttribute="trailing" constant="16" id="Y5s-zA-Ycg"/>
                             <constraint firstItem="Xax-rr-LFy" firstAttribute="top" secondItem="v7P-Fa-O1x" secondAttribute="top" constant="16" id="ahg-yo-e8j"/>
                             <constraint firstItem="Xax-rr-LFy" firstAttribute="leading" secondItem="Vdk-KL-Uh4" secondAttribute="trailing" constant="16" id="ciL-cr-vBN"/>
-                            <constraint firstAttribute="width" constant="350" id="etc-56-jpq"/>
                             <constraint firstItem="iPL-bE-awM" firstAttribute="centerY" secondItem="rUU-0H-fuo" secondAttribute="centerY" id="wYv-UV-ZEH"/>
                             <constraint firstItem="Vdk-KL-Uh4" firstAttribute="leading" secondItem="v7P-Fa-O1x" secondAttribute="leading" constant="16" id="yfL-Q5-E8g"/>
                         </constraints>
@@ -100,6 +99,8 @@
                 </subviews>
                 <constraints>
                     <constraint firstItem="v7P-Fa-O1x" firstAttribute="centerY" secondItem="H2p-sc-9uM" secondAttribute="centerY" id="AeF-6a-nht"/>
+                    <constraint firstItem="v7P-Fa-O1x" firstAttribute="leading" secondItem="H2p-sc-9uM" secondAttribute="leading" constant="20" id="Lxm-HC-YBG"/>
+                    <constraint firstAttribute="trailing" secondItem="v7P-Fa-O1x" secondAttribute="trailing" constant="20" id="j7H-Nh-PUs"/>
                     <constraint firstItem="v7P-Fa-O1x" firstAttribute="centerX" secondItem="H2p-sc-9uM" secondAttribute="centerX" id="rOi-PB-ymM"/>
                 </constraints>
             </tableViewCellContentView>

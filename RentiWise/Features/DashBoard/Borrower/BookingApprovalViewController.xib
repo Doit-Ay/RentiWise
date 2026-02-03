@@ -64,7 +64,7 @@
                     <rect key="frame" x="0.0" y="118" width="393" height="734"/>
                     <subviews>
                         <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="0iW-y8-UQA">
-                            <rect key="frame" x="0.0" y="0.0" width="393" height="1100"/>
+                            <rect key="frame" x="0.0" y="0.0" width="393" height="1300"/>
                             <subviews>
                                 <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="b05-l9-pdc" userLabel="product card view">
                                     <rect key="frame" x="16" y="16" width="361" height="130"/>
@@ -389,6 +389,9 @@
                                             <buttonConfiguration key="configuration" style="plain" image="document.on.document" catalog="system" title="Copy Address" imagePadding="3" titleAlignment="leading">
                                                 <fontDescription key="titleFontDescription" type="system" pointSize="16"/>
                                             </buttonConfiguration>
+                                            <connections>
+                                                <action selector="copyAddressButtonTapped:" destination="-1" eventType="touchUpInside" id="CopyAddr-Action-001"/>
+                                            </connections>
                                         </button>
                                         <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="IHh-4r-Yb8">
                                             <rect key="frame" x="185.66666666666663" y="163.66666666666663" width="159.33333333333337" height="34.333333333333343"/>
@@ -397,6 +400,9 @@
                                             <buttonConfiguration key="configuration" style="plain" image="arrow.up.and.down.and.arrow.left.and.right" catalog="system" title="Get Directions" imagePadding="3" titleAlignment="leading">
                                                 <fontDescription key="titleFontDescription" type="system" pointSize="16"/>
                                             </buttonConfiguration>
+                                            <connections>
+                                                <action selector="getDirectionsButtonTapped:" destination="-1" eventType="touchUpInside" id="GetDir-Action-001"/>
+                                            </connections>
                                         </button>
                                         <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="P2p-Up-l4l">
                                             <rect key="frame" x="316" y="24" width="40" height="40"/>
@@ -697,7 +703,7 @@
                                 <constraint firstAttribute="trailing" secondItem="879-JP-NVY" secondAttribute="trailing" constant="20" id="WGP-fx-rrc"/>
                                 <constraint firstAttribute="trailing" secondItem="RWs-Ng-dQQ" secondAttribute="trailing" constant="16" id="cFP-9K-xGO"/>
                                 <constraint firstItem="b05-l9-pdc" firstAttribute="leading" secondItem="0iW-y8-UQA" secondAttribute="leading" constant="16" id="dyC-0n-Umd"/>
-                                <constraint firstAttribute="height" constant="1100" id="glp-jN-nmw"/>
+                                <constraint firstAttribute="height" constant="1300" id="glp-jN-nmw"/>
                                 <constraint firstItem="b05-l9-pdc" firstAttribute="top" secondItem="0iW-y8-UQA" secondAttribute="top" constant="16" id="kBX-xn-YpB"/>
                                 <constraint firstAttribute="trailing" secondItem="sUx-gz-ibj" secondAttribute="trailing" constant="20" id="s5s-v9-R8w"/>
                                 <constraint firstAttribute="trailing" secondItem="BDK-1U-5ky" secondAttribute="trailing" constant="16" id="tU3-VM-emT"/>

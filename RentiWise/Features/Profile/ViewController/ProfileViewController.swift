@@ -17,6 +17,9 @@ import UserNotifications
 final class ProfileViewController: UIViewController {
 
     private var hosting: UIHostingController<ProfileRootView>?
+    
+    // Navigation delegate for tab bar hiding
+    private let tabBarDelegate = TabBarNavigationDelegate()
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -46,6 +49,15 @@ final class ProfileViewController: UIViewController {
         } else {
             print("[Profile] Tab index not found (not inside a UITabBarController).")
         }
+        
+        // Set navigation delegate to auto-hide tab bar on push
+        navigationController?.delegate = tabBarDelegate
+    }
+    
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        // Always show tab bar when Profile root screen appears
+        tabBarController?.tabBar.isHidden = false
     }
 
     // Finds the UITabBarController and returns the index of the tab that contains this ProfileViewController
@@ -145,7 +157,7 @@ private struct ProductHostView: UIViewControllerRepresentable {
         let vc: ProductViewController
         if Bundle.main.path(forResource: nibName, ofType: "nib") != nil ||
             Bundle.main.path(forResource: nibName, ofType: "xib") != nil {
-            vc = ProductViewController(nibName: nibName, bundle: nil)
+                vc = ProductViewController(nibName: nibName, bundle: nil)
         } else {
             vc = ProductViewController()
         }
@@ -211,70 +223,34 @@ private struct ProfileRootView: View {
 
                 // More
                 Section {
-                    // Keep everything in SwiftUI NavigationStack.
                     NavigationLink {
-                        // Hide tab bar while this destination is shown
                         MyRentalsHostView()
-                            .ignoresSafeArea(.all, edges: .bottom)
-                            .background(TabBarHider(hidden: true))
                             .navigationTitle("My Rentals")
                             .navigationBarTitleDisplayMode(.inline)
-                            .onDisappear {
-                                // Restore tab bar when leaving
-                                if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                                   let window = scene.windows.first,
-                                   let tab = window.rootViewController as? UITabBarController {
-                                    tab.tabBar.isHidden = false
-                                }
-                            }
+                            .hideTabBar()
                     } label: {
                         Label("My Rentals", systemImage: "bag")
                     }
 
                     NavigationLink {
                         WishlistPage()
-                            .ignoresSafeArea(.all, edges: .bottom)
-                            .background(TabBarHider(hidden: true))
-                            .onDisappear {
-                                if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                                   let window = scene.windows.first,
-                                   let tab = window.rootViewController as? UITabBarController {
-                                    tab.tabBar.isHidden = false
-                                }
-                            }
+                            .hideTabBar()
                     } label: {
                         Label("Wishlist", systemImage: "heart")
                     }
 
                     NavigationLink {
                         PrivacySecurityPage()
-                            .ignoresSafeArea(.all, edges: .bottom)
-                            .background(TabBarHider(hidden: true))
-                            .onDisappear {
-                                if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                                   let window = scene.windows.first,
-                                   let tab = window.rootViewController as? UITabBarController {
-                                    tab.tabBar.isHidden = false
-                                }
-                            }
+                            .hideTabBar()
                     } label: {
                         Label("Privacy & Security", systemImage: "lock.shield")
                     }
 
-                    // Contact Us now routes to SupportChatViewController
                     NavigationLink {
                         SupportChatHost()
-                            .ignoresSafeArea(.all, edges: .bottom)
                             .navigationTitle("Support")
                             .navigationBarTitleDisplayMode(.inline)
-                            .background(TabBarHider(hidden: true))
-                            .onDisappear {
-                                if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                                   let window = scene.windows.first,
-                                   let tab = window.rootViewController as? UITabBarController {
-                                    tab.tabBar.isHidden = false
-                                }
-                            }
+                            .hideTabBar()
                     } label: {
                         Label("Contact Us", systemImage: "message")
                     }
@@ -301,6 +277,14 @@ private struct ProfileRootView: View {
             }
             .listStyle(.insetGrouped)
             .background(Color(.systemGroupedBackground))
+            .onAppear {
+                // Show tab bar when Profile root screen appears
+                if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                   let window = windowScene.windows.first,
+                   let tabBarController = window.rootViewController as? UITabBarController {
+                    tabBarController.tabBar.isHidden = false
+                }
+            }
             .navigationTitle("Profile")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -548,7 +532,7 @@ private struct WishlistPage: View {
                 NavigationLink {
                     ProductHostView(item: item)
                         .navigationBarTitleDisplayMode(.inline)
-                        .toolbar(.hidden, for: .tabBar)  // Hide tab bar like Home screen
+                        .hideTabBar()
                 } label: {
                     HStack(spacing: 12) {
                         WishlistImage(path: item.images.first)
@@ -574,7 +558,7 @@ private struct WishlistPage: View {
         .navigationTitle("Wishlist")
         .navigationBarTitleDisplayMode(.inline)
         .task { await loadWishlist() }
-        .toolbar(.hidden, for: .tabBar)  // Keep tab bar hidden in Wishlist and nested screens
+        .hideTabBar()
     }
 
     private func priceText(for item: Item) -> String {
@@ -685,8 +669,8 @@ private struct ManageDataViews: View {
             }
 
             Section("Data") {
-                NavigationLink("Profile Information") { ProfileInformationView() }
-                NavigationLink("Payment History") { PaymentHistoryView() }
+                NavigationLink("Profile Information") { ProfileInformationView().hideTabBar() }
+                NavigationLink("Payment History") { PaymentHistoryView().hideTabBar() }
             }
 
             Section("Actions") {
@@ -714,7 +698,6 @@ private struct ManageDataViews: View {
             Text("This will permanently delete your profile, bookings, and payments. This action cannot be undone.")
         }
         .background(Color(.systemGroupedBackground))
-        .toolbar(.hidden, for: .tabBar)  // Keep tab bar hidden in nested screen
     }
 
     private func deleteAccount() async {
@@ -764,7 +747,6 @@ private struct ProfileInformationView: View {
         .task { await load() }
         .refreshable { await load() }
         .background(Color(.systemGroupedBackground))
-        .toolbar(.hidden, for: .tabBar)  // Keep tab bar hidden
     }
 
     private func load() async {
@@ -836,7 +818,9 @@ private struct BookingHistoryView: View {
         let nf = NumberFormatter(); nf.numberStyle = .currency; return nf.string(from: NSNumber(value: value)) ?? "\(value)"
     }
     private func dateRange(_ s: Date, _ e: Date) -> String {
-        let df = DateFormatter(); df.dateStyle = .medium; return "\(df.string(from: s)) – \(df.string(from: e))"
+        let df = DateFormatter()
+        df.dateStyle = .medium
+        return "\(df.string(from: s)) – \(df.string(from: e))"
     }
 }
 
@@ -918,7 +902,6 @@ private struct PaymentHistoryView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
         .refreshable { await load() }
-        .toolbar(.hidden, for: .tabBar)  // Keep tab bar hidden
     }
 
     private func load() async {
@@ -1037,18 +1020,33 @@ private struct PrivacySecurityPage: View {
     var body: some View {
         List {
             Section("Privacy") {
-                NavigationLink("Manage Data") { ManageDataViews() }
-                NavigationLink("App Permissions") { AppPermissionsView() }
+                NavigationLink {
+                    ManageDataViews()
+                        .hideTabBar()
+                } label: {
+                    Text("Manage Data")
+                }
+                
+                NavigationLink {
+                    AppPermissionsView()
+                        .hideTabBar()
+                } label: {
+                    Text("App Permissions")
+                }
             }
             Section("Security") {
-                NavigationLink("Change Password") { ChangePasswordView() }
-                NavigationLink("Two-Factor Authentication") { Text("Two-Factor Authentication").toolbar(.hidden, for: .tabBar) }
+                NavigationLink {
+                    ChangePasswordView()
+                        .hideTabBar()
+                } label: {
+                    Text("Change Password")
+                }
             }
         }
         .navigationTitle("Privacy & Security")
         .navigationBarTitleDisplayMode(.inline)
         .background(Color(.systemGroupedBackground))
-        .toolbar(.hidden, for: .tabBar)  // Keep tab bar hidden
+        .hideTabBar()
     }
 }
 
@@ -1087,7 +1085,7 @@ private struct ChangePasswordView: View {
     var body: some View {
         VStack(spacing: 16) {
             Form {
-                Section("Change Password") {
+                Section("") {
                     // Current Password
                     passwordRow(title: "Current Password", text: $currentPassword, isSecure: !showCurrent, toggle: { showCurrent.toggle() })
 
@@ -1108,32 +1106,22 @@ private struct ChangePasswordView: View {
             }
             .scrollContentBackground(.hidden)
             .background(Color(.systemGroupedBackground))
-
-            Button(action: { Task { await updatePassword() } }) {
-                if isUpdating {
-                    HStack(spacing: 8) {
-                        ProgressView()
-                        Text("Updating…")
-                            .font(.system(size: 18, weight: .semibold))
-                    }
-                    .frame(height: 44)
-                    .frame(maxWidth: .infinity)
-                } else {
-                    Text("Update Password")
-                        .font(.system(size: 18, weight: .semibold))
-                        .frame(height: 44)
-                        .frame(maxWidth: .infinity)
-                }
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(brandTeal)
-            .padding(.horizontal)
-            .padding(.bottom, 16)
         }
         .navigationTitle("Change Password")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                if isUpdating {
+                    ProgressView()
+                } else {
+                    Button("Update") {
+                        Task { await updatePassword() }
+                    }
+                    .tint(brandTeal)
+                }
+            }
+        }
         .background(Color(.systemGroupedBackground))
-        .toolbar(.hidden, for: .tabBar)  // Keep tab bar hidden
     }
 
     // MARK: - Row helper
@@ -1222,7 +1210,6 @@ private struct AppPermissionsView: View {
         .navigationTitle("App Permissions")
         .navigationBarTitleDisplayMode(.inline)
         .background(Color(.systemGroupedBackground))
-        .toolbar(.hidden, for: .tabBar)  // Keep tab bar hidden
         .alert("Change Permissions", isPresented: $showSettingsAlert, actions: {
             Button("Cancel", role: .cancel) {}
             Button("Open Settings") { openAppSettings() }
@@ -1362,4 +1349,3 @@ private struct AppPermissionsView: View {
         UIApplication.shared.open(url)
     }
 }
-

@@ -9,6 +9,7 @@ import Supabase
 
 class HomeViewController: UIViewController, UICollectionViewDelegate, UICollectionViewDataSource, UITabBarDelegate, UICollectionViewDelegateFlowLayout {
 
+    @IBOutlet weak var greetingTop: UILabel!
     @IBOutlet weak var collectionView: UICollectionView!
 
     @IBOutlet weak var Homepagelastline: UILabel!
@@ -207,6 +208,9 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
 
     // MARK: - Services
     private let itemsService = ItemsService()
+    
+    // MARK: - Navigation delegate for tab bar hiding
+    private let tabBarDelegate = TabBarNavigationDelegate()
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -270,6 +274,12 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
 
         // Set the bottom tagline "You ❤️ RentiWise" with brand-colored heart
         setBottomTagline()
+        
+        // Set navigation delegate to auto-hide tab bar on push
+        navigationController?.delegate = tabBarDelegate
+        
+        // Ensure tab bar item shows title
+        navigationController?.tabBarItem.title = "Explore"
     }
 
     @objc private func dismissKeyboardTap() {
@@ -310,7 +320,11 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         navigationController?.setNavigationBarHidden(true, animated: true)
+        // Always show tab bar when Home screen appears
+        tabBarController?.tabBar.isHidden = false
         startHomeImageRotation()
+        // Update greeting based on time of day
+        updateGreeting()
         // Refresh the listing section each time we come back
         Task { await checkAndUpdateListingSection() }
         // Refresh location button on appear as well
@@ -769,6 +783,26 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
     @IBOutlet weak var item4CardView: UIView!
     @IBOutlet weak var rentButton4: UIButton!
     @IBOutlet weak var item4owner: UILabel!
+    
+    // MARK: - Greeting helper
+    private func updateGreeting() {
+        let hour = Calendar.current.component(.hour, from: Date())
+        let greeting: String
+        
+        switch hour {
+        case 0..<12:
+            // 12:00am - 11:59am
+            greeting = "Good morning"
+        case 12..<16:
+            // 12:00pm - 3:59pm
+            greeting = "Good afternoon"
+        default:
+            // 4:00pm - 11:59pm
+            greeting = "Good evening"
+        }
+        
+        greetingTop?.text = greeting
+    }
 }
 
 // MARK: - Location handling (sheet + persistence)
