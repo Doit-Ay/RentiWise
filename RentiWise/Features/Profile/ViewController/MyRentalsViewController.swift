@@ -13,8 +13,8 @@ final class MyRentalsViewController: UIViewController {
     private let tableView = UITableView(frame: .zero, style: .plain)
     private let refresh = UIRefreshControl()
 
-    // Top row containing a search bar (left, expands) and a Filter button (right)
-    private let topBar = UIView()
+    // UI elements
+    private let searchBarContainer = UIView()
     private let searchBar = UISearchBar()
     private let filterButton = UIButton(type: .system)
 
@@ -57,7 +57,7 @@ final class MyRentalsViewController: UIViewController {
         return df
     }()
 
-    // MARK: - Tab bar visibility management (for SwiftUI-hosted path)
+    // MARK: - Tab bar visibility management (for UI-hosted path)
     private var didHideTabBarManually = false
 
     override func viewDidLoad() {
@@ -88,10 +88,11 @@ final class MyRentalsViewController: UIViewController {
         navigationController?.navigationBar.backgroundColor = .systemGroupedBackground
         navigationController?.setNavigationBarHidden(false, animated: false)
 
-        // Right bar "Add" action (placeholder)
-        navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(didTapAdd))
-
-        setupTopBar()
+        // Set up filter button in navigation bar
+        setupNavigationBar()
+        
+        // Set up search bar below navigation bar
+        setupSearchBar()
         setupTable()
 
         Task { await loadData(showSpinner: true) }
@@ -114,7 +115,7 @@ final class MyRentalsViewController: UIViewController {
         navigationController?.navigationBar.barTintColor = .systemGroupedBackground
         navigationController?.navigationBar.backgroundColor = .systemGroupedBackground
 
-        // Hide tab bar if this VC is hosted via SwiftUI path where there is no nav stack under the tab
+        
         ensureTabBarHiddenIfNeeded()
     }
 
@@ -133,12 +134,27 @@ final class MyRentalsViewController: UIViewController {
     }
 
     // MARK: - UI Setup
-    private func setupTopBar() {
-        topBar.translatesAutoresizingMaskIntoConstraints = false
-        topBar.backgroundColor = .systemGroupedBackground
-        view.addSubview(topBar)
-
-        // Search bar
+    private func setupNavigationBar() {
+        // Keep title as "My Rentals"
+        title = "My Rentals"
+        
+        // Configure filter button for navigation bar
+        filterButton.setImage(UIImage(systemName: "line.3.horizontal.decrease.circle"), for: .normal)
+        filterButton.tintColor = .label
+        filterButton.addTarget(self, action: #selector(didTapFilter), for: .touchUpInside)
+        filterButton.accessibilityLabel = "Filter rentals"
+        
+        // Set filter button as right bar button item
+        navigationItem.rightBarButtonItem = UIBarButtonItem(customView: filterButton)
+    }
+    
+    private func setupSearchBar() {
+        // Container for search bar
+        searchBarContainer.translatesAutoresizingMaskIntoConstraints = false
+        searchBarContainer.backgroundColor = .systemGroupedBackground
+        view.addSubview(searchBarContainer)
+        
+        // Configure search bar
         searchBar.translatesAutoresizingMaskIntoConstraints = false
         searchBar.placeholder = "Search rentals"
         searchBar.searchBarStyle = .minimal
@@ -146,17 +162,15 @@ final class MyRentalsViewController: UIViewController {
         searchBar.autocapitalizationType = .none
         searchBar.autocorrectionType = .no
         searchBar.returnKeyType = .search
-
-        // Remove default background/chrome so our custom white field looks clean
+        
+        // Remove default background for clean look
         searchBar.setBackgroundImage(UIImage(), for: .any, barMetrics: .default)
         searchBar.backgroundImage = UIImage()
         searchBar.backgroundColor = .clear
-
+        
         if #available(iOS 13.0, *) {
             let tf = searchBar.searchTextField
-            // White field
             tf.backgroundColor = .white
-            // Subtle border and rounding
             tf.layer.borderWidth = 1
             tf.layer.borderColor = UIColor.separator.cgColor
             tf.layer.cornerRadius = 10
@@ -168,54 +182,35 @@ final class MyRentalsViewController: UIViewController {
                 attributes: [.foregroundColor: UIColor.secondaryLabel]
             )
         }
-
-        // Filter button (round, white background)
-        filterButton.translatesAutoresizingMaskIntoConstraints = false
-        filterButton.setImage(UIImage(systemName: "line.3.horizontal.decrease.circle"), for: .normal)
-        filterButton.tintColor = UIColor.label
-        filterButton.backgroundColor = .white
-        filterButton.layer.cornerRadius = 20
-        filterButton.layer.masksToBounds = false
-        // Optional: soft shadow so the white circle stands out
-        filterButton.layer.shadowOpacity = 0.10
-        filterButton.layer.shadowRadius = 4
-        filterButton.layer.shadowOffset = CGSize(width: 0, height: 2)
-
-        filterButton.accessibilityLabel = "Filter rentals"
-        filterButton.addTarget(self, action: #selector(didTapFilter), for: .touchUpInside)
-
-        topBar.addSubview(searchBar)
-        topBar.addSubview(filterButton)
-
+        
+        searchBarContainer.addSubview(searchBar)
+        
         NSLayoutConstraint.activate([
-            topBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            topBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            topBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            topBar.heightAnchor.constraint(equalToConstant: 60),
-
-            filterButton.trailingAnchor.constraint(equalTo: topBar.trailingAnchor, constant: -16),
-            filterButton.centerYAnchor.constraint(equalTo: topBar.centerYAnchor),
-            filterButton.widthAnchor.constraint(equalToConstant: 40),
-            filterButton.heightAnchor.constraint(equalToConstant: 40),
-
-            searchBar.leadingAnchor.constraint(equalTo: topBar.leadingAnchor, constant: 16),
-            searchBar.trailingAnchor.constraint(equalTo: filterButton.leadingAnchor, constant: -10),
-            searchBar.centerYAnchor.constraint(equalTo: topBar.centerYAnchor),
+            // Container constraints
+            searchBarContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            searchBarContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            searchBarContainer.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            searchBarContainer.heightAnchor.constraint(equalToConstant: 60),
+            
+            // Search bar constraints
+            searchBar.leadingAnchor.constraint(equalTo: searchBarContainer.leadingAnchor, constant: 16),
+            searchBar.trailingAnchor.constraint(equalTo: searchBarContainer.trailingAnchor, constant: -16),
+            searchBar.centerYAnchor.constraint(equalTo: searchBarContainer.centerYAnchor),
             searchBar.heightAnchor.constraint(equalToConstant: 36)
         ])
-
+    }
+    
+    private func setupTable() {
+        // Set up table view
         tableView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(tableView)
         NSLayoutConstraint.activate([
-            tableView.topAnchor.constraint(equalTo: topBar.bottomAnchor),
+            tableView.topAnchor.constraint(equalTo: searchBarContainer.bottomAnchor),
             tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            // Pin to the very bottom of the view so it fills the screen
             tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
-    }
-
-    private func setupTable() {
+        
         // Card list look
         tableView.backgroundColor = .systemGroupedBackground
         tableView.separatorStyle = .none
@@ -236,7 +231,7 @@ final class MyRentalsViewController: UIViewController {
             tableView.contentInsetAdjustmentBehavior = .never
         }
 
-        // Top padding for breathing room below the topBar; zero bottom so it reaches the end
+        // Add top padding so items don't appear under search bar
         tableView.contentInset = UIEdgeInsets(top: 70, left: 0, bottom: 0, right: 0)
         tableView.verticalScrollIndicatorInsets = UIEdgeInsets(top: 70, left: 0, bottom: 0, right: 0)
 
@@ -250,11 +245,6 @@ final class MyRentalsViewController: UIViewController {
     }
 
     // MARK: - Actions
-    @objc private func didTapAdd() {
-        let a = UIAlertController(title: "Add Listing", message: "This will open the add listing flow.", preferredStyle: .alert)
-        a.addAction(UIAlertAction(title: "OK", style: .default))
-        present(a, animated: true)
-    }
 
     @objc private func didTapFilter() {
         let ac = UIAlertController(title: "Filter rentals", message: nil, preferredStyle: .actionSheet)
@@ -323,19 +313,13 @@ final class MyRentalsViewController: UIViewController {
             title.textColor = .label
 
             let subtitle = UILabel()
-            subtitle.text = "Add your first item to start renting."
+            subtitle.text = "Your rental bookings will appear here."
             subtitle.font = .systemFont(ofSize: 14)
             subtitle.textColor = .secondaryLabel
-
-            let add = UIButton(type: .system)
-            add.setTitle("Add Listing", for: .normal)
-            add.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
-            add.addTarget(self, action: #selector(didTapAdd), for: .touchUpInside)
 
             container.addArrangedSubview(icon)
             container.addArrangedSubview(title)
             container.addArrangedSubview(subtitle)
-            container.addArrangedSubview(add)
 
             let host = UIView()
             host.addSubview(container)
@@ -357,7 +341,8 @@ final class MyRentalsViewController: UIViewController {
             spinner.startAnimating()
             navigationItem.rightBarButtonItem = UIBarButtonItem(customView: spinner)
         } else {
-            navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(didTapAdd))
+            // Restore filter button
+            navigationItem.rightBarButtonItem = UIBarButtonItem(customView: filterButton)
         }
     }
 

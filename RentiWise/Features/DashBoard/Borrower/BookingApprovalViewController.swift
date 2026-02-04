@@ -272,7 +272,7 @@ class BookingApprovalViewController: UIViewController {
         // Redundantly ensure this VC hides bottom bar when pushed
         hidesBottomBarWhenPushed = true
 
-        // If we’re not pushed in a nav that hides the tab bar, hide tab bar manually (covers SwiftUI-hosted path)
+
         ensureTabBarHiddenIfNeeded()
 
         // Extra defensive: if we can find a tab bar controller, force hide its tab bar

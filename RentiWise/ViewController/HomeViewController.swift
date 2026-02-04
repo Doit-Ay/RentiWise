@@ -1500,7 +1500,7 @@ private extension HomeViewController {
         actionsRow.axis = .horizontal
         actionsRow.alignment = .center
         actionsRow.distribution = .equalSpacing
-        actionsRow.spacing = 28 // match SwiftUI spacing
+        actionsRow.spacing = 28
 
         // Helper to make a round frosted button + caption
         func roundAction(symbol: String, title: String, selector: Selector) -> UIView {
@@ -1509,7 +1509,7 @@ private extension HomeViewController {
             wrapper.alignment = .center
             wrapper.spacing = 8
 
-            let circleSide: CGFloat = 56 // SwiftUI used 56
+            let circleSide: CGFloat = 56
             let circle = UIView()
             circle.translatesAutoresizingMaskIntoConstraints = false
             NSLayoutConstraint.activate([
