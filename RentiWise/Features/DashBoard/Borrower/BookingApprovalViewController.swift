@@ -104,6 +104,23 @@ class BookingApprovalViewController: UIViewController {
     @IBOutlet weak var addresscard: UIView!
     @IBOutlet weak var summary: UIView!
     
+    // Extend and Return buttons (borrower only)
+    @IBOutlet weak var extendButton: UIButton!
+    @IBOutlet weak var returnButton: UIButton!
+    @IBOutlet weak var extendReturnButtonsStack: UIStackView!
+    
+    // Status labels for return/extend requests (created programmatically)
+    private var returnStatusLabel: UILabel?
+    private var extensionStatusLabel: UILabel?
+    
+    
+    // Track current request statuses
+    private var currentReturnRequestStatus: String?
+    private var currentExtensionRequestStatus: String?
+    private var currentReturnRequestId: String?
+    private var currentExtensionRequestId: String?
+
+    
     @IBOutlet weak var dateperiodLabel: UILabel!
     @IBOutlet weak var picktimeLabel: UILabel!
     @IBOutlet weak var numLabeldays: UILabel!
@@ -247,6 +264,9 @@ class BookingApprovalViewController: UIViewController {
 
         // Apply current mode (may hide sections)
         applyModeUI()
+        
+        // Setup request status labels programmatically
+        setupRequestStatusLabels()
 
         // If a request is already injected, apply it now
         applyRequestToUI()
@@ -309,7 +329,10 @@ class BookingApprovalViewController: UIViewController {
             } else {
                 await refreshPaymentStatusForHistory()
             }
+            // Fetch return/extend request statuses
+            await fetchRequestStatuses()
         }
+
     }
 
     @objc private func handleRequestsShouldRefresh() {
@@ -357,6 +380,219 @@ class BookingApprovalViewController: UIViewController {
         self.returnTime = returnTime
         updateDatesUI()
     }
+    
+    // MARK: - Request Status Management
+    
+    /// Fetch the latest status for return and extension requests
+    private func fetchRequestStatuses() async {
+        guard let bookingId = request?.id else { return }
+        
+        // Fetch return request status
+        await fetchReturnRequestStatus(for: bookingId)
+        
+        // Fetch extension request status
+        await fetchExtensionRequestStatus(for: bookingId)
+        
+        // Update UI on main thread
+        await MainActor.run {
+            updateReturnButtonState()
+            updateExtensionButtonState()
+        }
+    }
+    
+    private func fetchReturnRequestStatus(for bookingId: String) async {
+        do {
+            struct ReturnRequestRow: Decodable {
+                let id: String
+                let status: String
+            }
+            
+            let response = try await SupabaseManager.shared.client
+                .from("return_requests")
+                .select("id, status")
+                .eq("request_id", value: bookingId)
+                .order("created_at", ascending: false)
+                .limit(1)
+                .execute()
+            
+            let data = response.data
+            let requests = try JSONDecoder().decode([ReturnRequestRow].self, from: data)
+            
+            if let latestRequest = requests.first {
+                currentReturnRequestId = latestRequest.id
+                currentReturnRequestStatus = latestRequest.status
+                print("[BookingApproval] Return request status: \(latestRequest.status)")
+            } else {
+                currentReturnRequestId = nil
+                currentReturnRequestStatus = nil
+            }
+        } catch {
+            print("[BookingApproval] Error fetching return request status: \(error)")
+            currentReturnRequestStatus = nil
+        }
+    }
+    
+    private func fetchExtensionRequestStatus(for bookingId: String) async {
+        do {
+            struct ExtensionRequestRow: Decodable {
+                let id: String
+                let status: String
+            }
+            
+            let response = try await SupabaseManager.shared.client
+                .from("extension_requests")
+                .select("id, status")
+                .eq("request_id", value: bookingId)
+                .order("created_at", ascending: false)
+                .limit(1)
+                .execute()
+            
+            let data = response.data
+            let requests = try JSONDecoder().decode([ExtensionRequestRow].self, from: data)
+            
+            if let latestRequest = requests.first {
+                currentExtensionRequestId = latestRequest.id
+                currentExtensionRequestStatus = latestRequest.status
+                print("[BookingApproval] Extension request status: \(latestRequest.status)")
+            } else {
+                currentExtensionRequestId = nil
+                currentExtensionRequestStatus = nil
+            }
+        } catch {
+            print("[BookingApproval] Error fetching extension request status: \(error)")
+            currentExtensionRequestStatus = nil
+        }
+    }
+    
+    private func updateReturnButtonState() {
+        guard let statusLabel = returnStatusLabel else { return }
+        
+        if let status = currentReturnRequestStatus {
+            statusLabel.isHidden = false
+            styleStatusLabel(statusLabel, status: status)
+            
+            // Disable button if pending, enable if rejected or no status
+            if status == "pending" {
+                returnButton?.isEnabled = false
+                returnButton?.alpha = 0.5
+            } else if status == "rejected" {
+                returnButton?.isEnabled = true
+                returnButton?.alpha = 1.0
+            } else if status == "accepted" {
+                // Keep disabled if accepted (request completed)
+                returnButton?.isEnabled = false
+                returnButton?.alpha = 0.5
+            }
+        } else {
+            // No request exists, enable button
+            statusLabel.isHidden = true
+            returnButton?.isEnabled = true
+            returnButton?.alpha = 1.0
+        }
+    }
+    
+    private func updateExtensionButtonState() {
+        guard let statusLabel = extensionStatusLabel else { return }
+        
+        if let status = currentExtensionRequestStatus {
+            statusLabel.isHidden = false
+            styleStatusLabel(statusLabel, status: status)
+            
+            // Disable button if pending, enable if rejected or no status
+            if status == "pending" {
+                extendButton?.isEnabled = false
+                extendButton?.alpha = 0.5
+            } else if status == "rejected" {
+                extendButton?.isEnabled = true
+                extendButton?.alpha = 1.0
+            } else if status == "accepted" {
+                // Keep disabled if accepted (request completed)
+                extendButton?.isEnabled = false
+                extendButton?.alpha = 0.5
+            }
+        } else {
+            // No request exists, enable button
+            statusLabel.isHidden = true
+            extendButton?.isEnabled = true
+            extendButton?.alpha = 1.0
+        }
+    }
+    
+    private func styleStatusLabel(_ label: UILabel, status: String) {
+        label.font = .systemFont(ofSize: 13, weight: .medium)
+        label.textAlignment = .center
+        
+        switch status.lowercased() {
+        case "pending":
+            label.text = "Status: Pending"
+            label.textColor = .systemOrange
+        case "accepted":
+            label.text = "Status: Accepted ✓"
+            label.textColor = .systemGreen
+        case "rejected":
+            label.text = "Status: Rejected"
+            label.textColor = .systemRed
+        default:
+            label.text = "Status: \(status.capitalized)"
+            label.textColor = .secondaryLabel
+        }
+    }
+    
+    private func setupRequestStatusLabels() {
+        // Only show status labels in myRentals mode (borrower side)
+        guard mode == .myRentals else {
+            returnStatusLabel?.isHidden = true
+            extensionStatusLabel?.isHidden = true
+            return
+        }
+        
+        guard let buttonStack = extendReturnButtonsStack,
+              let parentView = buttonStack.superview else {
+            print("[BookingApproval] Could not find button stack or parent view")
+            return
+        }
+        
+        // Create return status label (right side, under return button)
+        if returnStatusLabel == nil {
+            let label = UILabel()
+            label.translatesAutoresizingMaskIntoConstraints = false
+            label.font = .systemFont(ofSize: 13, weight: .medium)
+            label.textAlignment = .center
+            label.isHidden = true // Hidden by default
+            parentView.addSubview(label)
+            
+            NSLayoutConstraint.activate([
+                label.topAnchor.constraint(equalTo: buttonStack.bottomAnchor, constant: 8),
+                label.trailingAnchor.constraint(equalTo: buttonStack.trailingAnchor),
+                label.widthAnchor.constraint(equalTo: buttonStack.widthAnchor, multiplier: 0.48)
+            ])
+            
+            returnStatusLabel = label
+        }
+        
+        // Create extension status label (left side, under extend button)
+        if extensionStatusLabel == nil {
+            let label = UILabel()
+            label.translatesAutoresizingMaskIntoConstraints = false
+            label.font = .systemFont(ofSize: 13, weight: .medium)
+            label.textAlignment = .center
+            label.isHidden = true // Hidden by default
+            parentView.addSubview(label)
+            
+            NSLayoutConstraint.activate([
+                label.topAnchor.constraint(equalTo: buttonStack.bottomAnchor, constant: 8),
+                label.leadingAnchor.constraint(equalTo: buttonStack.leadingAnchor),
+                label.widthAnchor.constraint(equalTo: buttonStack.widthAnchor, multiplier: 0.48)
+            ])
+            
+            extensionStatusLabel = label
+        }
+    }
+
+
+
+
+
 
     func didSelectNewProductFromMyRentals() {
         hasCompletedPayment = false
@@ -528,6 +764,56 @@ class BookingApprovalViewController: UIViewController {
         showToast(message: "Address copied", fromBottom: true)
     }
     
+    @IBAction func extendRentalButtonTapped(_ sender: UIButton) {
+        print("[BookingApproval] Extend Rental button tapped")
+        
+        guard let req = request else {
+            print("[BookingApproval] No request available")
+            return
+        }
+        
+        // Create and configure ExtendRentalViewController
+        let extendVC = ExtendRentalViewController(nibName: "ExtendRentalViewController", bundle: nil)
+        extendVC.request = req
+        
+        // Parse end date from request
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        dateFormatter.timeZone = TimeZone(secondsFromGMT: 0)
+        extendVC.originalEndDate = dateFormatter.date(from: req.end_date)
+        
+        // Present as modal
+        extendVC.modalPresentationStyle = .pageSheet
+        if let sheet = extendVC.sheetPresentationController {
+            sheet.detents = [.large()]
+            sheet.prefersGrabberVisible = true
+        }
+        
+        present(extendVC, animated: true)
+    }
+    
+    @IBAction func returnItemButtonTapped(_ sender: UIButton) {
+        print("[BookingApproval] Return Item button tapped")
+        
+        guard let req = request else {
+            print("[BookingApproval] No request available")
+            return
+        }
+        
+        // Create and configure ReturnProofViewController
+        let returnVC = ReturnProofViewController(nibName: "ReturnProofViewController", bundle: nil)
+        returnVC.request = req
+        
+        // Present as modal
+        returnVC.modalPresentationStyle = .pageSheet
+        if let sheet = returnVC.sheetPresentationController {
+            sheet.detents = [.large()]
+            sheet.prefersGrabberVisible = true
+        }
+        
+        present(returnVC, animated: true)
+    }
+    
     @IBAction func debugForceApprove(_ sender: Any) {
         print("[BookingApproval] debugForceApprove tapped")
         setStatus(.approved)
@@ -552,6 +838,10 @@ class BookingApprovalViewController: UIViewController {
         
         // Payment status label visibility
         paymentStatus?.isHidden = (mode == .myRentals)
+        
+        // Hide Extend and Return buttons for owners (only show to borrowers)
+        let hideExtendReturnButtons = (mode == .history)
+        extendReturnButtonsStack?.isHidden = hideExtendReturnButtons
 
         // Update UI based on current payment and approval status
         updateStatusUI()

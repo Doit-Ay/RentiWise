@@ -6,24 +6,508 @@
 //
 
 import UIKit
+import Supabase
 
 class NotificationViewController: UIViewController {
-
+    
+    @IBOutlet weak var tableView: UITableView!
+    @IBOutlet weak var emptyStateView: UIView!
+    @IBOutlet weak var emptyStateLabel: UILabel!
+    
+    private var notifications: [NotificationItem] = []
+    private let refreshControl = UIRefreshControl()
+    
     override func viewDidLoad() {
         super.viewDidLoad()
+        
+        title = "Notifications"
+        view.backgroundColor = .systemGroupedBackground
+        
+        setupTableView()
+        setupEmptyState()
+        
+        Task {
+            await loadNotifications()
+        }
+    }
+    
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        // Refresh notifications when screen appears
+        Task {
+            await loadNotifications()
+        }
+    }
+    
+    // MARK: - Setup
+    
+    private func setupTableView() {
+        tableView.delegate = self
+        tableView.dataSource = self
+        tableView.backgroundColor = .clear
+        tableView.separatorStyle = .none
+        tableView.register(NotificationCell.self, forCellReuseIdentifier: NotificationCell.reuseID)
+        
+        // Add refresh control
+        refreshControl.addTarget(self, action: #selector(handleRefresh), for: .valueChanged)
+        tableView.refreshControl = refreshControl
+    }
+    
+    private func setupEmptyState() {
+        emptyStateView.isHidden = true
+        emptyStateLabel.text = "No notifications yet"
+        emptyStateLabel.textColor = .secondaryLabel
+        emptyStateLabel.font = .systemFont(ofSize: 16, weight: .medium)
+    }
+    
+    @objc private func handleRefresh() {
+        Task {
+            await loadNotifications()
+            refreshControl.endRefreshing()
+        }
+    }
+    
+    // MARK: - Data Loading
+    
+    private func loadNotifications() async {
+        do {
+            // Get current user
+            let session = try await SupabaseManager.shared.client.auth.session
+            let userId = session.user.id.uuidString
+            
+            // Fetch extension requests
+            let extensionRequests = try await fetchExtensionRequests(for: userId)
+            
+            // Fetch return requests  
+            let returnRequests = try await fetchReturnRequests(for: userId)
+            
+            // Combine and sort by date
+            var allNotifications = extensionRequests + returnRequests
+            allNotifications.sort { $0.createdAt > $1.createdAt }
+            
+            await MainActor.run {
+                self.notifications = allNotifications
+                self.tableView.reloadData()
+                self.updateEmptyState()
+            }
+        } catch {
+            print("[Notifications] Error loading notifications: \\(error)")
+            await MainActor.run {
+                self.updateEmptyState()
+            }
+        }
+    }
+    
+    private func fetchExtensionRequests(for ownerId: String) async throws -> [NotificationItem] {
+        struct ExtensionResponse: Decodable {
+            let id: String
+            let request_id: String
+            let additional_days: Int
+            let additional_cost: Double
+            let created_at: String
+            let is_read: Bool?
+            let requests: RequestInfo
+            
+            struct RequestInfo: Decodable {
+                let borrower_id: String
+                let items: ItemInfo
+            }
+            
+            struct ItemInfo: Decodable {
+                let title: String
+                let images: [String]
+            }
+        }
+        
+        let response: [ExtensionResponse] = try await SupabaseManager.shared.client
+            .from("extension_requests")
+            .select("""
+                id,
+                request_id,
+                additional_days,
+                additional_cost,
+                created_at,
+                is_read,
+                requests!inner(
+                    borrower_id,
+                    owner_id,
+                    items!inner(title, images)
+                )
+            """)
+            .eq("requests.owner_id", value: ownerId)
+            .eq("status", value: "pending")
+            .order("created_at", ascending: false)
+            .execute()
+            .value
+        
+        return response.map { ext in
+            let dateFormatter = ISO8601DateFormatter()
+            let date = dateFormatter.date(from: ext.created_at) ?? Date()
+            
+            return NotificationItem(
+                id: ext.id,
+                type: .extensionRequest,
+                requestId: ext.request_id,
+                itemTitle: ext.requests.items.title,
+                itemImage: ext.requests.items.images.first,
+                borrowerId: ext.requests.borrower_id,
+                message: "Extension request for \(ext.additional_days) days (+₹\(String(format: "%.2f", ext.additional_cost)))",
+                createdAt: date,
+                isRead: ext.is_read ?? false
+            )
+        }
+    }
+    
+    private func fetchReturnRequests(for ownerId: String) async throws -> [NotificationItem] {
+        struct ReturnResponse: Decodable {
+            let id: String
+            let request_id: String
+            let notes: String?
+            let created_at: String
+            let is_read: Bool?
+            let requests: RequestInfo
+            
+            struct RequestInfo: Decodable {
+                let borrower_id: String
+                let items: ItemInfo
+            }
+            
+            struct ItemInfo: Decodable {
+                let title: String
+                let images: [String]
+            }
+        }
+        
+        let response: [ReturnResponse] = try await SupabaseManager.shared.client
+            .from("return_requests")
+            .select("""
+                id,
+                request_id,
+                notes,
+                created_at,
+                is_read,
+                requests!inner(
+                    borrower_id,
+                    owner_id,
+                    items!inner(title, images)
+                )
+            """)
+            .eq("requests.owner_id", value: ownerId)
+            .eq("status", value: "pending")
+            .order("created_at", ascending: false)
+            .execute()
+            .value
+        
+        return response.map { ret in
+            let dateFormatter = ISO8601DateFormatter()
+            let date = dateFormatter.date(from: ret.created_at) ?? Date()
+            
+            let message = ret.notes?.isEmpty == false ? 
+                "Item returned with notes" : 
+                "Item has been returned"
+            
+            return NotificationItem(
+                id: ret.id,
+                type: .returnRequest,
+                requestId: ret.request_id,
+                itemTitle: ret.requests.items.title,
+                itemImage: ret.requests.items.images.first,
+                borrowerId: ret.requests.borrower_id,
+                message: message,
+                createdAt: date,
+                isRead: ret.is_read ?? false
+            )
+        }
+    }
+    
+    private func updateEmptyState() {
+        emptyStateView.isHidden = !notifications.isEmpty
+        tableView.isHidden = notifications.isEmpty
+    }
+    
+    // MARK: - Mark as Read
+    
+    private func markAsRead(notification: NotificationItem) async {
+        do {
+            let tableName = notification.type == .extensionRequest ? 
+                "extension_requests" : "return_requests"
+            
+            try await SupabaseManager.shared.client
+                .from(tableName)
+                .update(["is_read": true])
+                .eq("id", value: notification.id)
+                .execute()
+            
+            // Update local state
+            if let index = notifications.firstIndex(where: { $0.id == notification.id }) {
+                await MainActor.run {
+                    notifications[index].isRead = true
+                    tableView.reloadRows(at: [IndexPath(row: index, section: 0)], with: .none)
+                }
+            }
+        } catch {
+            print("[Notifications] Error marking as read: \\(error)")
+        }
+    }
+}
 
-        // Do any additional setup after loading the view.
+// MARK: - UITableViewDataSource
+
+extension NotificationViewController: UITableViewDataSource {
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        return notifications.count
+    }
+    
+    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        let cell = tableView.dequeueReusableCell(withIdentifier: NotificationCell.reuseID, for: indexPath) as! NotificationCell
+        let notification = notifications[indexPath.row]
+        cell.configure(with: notification)
+        return cell
+    }
+}
+
+// MARK: - UITableViewDelegate
+
+extension NotificationViewController: UITableViewDelegate {
+    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: true)
+        
+        let notification = notifications[indexPath.row]
+        
+        // Mark as read
+        Task {
+            await markAsRead(notification: notification)
+        }
+        
+        // Navigate to appropriate screen based on notification type
+        switch notification.type {
+        case .extensionRequest, .returnRequest:
+            openRequestApprovalScreen(for: notification)
+        }
+    }
+    
+    private func openRequestApprovalScreen(for notification: NotificationItem) {
+        // Create RequestApprovalViewController from XIB
+        let approvalVC = RequestApprovalViewController(nibName: "RequestApprovalViewController", bundle: nil)
+        
+        // Determine request type
+        let requestType: RequestType = notification.type == .returnRequest ? .returnRequest : .extensionRequest
+        
+        // Configure the view controller
+        approvalVC.configure(
+            requestType: requestType,
+            requestId: notification.id,
+            bookingId: notification.requestId
+        )
+        
+        // Push to navigation stack
+        navigationController?.pushViewController(approvalVC, animated: true)
     }
 
 
-    /*
-    // MARK: - Navigation
-
-    // In a storyboard-based application, you will often want to do a little preparation before navigation
-    override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
-        // Get the new view controller using segue.destination.
-        // Pass the selected object to the new view controller.
+    
+    func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
+        return 90
     }
-    */
+}
 
+// MARK: - Supporting Types
+
+struct NotificationItem {
+    let id: String
+    let type: NotificationType
+    let requestId: String
+    let itemTitle: String
+    let itemImage: String?
+    let borrowerId: String
+    let message: String
+    let createdAt: Date
+    var isRead: Bool
+}
+
+enum NotificationType {
+    case extensionRequest
+    case returnRequest
+    
+    var icon: String {
+        switch self {
+        case .extensionRequest:
+            return "clock.arrow.circlepath"
+        case .returnRequest:
+            return "checkmark.circle"
+        }
+    }
+    
+    var iconColor: UIColor {
+        switch self {
+        case .extensionRequest:
+            return UIColor(red: 0.36, green: 0.66, blue: 0.71, alpha: 1.0) // Teal
+        case .returnRequest:
+            return UIColor.systemGreen
+        }
+    }
+}
+
+// MARK: - Custom Cell
+
+class NotificationCell: UITableViewCell {
+    static let reuseID = "NotificationCell"
+    
+    private let containerView = UIView()
+    private let iconView = UIImageView()
+    private let titleLabel = UILabel()
+    private let messageLabel = UILabel()
+    private let timeLabel = UILabel()
+    private let unreadIndicator = UIView()
+    private let itemImageView = UIImageView()
+    
+    override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
+        super.init(style: style, reuseIdentifier: reuseIdentifier)
+        setupUI()
+    }
+    
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+    
+    private func setupUI() {
+        backgroundColor = .clear
+        selectionStyle = .none
+        
+        // Container with white background and shadow
+        containerView.backgroundColor = .secondarySystemGroupedBackground
+        containerView.layer.cornerRadius = 12
+        containerView.layer.shadowColor = UIColor.black.cgColor
+        containerView.layer.shadowOpacity = 0.08
+        containerView.layer.shadowRadius = 4
+        containerView.layer.shadowOffset = CGSize(width: 0, height: 2)
+        contentView.addSubview(containerView)
+        
+        // Item image
+        itemImageView.contentMode = .scaleAspectFill
+        itemImageView.clipsToBounds = true
+        itemImageView.layer.cornerRadius = 8
+        itemImageView.backgroundColor = .tertiarySystemGroupedBackground
+        containerView.addSubview(itemImageView)
+        
+        // Icon
+        iconView.contentMode = .scaleAspectFit
+        iconView.tintColor = .systemBlue
+        containerView.addSubview(iconView)
+        
+        // Title
+        titleLabel.font = .systemFont(ofSize: 16, weight: .semibold)
+        titleLabel.textColor = .label
+        titleLabel.numberOfLines = 1
+        containerView.addSubview(titleLabel)
+        
+        // Message
+        messageLabel.font = .systemFont(ofSize: 14, weight: .regular)
+        messageLabel.textColor = .secondaryLabel
+        messageLabel.numberOfLines = 2
+        containerView.addSubview(messageLabel)
+        
+        // Time
+        timeLabel.font = .systemFont(ofSize: 12, weight: .regular)
+        timeLabel.textColor = .tertiaryLabel
+        containerView.addSubview(timeLabel)
+        
+        // Unread indicator
+        unreadIndicator.backgroundColor = UIColor(red: 0.36, green: 0.66, blue: 0.71, alpha: 1.0)
+        unreadIndicator.layer.cornerRadius = 4
+        containerView.addSubview(unreadIndicator)
+        
+        setupConstraints()
+    }
+    
+    private func setupConstraints() {
+        containerView.translatesAutoresizingMaskIntoConstraints = false
+        itemImageView.translatesAutoresizingMaskIntoConstraints = false
+        iconView.translatesAutoresizingMaskIntoConstraints = false
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        messageLabel.translatesAutoresizingMaskIntoConstraints = false
+        timeLabel.translatesAutoresizingMaskIntoConstraints = false
+        unreadIndicator.translatesAutoresizingMaskIntoConstraints = false
+        
+        NSLayoutConstraint.activate([
+            // Container
+            containerView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 6),
+            containerView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+            containerView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+            containerView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -6),
+            
+            // Item image
+            itemImageView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 12),
+            itemImageView.centerYAnchor.constraint(equalTo: containerView.centerYAnchor),
+            itemImageView.widthAnchor.constraint(equalToConstant: 60),
+            itemImageView.heightAnchor.constraint(equalToConstant: 60),
+            
+            // Icon (overlaid on item image)
+            iconView.trailingAnchor.constraint(equalTo: itemImageView.trailingAnchor, constant: -4),
+            iconView.bottomAnchor.constraint(equalTo: itemImageView.bottomAnchor, constant: -4),
+            iconView.widthAnchor.constraint(equalToConstant: 24),
+            iconView.heightAnchor.constraint(equalToConstant: 24),
+            
+            // Title
+            titleLabel.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 12),
+            titleLabel.leadingAnchor.constraint(equalTo: itemImageView.trailingAnchor, constant: 12),
+            titleLabel.trailingAnchor.constraint(equalTo: unreadIndicator.leadingAnchor, constant: -8),
+            
+            // Message
+            messageLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 4),
+            messageLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
+            messageLabel.trailingAnchor.constraint(equalTo: titleLabel.trailingAnchor),
+            
+            // Time
+            timeLabel.topAnchor.constraint(equalTo: messageLabel.bottomAnchor, constant: 4),
+            timeLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
+            timeLabel.trailingAnchor.constraint(equalTo: titleLabel.trailingAnchor),
+            
+            // Unread indicator
+            unreadIndicator.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 12),
+            unreadIndicator.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -12),
+            unreadIndicator.widthAnchor.constraint(equalToConstant: 8),
+            unreadIndicator.heightAnchor.constraint(equalToConstant: 8),
+        ])
+    }
+    
+    func configure(with notification: NotificationItem) {
+        titleLabel.text = notification.itemTitle
+        messageLabel.text = notification.message
+        timeLabel.text = notification.createdAt.timeAgoDisplay()
+        
+        // Icon
+        let config = UIImage.SymbolConfiguration(pointSize: 20, weight: .semibold)
+        iconView.image = UIImage(systemName: notification.type.icon, withConfiguration: config)
+        iconView.tintColor = notification.type.iconColor
+        
+        // Unread indicator
+        unreadIndicator.isHidden = notification.isRead
+        
+        // Item image
+        if let imageUrl = notification.itemImage {
+            Task {
+                await loadImage(from: imageUrl)
+            }
+        } else {
+            itemImageView.image = nil
+        }
+    }
+    
+    private func loadImage(from path: String) async {
+        // Simple placeholder for now
+        // TODO: Implement image loading from Supabase storage or URL
+        itemImageView.image = UIImage(systemName: "photo")
+        itemImageView.tintColor = .tertiaryLabel
+    }
+}
+
+// MARK: - Date Extension
+
+extension Date {
+    func timeAgoDisplay() -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .short
+        return formatter.localizedString(for: self, relativeTo: Date())
+    }
 }

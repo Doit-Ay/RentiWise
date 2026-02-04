@@ -961,3 +961,23 @@ WITH CHECK (
 
 -- Realtime is already enabled for chat_messages table ✅
 -- (The table is already added to supabase_realtime publication)
+
+CREATE TABLE extension_requests (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    request_id UUID NOT NULL REFERENCES requests(id),
+    original_end_date TEXT NOT NULL,
+    new_end_date TEXT NOT NULL,
+    additional_days INTEGER NOT NULL,
+    additional_cost DOUBLE PRECISION NOT NULL,
+    status TEXT DEFAULT 'pending',
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE return_requests (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    request_id UUID NOT NULL REFERENCES requests(id),
+    proof_media TEXT[] NOT NULL,
+    notes TEXT,
+    status TEXT DEFAULT 'pending',
+    created_at TEXT NOT NULL
+);

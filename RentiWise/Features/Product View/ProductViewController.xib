@@ -40,7 +40,7 @@
                     <rect key="frame" x="0.0" y="118" width="393" height="734"/>
                     <subviews>
                         <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="HTq-vE-ojZ">
-                            <rect key="frame" x="0.0" y="0.0" width="393" height="1125"/>
+                            <rect key="frame" x="0.0" y="0.0" width="393" height="1100"/>
                             <subviews>
                                 <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFill" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="Image 3" translatesAutoresizingMaskIntoConstraints="NO" id="UI3-I1-ds2">
                                     <rect key="frame" x="16" y="16" width="361" height="240"/>
@@ -310,7 +310,7 @@
                                 <constraint firstAttribute="trailing" secondItem="qtp-0D-nta" secondAttribute="trailing" constant="16" id="pMW-h8-uds"/>
                                 <constraint firstAttribute="trailing" secondItem="UI3-I1-ds2" secondAttribute="trailing" constant="16" id="pjV-Qe-3H5"/>
                                 <constraint firstItem="UI3-I1-ds2" firstAttribute="top" secondItem="HTq-vE-ojZ" secondAttribute="top" constant="16" id="rUc-CB-KeY"/>
-                                <constraint firstAttribute="height" constant="1125" id="thG-sE-Jbz"/>
+                                <constraint firstAttribute="height" constant="1100" id="thG-sE-Jbz"/>
                                 <constraint firstItem="5Pd-cM-hKM" firstAttribute="leading" secondItem="HTq-vE-ojZ" secondAttribute="leading" constant="24" id="urq-IL-Bkx"/>
                                 <constraint firstItem="VgB-tA-HB5" firstAttribute="leading" secondItem="5Pd-cM-hKM" secondAttribute="trailing" constant="25" id="yo8-9V-DN0"/>
                             </constraints>

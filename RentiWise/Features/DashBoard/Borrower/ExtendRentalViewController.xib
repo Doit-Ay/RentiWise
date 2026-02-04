@@ -1,0 +1,359 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.XIB" version="3.0" toolsVersion="24128" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES">
+    <device id="retina6_12" orientation="portrait" appearance="light"/>
+    <dependencies>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="24063"/>
+        <capability name="Safe area layout guides" minToolsVersion="9.0"/>
+        <capability name="System colors in document resources" minToolsVersion="11.0"/>
+        <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
+    </dependencies>
+    <objects>
+        <placeholder placeholderIdentifier="IBFilesOwner" id="-1" userLabel="File's Owner" customClass="ExtendRentalViewController" customModule="RentiWise" customModuleProvider="target">
+            <connections>
+                <outlet property="additionalDaysLabel" destination="Add-Days-Lbl" id="OutAddDays"/>
+                <outlet property="additionalFeeLabel" destination="Add-Fee-Lbl" id="OutAddFee"/>
+                <outlet property="currentEndDateLabel" destination="Cur-End-Lbl" id="OutCurEnd"/>
+                <outlet property="itemNameLabel" destination="Item-Name-Lbl" id="OutItemName"/>
+                <outlet property="newEndDatePicker" destination="Date-Picker" id="OutDatePick"/>
+                <outlet property="pricePerDayLabel" destination="Price-Day-Lbl" id="OutPriceDay"/>
+                <outlet property="sendRequestButton" destination="Send-Req-Btn" id="OutSendBtn"/>
+                <outlet property="totalExtensionLabel" destination="Tot-Ext-Lbl" id="OutTotExt"/>
+                <outlet property="view" destination="i5M-Pr-FkT" id="sfx-zR-JGt"/>
+            </connections>
+        </placeholder>
+        <placeholder placeholderIdentifier="IBFirstResponder" id="-2" customClass="UIResponder"/>
+        <view clearsContextBeforeDrawing="NO" contentMode="scaleToFill" id="i5M-Pr-FkT">
+            <rect key="frame" x="0.0" y="0.0" width="393" height="852"/>
+            <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
+            <subviews>
+                <scrollView clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="Scroll-View">
+                    <rect key="frame" x="0.0" y="0.0" width="393" height="852"/>
+                    <subviews>
+                        <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="Content-View">
+                            <rect key="frame" x="0.0" y="0.0" width="393" height="760"/>
+                            <subviews>
+                                <!-- Simple Header -->
+                                <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Extend Rental" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="Title-Lbl">
+                                    <rect key="frame" x="24" y="32" width="345" height="34"/>
+                                    <fontDescription key="fontDescription" type="system" weight="semibold" pointSize="28"/>
+                                    <nil key="textColor"/>
+                                    <nil key="highlightedColor"/>
+                                </label>
+                                
+                                <!-- Item Card -->
+                                <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="Item-Card">
+                                    <rect key="frame" x="24" y="90" width="345" height="70"/>
+                                    <subviews>
+                                        <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="RENTAL ITEM" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="Item-Label-Title">
+                                            <rect key="frame" x="20" y="16" width="305" height="14"/>
+                                            <fontDescription key="fontDescription" type="system" weight="medium" pointSize="11"/>
+                                            <color key="textColor" systemColor="secondaryLabelColor"/>
+                                            <nil key="highlightedColor"/>
+                                        </label>
+                                        <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Item Name" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="Item-Name-Lbl">
+                                            <rect key="frame" x="20" y="36" width="305" height="22"/>
+                                            <fontDescription key="fontDescription" type="system" weight="medium" pointSize="18"/>
+                                            <nil key="textColor"/>
+                                            <nil key="highlightedColor"/>
+                                        </label>
+                                    </subviews>
+                                    <color key="backgroundColor" systemColor="secondarySystemGroupedBackgroundColor"/>
+                                    <constraints>
+                                        <constraint firstItem="Item-Label-Title" firstAttribute="top" secondItem="Item-Card" secondAttribute="top" constant="16" id="ItemLabelT-Top"/>
+                                        <constraint firstItem="Item-Label-Title" firstAttribute="leading" secondItem="Item-Card" secondAttribute="leading" constant="20" id="ItemLabelT-Lead"/>
+                                        <constraint firstAttribute="trailing" secondItem="Item-Label-Title" secondAttribute="trailing" constant="20" id="ItemLabelT-Trail"/>
+                                        <constraint firstItem="Item-Name-Lbl" firstAttribute="top" secondItem="Item-Label-Title" secondAttribute="bottom" constant="6" id="ItemName-Top"/>
+                                        <constraint firstItem="Item-Name-Lbl" firstAttribute="leading" secondItem="Item-Card" secondAttribute="leading" constant="20" id="ItemName-Lead"/>
+                                        <constraint firstAttribute="trailing" secondItem="Item-Name-Lbl" secondAttribute="trailing" constant="20" id="ItemName-Trail"/>
+                                        <constraint firstAttribute="height" constant="70" id="ItemCard-Height"/>
+                                    </constraints>
+                                    <userDefinedRuntimeAttributes>
+                                        <userDefinedRuntimeAttribute type="number" keyPath="layer.shadowOpacity">
+                                            <real key="value" value="0.04"/>
+                                        </userDefinedRuntimeAttribute>
+                                        <userDefinedRuntimeAttribute type="size" keyPath="layer.shadowOffset">
+                                            <size key="value" width="0.0" height="1"/>
+                                        </userDefinedRuntimeAttribute>
+                                        <userDefinedRuntimeAttribute type="number" keyPath="layer.shadowRadius">
+                                            <real key="value" value="2"/>
+                                        </userDefinedRuntimeAttribute>
+                                        <userDefinedRuntimeAttribute type="color" keyPath="layer.shadowColor">
+                                            <color key="value" white="0.0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                                        </userDefinedRuntimeAttribute>
+                                        <userDefinedRuntimeAttribute type="number" keyPath="ibCornerRadius">
+                                            <real key="value" value="16"/>
+                                        </userDefinedRuntimeAttribute>
+                                    </userDefinedRuntimeAttributes>
+                                </view>
+                                
+                                <!-- Current Date Card -->
+                                <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="Current-Date-Card">
+                                    <rect key="frame" x="24" y="184" width="345" height="70"/>
+                                    <subviews>
+                                        <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="CURRENT RETURN DATE" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="Cur-End-Title">
+                                            <rect key="frame" x="20" y="16" width="305" height="14"/>
+                                            <fontDescription key="fontDescription" type="system" weight="medium" pointSize="11"/>
+                                            <color key="textColor" systemColor="secondaryLabelColor"/>
+                                            <nil key="highlightedColor"/>
+                                        </label>
+                                        <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Jan 15, 2026" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="Cur-End-Lbl">
+                                            <rect key="frame" x="20" y="36" width="305" height="22"/>
+                                            <fontDescription key="fontDescription" type="system" weight="medium" pointSize="18"/>
+                                            <nil key="textColor"/>
+                                            <nil key="highlightedColor"/>
+                                        </label>
+                                    </subviews>
+                                    <color key="backgroundColor" systemColor="secondarySystemGroupedBackgroundColor"/>
+                                    <constraints>
+                                        <constraint firstItem="Cur-End-Title" firstAttribute="top" secondItem="Current-Date-Card" secondAttribute="top" constant="16" id="CurTitle-Top"/>
+                                        <constraint firstItem="Cur-End-Title" firstAttribute="leading" secondItem="Current-Date-Card" secondAttribute="leading" constant="20" id="CurTitle-Lead"/>
+                                        <constraint firstAttribute="trailing" secondItem="Cur-End-Title" secondAttribute="trailing" constant="20" id="CurTitle-Trail"/>
+                                        <constraint firstItem="Cur-End-Lbl" firstAttribute="top" secondItem="Cur-End-Title" secondAttribute="bottom" constant="6" id="CurLbl-Top"/>
+                                        <constraint firstItem="Cur-End-Lbl" firstAttribute="leading" secondItem="Current-Date-Card" secondAttribute="leading" constant="20" id="CurLbl-Lead"/>
+                                        <constraint firstAttribute="trailing" secondItem="Cur-End-Lbl" secondAttribute="trailing" constant="20" id="CurLbl-Trail"/>
+                                        <constraint firstAttribute="height" constant="70" id="CurCard-Height"/>
+                                    </constraints>
+                                    <userDefinedRuntimeAttributes>
+                                        <userDefinedRuntimeAttribute type="number" keyPath="layer.shadowOpacity">
+                                            <real key="value" value="0.04"/>
+                                        </userDefinedRuntimeAttribute>
+                                        <userDefinedRuntimeAttribute type="size" keyPath="layer.shadowOffset">
+                                            <size key="value" width="0.0" height="1"/>
+                                        </userDefinedRuntimeAttribute>
+                                        <userDefinedRuntimeAttribute type="number" keyPath="layer.shadowRadius">
+                                            <real key="value" value="2"/>
+                                        </userDefinedRuntimeAttribute>
+                                        <userDefinedRuntimeAttribute type="color" keyPath="layer.shadowColor">
+                                            <color key="value" white="0.0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                                        </userDefinedRuntimeAttribute>
+                                        <userDefinedRuntimeAttribute type="number" keyPath="ibCornerRadius">
+                                            <real key="value" value="16"/>
+                                        </userDefinedRuntimeAttribute>
+                                    </userDefinedRuntimeAttributes>
+                                </view>
+                                
+                                <!-- New Date Section -->
+                                <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="NEW RETURN DATE" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="New-Date-Title">
+                                    <rect key="frame" x="24" y="278" width="345" height="14"/>
+                                    <fontDescription key="fontDescription" type="system" weight="medium" pointSize="11"/>
+                                    <color key="textColor" systemColor="secondaryLabelColor"/>
+                                    <nil key="highlightedColor"/>
+                                </label>
+                                <datePicker contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" datePickerMode="date" style="wheels" translatesAutoresizingMaskIntoConstraints="NO" id="Date-Picker">
+                                    <rect key="frame" x="24" y="312" width="345" height="200"/>
+                                    <constraints>
+                                        <constraint firstAttribute="height" constant="200" id="DatePicker-Height"/>
+                                    </constraints>
+                                </datePicker>
+                                
+                                <!-- Price Summary Card -->
+                                <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="Price-Card">
+                                    <rect key="frame" x="24" y="536" width="345" height="108"/>
+                                    <subviews>
+                                        <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="SUMMARY" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="Price-Title">
+                                            <rect key="frame" x="20" y="16" width="305" height="14"/>
+                                            <fontDescription key="fontDescription" type="system" weight="medium" pointSize="11"/>
+                                            <color key="textColor" systemColor="secondaryLabelColor"/>
+                                            <nil key="highlightedColor"/>
+                                        </label>
+                                        <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Additional Days" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="Add-Days-Title">
+                                            <rect key="frame" x="20" y="46" width="220" height="20"/>
+                                            <fontDescription key="fontDescription" type="system" pointSize="16"/>
+                                            <nil key="textColor"/>
+                                            <nil key="highlightedColor"/>
+                                        </label>
+                                        <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="0 days" textAlignment="right" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="Add-Days-Lbl">
+                                            <rect key="frame" x="245" y="46" width="80" height="20"/>
+                                            <constraints>
+                                                <constraint firstAttribute="width" constant="80" id="AddDaysVal-Width"/>
+                                            </constraints>
+                                            <fontDescription key="fontDescription" type="system" weight="medium" pointSize="16"/>
+                                            <nil key="textColor"/>
+                                            <nil key="highlightedColor"/>
+                                        </label>
+                                        <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="Divider">
+                                            <rect key="frame" x="20" y="76" width="305" height="0.5"/>
+                                            <color key="backgroundColor" systemColor="separatorColor"/>
+                                            <constraints>
+                                                <constraint firstAttribute="height" constant="0.5" id="Div-Height"/>
+                                            </constraints>
+                                        </view>
+                                        <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Total Cost" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="Tot-Title">
+                                            <rect key="frame" x="20" y="86.5" width="220" height="20"/>
+                                            <fontDescription key="fontDescription" type="system" weight="medium" pointSize="16"/>
+                                            <nil key="textColor"/>
+                                            <nil key="highlightedColor"/>
+                                        </label>
+                                        <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="₹0" textAlignment="right" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="Tot-Ext-Lbl">
+                                            <rect key="frame" x="245" y="84.5" width="80" height="24"/>
+                                            <constraints>
+                                                <constraint firstAttribute="width" constant="80" id="TotExt-Width"/>
+                                            </constraints>
+                                            <fontDescription key="fontDescription" type="system" weight="semibold" pointSize="20"/>
+                                            <color key="textColor" red="0.36470588240000001" green="0.66274509800000003" blue="0.71372549019999998" alpha="1" colorSpace="calibratedRGB"/>
+                                            <nil key="highlightedColor"/>
+                                        </label>
+                                    </subviews>
+                                    <color key="backgroundColor" systemColor="secondarySystemGroupedBackgroundColor"/>
+                                    <constraints>
+                                        <constraint firstItem="Price-Title" firstAttribute="top" secondItem="Price-Card" secondAttribute="top" constant="16" id="PriceTitle-Top"/>
+                                        <constraint firstItem="Price-Title" firstAttribute="leading" secondItem="Price-Card" secondAttribute="leading" constant="20" id="PriceTitle-Lead"/>
+                                        <constraint firstAttribute="trailing" secondItem="Price-Title" secondAttribute="trailing" constant="20" id="PriceTitle-Trail"/>
+                                        <constraint firstItem="Add-Days-Title" firstAttribute="top" secondItem="Price-Title" secondAttribute="bottom" constant="16" id="AddDaysT-Top"/>
+                                        <constraint firstItem="Add-Days-Title" firstAttribute="leading" secondItem="Price-Card" secondAttribute="leading" constant="20" id="AddDaysT-Lead"/>
+                                        <constraint firstItem="Add-Days-Lbl" firstAttribute="centerY" secondItem="Add-Days-Title" secondAttribute="centerY" id="AddDaysL-CenterY"/>
+                                        <constraint firstAttribute="trailing" secondItem="Add-Days-Lbl" secondAttribute="trailing" constant="20" id="AddDaysL-Trail"/>
+                                        <constraint firstItem="Divider" firstAttribute="top" secondItem="Add-Days-Title" secondAttribute="bottom" constant="10" id="Div-Top"/>
+                                        <constraint firstItem="Divider" firstAttribute="leading" secondItem="Price-Card" secondAttribute="leading" constant="20" id="Div-Lead"/>
+                                        <constraint firstItem="Divider" firstAttribute="trailing" secondItem="Price-Card" secondAttribute="trailing" constant="-20" id="Div-Trail"/>
+                                        <constraint firstItem="Tot-Title" firstAttribute="top" secondItem="Divider" secondAttribute="bottom" constant="10" id="TotTitle-Top"/>
+                                        <constraint firstItem="Tot-Title" firstAttribute="leading" secondItem="Price-Card" secondAttribute="leading" constant="20" id="TotTitle-Lead"/>
+                                        <constraint firstItem="Tot-Ext-Lbl" firstAttribute="centerY" secondItem="Tot-Title" secondAttribute="centerY" id="TotExtL-CenterY"/>
+                                        <constraint firstItem="Tot-Ext-Lbl" firstAttribute="trailing" secondItem="Add-Days-Lbl" secondAttribute="trailing" id="TotExtL-Trail"/>
+                                        <constraint firstAttribute="height" constant="108" id="PriceCard-Height"/>
+                                    </constraints>
+                                    <userDefinedRuntimeAttributes>
+                                        <userDefinedRuntimeAttribute type="number" keyPath="layer.shadowOpacity">
+                                            <real key="value" value="0.04"/>
+                                        </userDefinedRuntimeAttribute>
+                                        <userDefinedRuntimeAttribute type="size" keyPath="layer.shadowOffset">
+                                            <size key="value" width="0.0" height="1"/>
+                                        </userDefinedRuntimeAttribute>
+                                        <userDefinedRuntimeAttribute type="number" keyPath="layer.shadowRadius">
+                                            <real key="value" value="2"/>
+                                        </userDefinedRuntimeAttribute>
+                                        <userDefinedRuntimeAttribute type="color" keyPath="layer.shadowColor">
+                                            <color key="value" white="0.0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                                        </userDefinedRuntimeAttribute>
+                                        <userDefinedRuntimeAttribute type="number" keyPath="ibCornerRadius">
+                                            <real key="value" value="16"/>
+                                        </userDefinedRuntimeAttribute>
+                                    </userDefinedRuntimeAttributes>
+                                </view>
+                                
+                                <!-- Hidden labels for compatibility -->
+                                <label opaque="NO" userInteractionEnabled="NO" contentMode="left" text="₹0/day" translatesAutoresizingMaskIntoConstraints="NO" id="Price-Day-Lbl" hidden="YES">
+                                    <rect key="frame" x="24" y="536" width="60" height="18"/>
+                                    <fontDescription key="fontDescription" type="system" pointSize="15"/>
+                                </label>
+                                <label opaque="NO" userInteractionEnabled="NO" contentMode="left" text="₹0" translatesAutoresizingMaskIntoConstraints="NO" id="Add-Fee-Lbl" hidden="YES">
+                                    <rect key="frame" x="24" y="536" width="60" height="18"/>
+                                    <fontDescription key="fontDescription" type="system" pointSize="15"/>
+                                </label>
+                            </subviews>
+                            <color key="backgroundColor" systemColor="systemGroupedBackgroundColor"/>
+                            <constraints>
+                                <constraint firstItem="Title-Lbl" firstAttribute="top" secondItem="Content-View" secondAttribute="top" constant="32" id="Title-Top"/>
+                                <constraint firstItem="Title-Lbl" firstAttribute="leading" secondItem="Content-View" secondAttribute="leading" constant="24" id="Title-Lead"/>
+                                <constraint firstAttribute="trailing" secondItem="Title-Lbl" secondAttribute="trailing" constant="24" id="Title-Trail"/>
+                                <constraint firstItem="Item-Card" firstAttribute="top" secondItem="Title-Lbl" secondAttribute="bottom" constant="24" id="ItemCard-Top"/>
+                                <constraint firstItem="Item-Card" firstAttribute="leading" secondItem="Content-View" secondAttribute="leading" constant="24" id="ItemCard-Lead"/>
+                                <constraint firstAttribute="trailing" secondItem="Item-Card" secondAttribute="trailing" constant="24" id="ItemCard-Trail"/>
+                                <constraint firstItem="Current-Date-Card" firstAttribute="top" secondItem="Item-Card" secondAttribute="bottom" constant="24" id="CurCard-Top"/>
+                                <constraint firstItem="Current-Date-Card" firstAttribute="leading" secondItem="Content-View" secondAttribute="leading" constant="24" id="CurCard-Lead"/>
+                                <constraint firstAttribute="trailing" secondItem="Current-Date-Card" secondAttribute="trailing" constant="24" id="CurCard-Trail"/>
+                                <constraint firstItem="New-Date-Title" firstAttribute="top" secondItem="Current-Date-Card" secondAttribute="bottom" constant="24" id="NewTitle-Top"/>
+                                <constraint firstItem="New-Date-Title" firstAttribute="leading" secondItem="Content-View" secondAttribute="leading" constant="24" id="NewTitle-Lead"/>
+                                <constraint firstAttribute="trailing" secondItem="New-Date-Title" secondAttribute="trailing" constant="24" id="NewTitle-Trail"/>
+                                <constraint firstItem="Date-Picker" firstAttribute="top" secondItem="New-Date-Title" secondAttribute="bottom" constant="20" id="DatePick-Top"/>
+                                <constraint firstItem="Date-Picker" firstAttribute="leading" secondItem="Content-View" secondAttribute="leading" constant="24" id="DatePick-Lead"/>
+                                <constraint firstAttribute="trailing" secondItem="Date-Picker" secondAttribute="trailing" constant="24" id="DatePick-Trail"/>
+                                <constraint firstItem="Price-Card" firstAttribute="top" secondItem="Date-Picker" secondAttribute="bottom" constant="24" id="PriceCard-Top"/>
+                                <constraint firstItem="Price-Card" firstAttribute="leading" secondItem="Content-View" secondAttribute="leading" constant="24" id="PriceCard-Lead"/>
+                                <constraint firstAttribute="trailing" secondItem="Price-Card" secondAttribute="trailing" constant="24" id="PriceCard-Trail"/>
+                                <constraint firstAttribute="height" constant="760" id="Content-Height"/>
+                            </constraints>
+                        </view>
+                    </subviews>
+                    <constraints>
+                        <constraint firstItem="Content-View" firstAttribute="width" secondItem="Scroll-View" secondAttribute="width" id="Content-Width"/>
+                        <constraint firstAttribute="bottom" secondItem="Content-View" secondAttribute="bottom" id="Content-Bottom"/>
+                        <constraint firstItem="Content-View" firstAttribute="leading" secondItem="Scroll-View" secondAttribute="leading" id="Content-Lead"/>
+                        <constraint firstAttribute="trailing" secondItem="Content-View" secondAttribute="trailing" id="Content-Trail"/>
+                        <constraint firstItem="Content-View" firstAttribute="top" secondItem="Scroll-View" secondAttribute="top" id="Content-Top"/>
+                    </constraints>
+                    <viewLayoutGuide key="contentLayoutGuide" id="Content-Guide"/>
+                    <viewLayoutGuide key="frameLayoutGuide" id="Frame-Guide"/>
+                </scrollView>
+                <stackView opaque="NO" contentMode="scaleToFill" distribution="fillEqually" spacing="16" translatesAutoresizingMaskIntoConstraints="NO" id="Button-Stack">
+                    <rect key="frame" x="24" y="762" width="345" height="50"/>
+                    <subviews>
+                        <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="Cancel-Btn">
+                            <rect key="frame" x="0.0" y="0.0" width="164.5" height="50"/>
+                            <color key="backgroundColor" systemColor="tertiarySystemGroupedBackgroundColor"/>
+                            <constraints>
+                                <constraint firstAttribute="height" constant="50" id="Cancel-Height"/>
+                            </constraints>
+                            <fontDescription key="fontDescription" type="system" weight="medium" pointSize="16"/>
+                            <state key="normal" title="Cancel">
+                                <color key="titleColor" systemColor="labelColor"/>
+                            </state>
+                            <userDefinedRuntimeAttributes>
+                                <userDefinedRuntimeAttribute type="number" keyPath="ibCornerRadius">
+                                    <real key="value" value="14"/>
+                                </userDefinedRuntimeAttribute>
+                            </userDefinedRuntimeAttributes>
+                            <connections>
+                                <action selector="cancelButtonTapped:" destination="-1" eventType="touchUpInside" id="Cancel-Action"/>
+                            </connections>
+                        </button>
+                        <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="Send-Req-Btn">
+                            <rect key="frame" x="180.5" y="0.0" width="164.5" height="50"/>
+                            <color key="backgroundColor" red="0.36470588240000001" green="0.66274509800000003" blue="0.71372549019999998" alpha="1" colorSpace="calibratedRGB"/>
+                            <constraints>
+                                <constraint firstAttribute="height" constant="50" id="Send-Height"/>
+                            </constraints>
+                            <fontDescription key="fontDescription" type="system" weight="semibold" pointSize="16"/>
+                            <state key="normal" title="Send Request">
+                                <color key="titleColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                            </state>
+                            <userDefinedRuntimeAttributes>
+                                <userDefinedRuntimeAttribute type="number" keyPath="ibCornerRadius">
+                                    <real key="value" value="14"/>
+                                </userDefinedRuntimeAttribute>
+                            </userDefinedRuntimeAttributes>
+                            <connections>
+                                <action selector="sendRequestButtonTapped:" destination="-1" eventType="touchUpInside" id="Send-Action"/>
+                            </connections>
+                        </button>
+                    </subviews>
+                    <constraints>
+                        <constraint firstAttribute="height" constant="50" id="BtnStack-Height"/>
+                    </constraints>
+                </stackView>
+            </subviews>
+            <viewLayoutGuide key="safeArea" id="fnl-2z-Ty3"/>
+            <color key="backgroundColor" systemColor="systemGroupedBackgroundColor"/>
+            <constraints>
+                <constraint firstItem="Scroll-View" firstAttribute="top" secondItem="i5M-Pr-FkT" secondAttribute="top" id="Scroll-Top"/>
+                <constraint firstItem="Scroll-View" firstAttribute="leading" secondItem="fnl-2z-Ty3" secondAttribute="leading" id="Scroll-Lead"/>
+                <constraint firstItem="fnl-2z-Ty3" firstAttribute="trailing" secondItem="Scroll-View" secondAttribute="trailing" id="Scroll-Trail"/>
+                <constraint firstItem="Button-Stack" firstAttribute="top" secondItem="Scroll-View" secondAttribute="bottom" id="BtnStack-Top"/>
+                <constraint firstItem="Button-Stack" firstAttribute="leading" secondItem="fnl-2z-Ty3" secondAttribute="leading" constant="24" id="BtnStack-Lead"/>
+                <constraint firstItem="fnl-2z-Ty3" firstAttribute="trailing" secondItem="Button-Stack" secondAttribute="trailing" constant="24" id="BtnStack-Trail"/>
+                <constraint firstItem="fnl-2z-Ty3" firstAttribute="bottom" secondItem="Button-Stack" secondAttribute="bottom" constant="6" id="BtnStack-Bottom"/>
+            </constraints>
+            <point key="canvasLocation" x="140" y="20"/>
+        </view>
+    </objects>
+    <resources>
+        <systemColor name="labelColor">
+            <color red="0.0" green="0.0" blue="0.0" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+        </systemColor>
+        <systemColor name="secondaryLabelColor">
+            <color red="0.23529411764705882" green="0.23529411764705882" blue="0.2627450980392157" alpha="0.59999999999999998" colorSpace="custom" customColorSpace="sRGB"/>
+        </systemColor>
+        <systemColor name="secondarySystemGroupedBackgroundColor">
+            <color white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+        </systemColor>
+        <systemColor name="separatorColor">
+            <color red="0.23529411764705882" green="0.23529411764705882" blue="0.2627450980392157" alpha="0.28999999999999998" colorSpace="custom" customColorSpace="sRGB"/>
+        </systemColor>
+        <systemColor name="systemGroupedBackgroundColor">
+            <color red="0.94901960784313721" green="0.94901960784313721" blue="0.96862745098039216" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+        </systemColor>
+        <systemColor name="tertiarySystemGroupedBackgroundColor">
+            <color white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+        </systemColor>
+    </resources>
+</document>

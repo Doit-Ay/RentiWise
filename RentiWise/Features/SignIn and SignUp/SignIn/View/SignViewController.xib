@@ -100,10 +100,10 @@
                     </connections>
                 </button>
                 <stackView opaque="NO" contentMode="scaleToFill" distribution="fillEqually" translatesAutoresizingMaskIntoConstraints="NO" id="kV0-Tt-mON">
-                    <rect key="frame" x="122.66666666666669" y="600.66666666666663" width="148" height="64"/>
+                    <rect key="frame" x="160.66666666666666" y="600.66666666666663" width="72" height="62"/>
                     <subviews>
                         <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="oZf-Yw-Qru">
-                            <rect key="frame" x="0.0" y="0.0" width="74" height="64"/>
+                            <rect key="frame" x="0.0" y="0.0" width="72" height="62"/>
                             <state key="normal" title="Button"/>
                             <buttonConfiguration key="configuration" style="plain" image="Google"/>
                             <connections>
@@ -112,6 +112,7 @@
                         </button>
                         <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="Fjh-tP-9Tj">
                             <rect key="frame" x="73.999999999999986" y="0.0" width="74.000000000000014" height="64"/>
+                            <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
                             <state key="normal" title="Button"/>
                             <buttonConfiguration key="configuration" style="plain" image="Apple"/>
                             <connections>
@@ -119,6 +120,11 @@
                             </connections>
                         </button>
                     </subviews>
+                    <variation key="default">
+                        <mask key="subviews">
+                            <exclude reference="Fjh-tP-9Tj"/>
+                        </mask>
+                    </variation>
                 </stackView>
                 <stackView opaque="NO" contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="tzd-7Z-Lcp">
                     <rect key="frame" x="53.333333333333343" y="742.33333333333337" width="286.33333333333326" height="29.666666666666629"/>

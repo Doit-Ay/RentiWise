@@ -33,6 +33,8 @@
                 <outlet property="codestack" destination="wjA-Op-thu" id="Xgv-tZ-ep8"/>
                 <outlet property="copybutton" destination="ikh-dv-Bkg" id="l2j-Ru-7kR"/>
                 <outlet property="dateperiodLabel" destination="ejR-57-5Od" id="qN7-eK-nSh"/>
+                <outlet property="extendButton" destination="Ext-Rn-Btn" id="ExtBtn-Outlet"/>
+                <outlet property="extendReturnButtonsStack" destination="BtN-sV-rRe" id="BtnStack-Outlet"/>
                 <outlet property="fee" destination="Z6e-Nj-shT" id="X0r-D1-p1D"/>
                 <outlet property="getdirectionbutton" destination="IHh-4r-Yb8" id="xt7-Is-h4C"/>
                 <outlet property="imageprod" destination="D0K-IZ-Qcq" id="CpF-Fy-FW2"/>
@@ -45,6 +47,7 @@
                 <outlet property="paymentStatus" destination="Qwb-KB-s4E" id="hac-Jv-3ug"/>
                 <outlet property="picktimeLabel" destination="v7X-Kw-lcL" id="Hu4-6g-FJf"/>
                 <outlet property="price" destination="Ewr-RB-Bof" id="sJz-7t-lBK"/>
+                <outlet property="returnButton" destination="Ret-It-Btn" id="RetBtn-Outlet"/>
                 <outlet property="seclabel" destination="hfg-OR-CWk" id="F16-n2-8HH"/>
                 <outlet property="statusView" destination="sUx-gz-ibj" id="VXh-WX-WM3"/>
                 <outlet property="summary" destination="BDK-1U-5ky" id="Yn8-Gj-Xni"/>
@@ -64,7 +67,7 @@
                     <rect key="frame" x="0.0" y="118" width="393" height="734"/>
                     <subviews>
                         <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="0iW-y8-UQA">
-                            <rect key="frame" x="0.0" y="0.0" width="393" height="1300"/>
+                            <rect key="frame" x="0.0" y="0.0" width="393" height="1200"/>
                             <subviews>
                                 <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="b05-l9-pdc" userLabel="product card view">
                                     <rect key="frame" x="16" y="16" width="361" height="130"/>
@@ -540,6 +543,51 @@
                                         </userDefinedRuntimeAttribute>
                                     </userDefinedRuntimeAttributes>
                                 </view>
+                                <stackView opaque="NO" contentMode="scaleToFill" distribution="fillEqually" spacing="16" translatesAutoresizingMaskIntoConstraints="NO" id="BtN-sV-rRe" userLabel="ExtendReturnButtonsStack">
+                                    <rect key="frame" x="16" y="1131" width="361" height="50"/>
+                                    <subviews>
+                                        <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="Ext-Rn-Btn">
+                                            <rect key="frame" x="0.0" y="0.0" width="172.66666666666666" height="50"/>
+                                            <color key="backgroundColor" red="0.36470588240000001" green="0.66274509800000003" blue="0.71372549019999998" alpha="1" colorSpace="calibratedRGB"/>
+                                            <constraints>
+                                                <constraint firstAttribute="height" constant="50" id="Ext-Btn-Height"/>
+                                            </constraints>
+                                            <color key="tintColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                                            <state key="normal" title="Button"/>
+                                            <buttonConfiguration key="configuration" style="plain" image="clock.arrow.circlepath" catalog="system" title="Extend Rental" imagePadding="8" titleAlignment="leading">
+                                                <fontDescription key="titleFontDescription" type="system" weight="semibold" pointSize="16"/>
+                                            </buttonConfiguration>
+                                            <userDefinedRuntimeAttributes>
+                                                <userDefinedRuntimeAttribute type="number" keyPath="ibCornerRadius">
+                                                    <real key="value" value="12"/>
+                                                </userDefinedRuntimeAttribute>
+                                            </userDefinedRuntimeAttributes>
+                                            <connections>
+                                                <action selector="extendRentalButtonTapped:" destination="-1" eventType="touchUpInside" id="Ext-Btn-Action"/>
+                                            </connections>
+                                        </button>
+                                        <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="Ret-It-Btn">
+                                            <rect key="frame" x="188.66666666666663" y="0.0" width="172.33333333333337" height="50"/>
+                                            <color key="backgroundColor" red="0.36470588240000001" green="0.66274509800000003" blue="0.71372549019999998" alpha="1" colorSpace="calibratedRGB"/>
+                                            <constraints>
+                                                <constraint firstAttribute="height" constant="50" id="Ret-Btn-Height"/>
+                                            </constraints>
+                                            <color key="tintColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                                            <state key="normal" title="Button"/>
+                                            <buttonConfiguration key="configuration" style="plain" image="checkmark.circle" catalog="system" title="Return Item" imagePadding="8" titleAlignment="leading">
+                                                <fontDescription key="titleFontDescription" type="system" weight="semibold" pointSize="16"/>
+                                            </buttonConfiguration>
+                                            <userDefinedRuntimeAttributes>
+                                                <userDefinedRuntimeAttribute type="number" keyPath="ibCornerRadius">
+                                                    <real key="value" value="12"/>
+                                                </userDefinedRuntimeAttribute>
+                                            </userDefinedRuntimeAttributes>
+                                            <connections>
+                                                <action selector="returnItemButtonTapped:" destination="-1" eventType="touchUpInside" id="Ret-Btn-Action"/>
+                                            </connections>
+                                        </button>
+                                    </subviews>
+                                </stackView>
                                 <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="879-JP-NVY">
                                     <rect key="frame" x="20" y="432" width="353" height="125"/>
                                     <subviews>
@@ -694,6 +742,9 @@
                                 <constraint firstItem="BDK-1U-5ky" firstAttribute="top" secondItem="879-JP-NVY" secondAttribute="bottom" constant="20" id="3Ny-3U-kkf"/>
                                 <constraint firstItem="879-JP-NVY" firstAttribute="top" secondItem="sUx-gz-ibj" secondAttribute="bottom" id="6dp-bN-98D"/>
                                 <constraint firstAttribute="trailing" secondItem="b05-l9-pdc" secondAttribute="trailing" constant="16" id="AGe-gP-5g8"/>
+                                <constraint firstItem="BtN-sV-rRe" firstAttribute="leading" secondItem="0iW-y8-UQA" secondAttribute="leading" constant="16" id="BtnStack-Leading"/>
+                                <constraint firstItem="BtN-sV-rRe" firstAttribute="top" secondItem="Ewr-RB-Bof" secondAttribute="bottom" constant="16" id="BtnStack-Top"/>
+                                <constraint firstAttribute="trailing" secondItem="BtN-sV-rRe" secondAttribute="trailing" constant="16" id="BtnStack-Trailing"/>
                                 <constraint firstItem="879-JP-NVY" firstAttribute="leading" secondItem="0iW-y8-UQA" secondAttribute="leading" constant="20" id="CrK-wX-IG0"/>
                                 <constraint firstItem="RWs-Ng-dQQ" firstAttribute="top" secondItem="BDK-1U-5ky" secondAttribute="bottom" constant="16" id="Evu-eX-3CN"/>
                                 <constraint firstItem="Ewr-RB-Bof" firstAttribute="top" secondItem="RWs-Ng-dQQ" secondAttribute="bottom" constant="16" id="HtY-cX-zoa"/>
@@ -703,7 +754,7 @@
                                 <constraint firstAttribute="trailing" secondItem="879-JP-NVY" secondAttribute="trailing" constant="20" id="WGP-fx-rrc"/>
                                 <constraint firstAttribute="trailing" secondItem="RWs-Ng-dQQ" secondAttribute="trailing" constant="16" id="cFP-9K-xGO"/>
                                 <constraint firstItem="b05-l9-pdc" firstAttribute="leading" secondItem="0iW-y8-UQA" secondAttribute="leading" constant="16" id="dyC-0n-Umd"/>
-                                <constraint firstAttribute="height" constant="1300" id="glp-jN-nmw"/>
+                                <constraint firstAttribute="height" constant="1200" id="glp-jN-nmw"/>
                                 <constraint firstItem="b05-l9-pdc" firstAttribute="top" secondItem="0iW-y8-UQA" secondAttribute="top" constant="16" id="kBX-xn-YpB"/>
                                 <constraint firstAttribute="trailing" secondItem="sUx-gz-ibj" secondAttribute="trailing" constant="20" id="s5s-v9-R8w"/>
                                 <constraint firstAttribute="trailing" secondItem="BDK-1U-5ky" secondAttribute="trailing" constant="16" id="tU3-VM-emT"/>
@@ -740,6 +791,8 @@
         <image name="Image 7" width="240" height="180"/>
         <image name="arrow.up.and.down.and.arrow.left.and.right" catalog="system" width="128" height="122"/>
         <image name="checkmark" catalog="system" width="128" height="114"/>
+        <image name="checkmark.circle" catalog="system" width="128" height="123"/>
+        <image name="clock.arrow.circlepath" catalog="system" width="128" height="119"/>
         <image name="document.on.document" catalog="system" width="116" height="128"/>
         <image name="ellipsis.message" catalog="system" width="128" height="106"/>
         <image name="indianrupeesign" catalog="system" width="105" height="128"/>

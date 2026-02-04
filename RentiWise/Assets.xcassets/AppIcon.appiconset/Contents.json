@@ -1,7 +1,7 @@
 {
   "images" : [
     {
-      "filename" : "RentiwiseLogo.png",
+      "filename" : "Rentiwise_logo.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
@@ -13,7 +13,7 @@
           "value" : "dark"
         }
       ],
-      "filename" : "RentiwiseLogo 1.png",
+      "filename" : "Rentiwise_logo_dark.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
@@ -25,7 +25,7 @@
           "value" : "tinted"
         }
       ],
-      "filename" : "RentiwiseLogo 2.png",
+      "filename" : "Rentiwise_logo 2.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"

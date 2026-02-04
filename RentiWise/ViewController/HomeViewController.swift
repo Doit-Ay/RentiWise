@@ -212,6 +212,10 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
     
     // MARK: - Navigation delegate for tab bar hiding
     private let tabBarDelegate = TabBarNavigationDelegate()
+    
+    // MARK: - Notification badge
+    private var unreadNotificationCount: Int = 0
+    private var notificationBadge: UIView?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -333,6 +337,8 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
         Task { await checkAndUpdateListingSection() }
         // Refresh location button on appear as well
         refreshLocationButtonTitle()
+        // Update notification badge
+        Task { await updateNotificationBadge() }
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -2110,6 +2116,135 @@ private extension HomeViewController {
         }
 
         label.attributedText = attr
+    }
+    
+    // MARK: - Notification Badge
+    
+    func updateNotificationBadge() async {
+        do {
+            // Check if user is logged in first
+            let session = try? await SupabaseManager.shared.client.auth.session
+            guard let userId = session?.user.id.uuidString else {
+                // Not logged in, hide badge
+                await MainActor.run {
+                    self.unreadNotificationCount = 0
+                    self.updateBadgeVisibility()
+                }
+                return
+            }
+            
+            // Fetch unread counts from both tables
+            let extensionCount = try await fetchUnreadExtensionCount(for: userId)
+            let returnCount = try await fetchUnreadReturnCount(for: userId)
+            let totalCount = extensionCount + returnCount
+            
+            await MainActor.run {
+                self.unreadNotificationCount = totalCount
+                self.updateBadgeVisibility()
+            }
+        } catch {
+            print("[Home] Error fetching unread notification count: \\(error)")
+            await MainActor.run {
+                self.unreadNotificationCount = 0
+                self.updateBadgeVisibility()
+            }
+        }
+    }
+    
+    private func fetchUnreadExtensionCount(for ownerId: String) async throws -> Int {
+        struct CountResponse: Decodable {
+            let count: Int
+        }
+        
+        let response: [CountResponse] = try await SupabaseManager.shared.client
+            .from("extension_requests")
+            .select("count", head: false, count: .exact)
+            .eq("requests.owner_id", value: ownerId)
+            .eq("status", value: "pending")
+            .or("is_read.is.null,is_read.eq.false")
+            .execute()
+            .value
+        
+        return response.first?.count ?? 0
+    }
+    
+    private func fetchUnreadReturnCount(for ownerId: String) async throws -> Int {
+        struct CountResponse: Decodable {
+            let count: Int
+        }
+        
+        let response: [CountResponse] = try await SupabaseManager.shared.client
+            .from("return_requests")
+            .select("count", head: false, count: .exact)
+            .eq("requests.owner_id", value: ownerId)
+            .eq("status", value: "pending")
+            .or("is_read.is.null,is_read.eq.false")
+            .execute()
+            .value
+        
+        return response.first?.count ?? 0
+    }
+    
+    private func updateBadgeVisibility() {
+        guard let bell = notificationBell else { return }
+        
+        if unreadNotificationCount > 0 {
+            // Show badge
+            if notificationBadge == nil {
+                createNotificationBadge(on: bell)
+            }
+            notificationBadge?.isHidden = false
+            
+            // Animate badge appearance
+            UIView.animate(withDuration: 0.2, delay: 0, options: [.curveEaseOut], animations: {
+                self.notificationBadge?.transform = CGAffineTransform(scaleX: 1.1, y: 1.1)
+            }) { _ in
+                UIView.animate(withDuration: 0.1) {
+                    self.notificationBadge?.transform = .identity
+                }
+            }
+        } else {
+            // Hide badge with fade
+            UIView.animate(withDuration: 0.2) {
+                self.notificationBadge?.alpha = 0
+            } completion: { _ in
+                self.notificationBadge?.isHidden = true
+                self.notificationBadge?.alpha = 1
+            }
+        }
+    }
+    
+    private func createNotificationBadge(on button: UIButton) {
+        // Remove existing badge if any
+        notificationBadge?.removeFromSuperview()
+        
+        // Create red dot badge
+        let badge = UIView()
+        badge.backgroundColor = UIColor(red: 0.36, green: 0.66, blue: 0.71, alpha: 1.0) // Teal color
+        badge.layer.cornerRadius = 6
+        badge.clipsToBounds = true
+        badge.translatesAutoresizingMaskIntoConstraints = false
+        
+        // Add shadow for depth
+        badge.layer.shadowColor = UIColor.black.cgColor
+        badge.layer.shadowOpacity = 0.3
+        badge.layer.shadowRadius = 2
+        badge.layer.shadowOffset = CGSize(width: 0, height: 1)
+        badge.layer.masksToBounds = false
+        
+        // Add to button's superview (so it's not affected by button transforms)
+        if let superview = button.superview {
+            superview.addSubview(badge)
+            
+            NSLayoutConstraint.activate([
+                badge.topAnchor.constraint(equalTo: button.topAnchor, constant: 0),
+                badge.trailingAnchor.constraint(equalTo: button.trailingAnchor, constant: 0),
+                badge.widthAnchor.constraint(equalToConstant: 12),
+                badge.heightAnchor.constraint(equalToConstant: 12)
+            ])
+        }
+        
+        notificationBadge = badge
     }
 }
 
