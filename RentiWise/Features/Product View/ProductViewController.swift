@@ -122,6 +122,11 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
     private var galleryScrollView: UIScrollView?
     private var pageControl: UIPageControl?
 
+    // MARK: - Bottom button bar (programmatic)
+    private var bottomButtonBar: UIView?
+    private var bottomWishlistButton: UIButton?
+    private var bottomRentButton: UIButton?
+
     // MARK: - Runtime constraint to force Reviews directly under Description in own-item mode
     private var ownModeDescriptionToReviewsConstraint: NSLayoutConstraint?
 
@@ -147,15 +152,23 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
 
     @objc private func didTapShare() {
         guard let item = selectedItem else { return }
-        var shareItems: [Any] = []
+        
+        // Build share text with deep link
         let amount = NSNumber(value: item.price_per_day)
         let priceText = (currencyFormatter.string(from: amount) ?? "\(item.price_per_day)") + " / day"
-        let text = "Check out this item on RentiWise: \(item.title)\n\(priceText)"
-        shareItems.append(text)
-        if let path = item.images.first, let url = StorageURLBuilder.publicFileURL(for: path) {
-            shareItems.append(url)
-        }
-        let ac = UIActivityViewController(activityItems: shareItems, applicationActivities: nil)
+        
+        // Include URL in text - iOS will auto-detect and make it clickable
+        let deepLink = "rentiwise://item/\(item.id)"
+        let shareText = """
+        Check out this item on RentiWise!
+        
+        \(item.title)
+        \(priceText)
+        
+        \(deepLink)
+        """
+        
+        let ac = UIActivityViewController(activityItems: [shareText], applicationActivities: nil)
         if let pop = ac.popoverPresentationController {
             pop.barButtonItem = shareButton
         }
@@ -437,6 +450,9 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         writeAReview?.isHidden = isOwn
         rentNowoutlet?.isHidden = isOwn
         actionButtonsContainer?.isHidden = isOwn || ((writeAReview == nil || writeAReview?.isHidden == true) && (rentNowoutlet == nil || rentNowoutlet?.isHidden == true))
+        
+        // Show/hide bottom button bar
+        bottomButtonBar?.isHidden = isOwn
 
         // Extra safeguard: explicitly hide owner subviews in own-item mode
         ownerNameLabel?.isHidden = isOwn
@@ -1236,14 +1252,10 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         subtitle.textAlignment = .center
         subtitle.numberOfLines = 0
 
-        let button = UIButton(type: .system)
-        button.setTitle("Write a Review", for: .normal)
-        button.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
-        button.addTarget(self, action: #selector(emptyStateWriteTapped), for: .touchUpInside)
-
         v.addArrangedSubview(title)
         v.addArrangedSubview(subtitle)
-        v.addArrangedSubview(button)
+        // Removed the extra "Write a Review" button to avoid duplication
+
         return container
     }
 
@@ -1382,6 +1394,9 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
             ownModeDescriptionToReviewsConstraint = c
         }
 
+        // Setup bottom button bar
+        setupBottomButtonBar()
+
         if selectedItem != nil { bindItemToUI() }
     }
     
@@ -1394,6 +1409,92 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         super.viewWillAppear(animated)
         // Re-apply the nav item for the current mode to ensure the ellipsis appears when ownItem
         setupNavBarForDisplayMode()
+    }
+
+    // MARK: - Bottom Button Bar Setup
+    
+    private func setupBottomButtonBar() {
+        // Create container view
+        let container = UIView()
+        container.backgroundColor = .systemBackground
+        container.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(container)
+        bottomButtonBar = container
+        
+        // Add top shadow for visual separation
+        container.layer.shadowColor = UIColor.black.cgColor
+        container.layer.shadowOpacity = 0.08
+        container.layer.shadowRadius = 8
+        container.layer.shadowOffset = CGSize(width: 0, height: -2)
+        container.layer.masksToBounds = false
+        
+        
+        // Create wishlist button (circular, smaller)
+        let wishlistBtn = UIButton(type: .system)
+        wishlistBtn.translatesAutoresizingMaskIntoConstraints = false
+        wishlistBtn.layer.cornerRadius = 24  // 48/2
+        wishlistBtn.layer.borderWidth = 1.5
+        wishlistBtn.layer.borderColor = brandTeal.cgColor
+        wishlistBtn.backgroundColor = .systemBackground
+        wishlistBtn.tintColor = brandTeal
+        wishlistBtn.addTarget(self, action: #selector(bottomWishlistButtonTapped), for: .touchUpInside)
+        container.addSubview(wishlistBtn)
+        bottomWishlistButton = wishlistBtn
+        
+        // Set initial heart icon
+        updateBottomWishlistButtonAppearance()
+        
+        // Create rent button (long, smaller)
+        let rentBtn = UIButton(type: .system)
+        rentBtn.translatesAutoresizingMaskIntoConstraints = false
+        rentBtn.setTitle("Rent Now", for: .normal)
+        rentBtn.titleLabel?.font = .systemFont(ofSize: 18, weight: .semibold)
+        rentBtn.backgroundColor = brandTeal
+        rentBtn.setTitleColor(.white, for: .normal)
+        rentBtn.layer.cornerRadius = 24
+        rentBtn.layer.masksToBounds = true
+        rentBtn.addTarget(self, action: #selector(bottomRentButtonTapped), for: .touchUpInside)
+        container.addSubview(rentBtn)
+        bottomRentButton = rentBtn
+        
+        // Layout constraints
+        NSLayoutConstraint.activate([
+            // Container at bottom
+            container.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            container.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            container.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            container.heightAnchor.constraint(equalToConstant: 86),
+            
+            // Wishlist button (left side, circular 48x48)
+            wishlistBtn.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
+            wishlistBtn.centerYAnchor.constraint(equalTo: container.safeAreaLayoutGuide.topAnchor, constant: 32),
+            wishlistBtn.widthAnchor.constraint(equalToConstant: 48),
+            wishlistBtn.heightAnchor.constraint(equalToConstant: 48),
+            
+            // Rent button (right side, fills remaining space)
+            rentBtn.leadingAnchor.constraint(equalTo: wishlistBtn.trailingAnchor, constant: 12),
+            rentBtn.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
+            rentBtn.centerYAnchor.constraint(equalTo: wishlistBtn.centerYAnchor),
+            rentBtn.heightAnchor.constraint(equalToConstant: 48)
+        ])
+    }
+    
+    private func updateBottomWishlistButtonAppearance() {
+        guard let btn = bottomWishlistButton else { return }
+        let iconName = isWishlisted ? "heart.fill" : "heart"
+        let config = UIImage.SymbolConfiguration(pointSize: 22, weight: .medium)
+        let image = UIImage(systemName: iconName, withConfiguration: config)
+        btn.setImage(image, for: .normal)
+    }
+    
+    @objc private func bottomWishlistButtonTapped() {
+        toggleWishlist()
+        updateBottomWishlistButtonAppearance()
+    }
+    
+    @objc private func bottomRentButtonTapped() {
+        // Reuse existing rent action
+        didTapRentNow(bottomRentButton!)
     }
 
     // MARK: - Actions
@@ -1505,4 +1606,3 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         }
     }
 }
-

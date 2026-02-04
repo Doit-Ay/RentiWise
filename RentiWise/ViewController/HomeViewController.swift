@@ -194,6 +194,7 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
     private var addItemContainer: UIView?
 
     // MARK: - Manage Listings state
+    private var isListingDataLoaded = false // track if listing data has been fetched
     private var manageContainerView: UIView? // inserted inside listingUIView when user has items
 
     // MARK: - Trending collection (new)
@@ -280,6 +281,9 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
         
         // Ensure tab bar item shows title
         navigationController?.tabBarItem.title = "Explore"
+        
+        // Initially hide the listing section until data loads to prevent flicker
+        listingUIView?.alpha = 0
     }
 
     @objc private func dismissKeyboardTap() {
@@ -1386,7 +1390,10 @@ private extension HomeViewController {
 
     func checkAndUpdateListingSection() async {
         guard let userId = await SupabaseManager.shared.currentUserId() else {
-            await MainActor.run { self.showListingSection(.empty) }
+            await MainActor.run {
+                self.isListingDataLoaded = true
+                self.showListingSection(.empty)
+            }
             return
         }
 
@@ -1399,10 +1406,14 @@ private extension HomeViewController {
 
             let hasAny = (response.count ?? 0) > 0
             await MainActor.run {
+                self.isListingDataLoaded = true
                 self.showListingSection(hasAny ? .manage : .empty)
             }
         } catch {
-            await MainActor.run { self.showListingSection(.empty) }
+            await MainActor.run {
+                self.isListingDataLoaded = true
+                self.showListingSection(.empty)
+            }
         }
     }
 
@@ -1439,6 +1450,13 @@ private extension HomeViewController {
             }
 
             adjustListingViewHeightIfFixed(target: 160) // tweak 150–170 to taste
+        }
+        
+        // Animate section visible after data is loaded (only on first load)
+        if isListingDataLoaded, listingUIView?.alpha == 0 {
+            UIView.animate(withDuration: 0.3) {
+                self.listingUIView?.alpha = 1
+            }
         }
     }
 

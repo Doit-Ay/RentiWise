@@ -32,18 +32,24 @@ final class DistanceService {
 
     private let geocoder = CLGeocoder()
     private let client: SupabaseClient
+    
+    // MARK: - UserDefaults keys for persistent coordinate caching
+    private let userCoordLatKey = "RW_UserAddressLatitude"
+    private let userCoordLonKey = "RW_UserAddressLongitude"
+    private let userCoordAddressKey = "RW_UserAddressCached"
 
     private init(client: SupabaseClient = SupabaseManager.shared.client) {
         self.client = client
-        geocodeCache.countLimit = 256  // Increased from 128
-        directionsCache.countLimit = 512  // Increased from 256
+        geocodeCache.countLimit = 256
+        directionsCache.countLimit = 512
     }
 
     // MARK: - Public API
 
     /// Returns a formatted distance string like "2.3 km" or "850 m".
     /// Owner-level cache (item_id = null).
-    func distanceText(for item: Item) async -> String {
+    /// For progressive loading, optionally provide a callback to receive road distance update.
+    func distanceText(for item: Item, progressiveUpdate: ((String) -> Void)? = nil) async -> String {
         // 0) Get viewer address and user ID
         let viewerAddressString = SavedAddressesStore.shared.getDefaultSelectedAddress()?.trimmingCharacters(in: .whitespacesAndNewlines)
         let viewerAddress = (viewerAddressString?.isEmpty == false) ? viewerAddressString! : defaultViewerAddress
@@ -72,7 +78,7 @@ final class DistanceService {
         }
         let resolvedOwnerCoord = ownerCoord!
 
-        // Resolve viewer coords with fallback
+        // Resolve viewer coords with fallback (NOW MUCH FASTER with persistent caching!)
         var viewerCoord = await geocodeAddressString(viewerAddress)
         if viewerCoord == nil {
             viewerCoord = await geocodeAddressString(defaultViewerAddress)
@@ -100,36 +106,63 @@ final class DistanceService {
             return formatDistance(meters: meters)
         }
 
-        // 4) Compute road distance
-        if let meters = await routeDistanceMeters(from: resolvedViewerCoord, to: resolvedOwnerCoord, transport: transportType) {
-            directionsCache.setObject(NSNumber(value: meters), forKey: memKey as NSString)
+        // 4) PROGRESSIVE LOADING: Show straight-line distance immediately
+        let straight = resolvedViewerCoord.distance(from: resolvedOwnerCoord)
+        let prelimText = formatDistance(meters: straight)
+        
+        // If callback provided, compute road distance in background and update
+        if let progressiveUpdate {
+            Task {
+                if let meters = await routeDistanceMeters(from: resolvedViewerCoord, to: resolvedOwnerCoord, transport: transportType) {
+                    directionsCache.setObject(NSNumber(value: meters), forKey: memKey as NSString)
+                    if let viewerUserId {
+                        await upsertDistanceMeters(
+                            meters,
+                            viewerUserId: viewerUserId,
+                            ownerUserId: item.owner_id,
+                            itemId: nil,
+                            viewerAddressHash: viewerAddressHash,
+                            transportType: "automobile"
+                        )
+                    }
+                    // Call update with road distance
+                    await MainActor.run {
+                        progressiveUpdate(formatDistance(meters: meters))
+                    }
+                }
+            }
+        } else {
+            // No callback - compute road distance synchronously (old behavior)
+            if let meters = await routeDistanceMeters(from: resolvedViewerCoord, to: resolvedOwnerCoord, transport: transportType) {
+                directionsCache.setObject(NSNumber(value: meters), forKey: memKey as NSString)
+                if let viewerUserId {
+                    await upsertDistanceMeters(
+                        meters,
+                        viewerUserId: viewerUserId,
+                        ownerUserId: item.owner_id,
+                        itemId: nil,
+                        viewerAddressHash: viewerAddressHash,
+                        transportType: "automobile"
+                    )
+                }
+                return formatDistance(meters: meters)
+            }
+            
+            // Fallback: save straight-line distance to DB
             if let viewerUserId {
                 await upsertDistanceMeters(
-                    meters,
+                    straight,
                     viewerUserId: viewerUserId,
                     ownerUserId: item.owner_id,
                     itemId: nil,
                     viewerAddressHash: viewerAddressHash,
-                    transportType: "automobile"
+                    transportType: "automobile",
+                    straightMeters: straight
                 )
             }
-            return formatDistance(meters: meters)
         }
-
-        // 5) Fallback: straight-line distance
-        let straight = resolvedViewerCoord.distance(from: resolvedOwnerCoord)
-        if let viewerUserId {
-            await upsertDistanceMeters(
-                straight,
-                viewerUserId: viewerUserId,
-                ownerUserId: item.owner_id,
-                itemId: nil,
-                viewerAddressHash: viewerAddressHash,
-                transportType: "automobile",
-                straightMeters: straight
-            )
-        }
-        return formatDistance(meters: straight)
+        
+        return prelimText
     }
 
     // MARK: - Owner coordinate from public view (with fallback)
@@ -178,17 +211,60 @@ final class DistanceService {
         return nil
     }
 
-    // MARK: - Viewer geocoding
+    // MARK: - Viewer geocoding with persistent caching
+    
+    /// Get cached user coordinates from UserDefaults (FAST - skip geocoding entirely)
+    private func getCachedUserCoordinates(for address: String) -> CLLocation? {
+        let normalizedAddress = normalizeAddressKey(address)
+        let savedAddress = UserDefaults.standard.string(forKey: userCoordAddressKey)
+        
+        // Check if cached address matches current address
+        guard normalizeAddressKey(savedAddress ?? "") == normalizedAddress else {
+            return nil
+        }
+        
+        let lat = UserDefaults.standard.double(forKey: userCoordLatKey)
+        let lon = UserDefaults.standard.double(forKey: userCoordLonKey)
+        
+        // Validate coordinates (not zero/default)
+        guard lat != 0.0 && lon != 0.0 else {
+            return nil
+        }
+        
+        return CLLocation(latitude: lat, longitude: lon)
+    }
+    
+    /// Save user coordinates to UserDefaults for future use
+    private func saveUserCoordinates(_ location: CLLocation, for address: String) {
+        UserDefaults.standard.set(location.coordinate.latitude, forKey: userCoordLatKey)
+        UserDefaults.standard.set(location.coordinate.longitude, forKey: userCoordLonKey)
+        UserDefaults.standard.set(address, forKey: userCoordAddressKey)
+    }
 
     private func geocodeAddressString(_ s: String) async -> CLLocation? {
-        let key = normalizeAddressKey(s) as NSString
-        if let cached = geocodeCache.object(forKey: key) {
+        // 1) Check persistent cache first (FASTEST - skip geocoding entirely)
+        if let cached = getCachedUserCoordinates(for: s) {
+            // Also populate in-memory cache for consistency
+            let key = normalizeAddressKey(s) as NSString
+            geocodeCache.setObject(cached, forKey: key)
             return cached
         }
+        
+        // 2) Check in-memory cache
+        let key = normalizeAddressKey(s) as NSString
+        if let cached = geocodeCache.object(forKey: key) {
+            // Save to persistent cache for next time
+            saveUserCoordinates(cached, for: s)
+            return cached
+        }
+        
+        // 3) Geocode (SLOW - only happens once per address)
         do {
             let placemarks = try await geocoder.geocodeAddressString(s)
             if let loc = placemarks.first?.location {
+                // Save to both caches
                 geocodeCache.setObject(loc, forKey: key)
+                saveUserCoordinates(loc, for: s)
                 return loc
             }
         } catch {

@@ -52,11 +52,11 @@ final class LenderRequestTableViewCell: UITableViewCell {
         card.layer.cornerRadius = 16
         card.layer.masksToBounds = false
 
-        // Stronger, softer shadow to pop from grouped bg
+        // Lighter shadow to match listing cell's glass effect appearance
         card.layer.shadowColor = UIColor.black.cgColor
-        card.layer.shadowOpacity = 0.22   // tweak 0.20–0.26 for taste
-        card.layer.shadowRadius = 12      // blur radius; higher = softer
-        card.layer.shadowOffset = CGSize(width: 0, height: 6)
+        card.layer.shadowOpacity = 0.12  // Lighter than listing (0.18) due to solid vs glass background
+        card.layer.shadowRadius = 12
+        card.layer.shadowOffset = CGSize(width: 0, height: 8)
 
         // Optional: rasterize for scrolling performance (be mindful with dynamic resizing)
         card.layer.shouldRasterize = true

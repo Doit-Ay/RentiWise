@@ -214,7 +214,7 @@ final class CategoryItemCell: UITableViewCell {
         */
     }
 
-    // MARK: - Distance resolution (owner-level, cached, reuse-safe)
+    // MARK: - Distance resolution (owner-level, cached, reuse-safe, with progressive loading)
     private func resolveDistance(for item: Item) {
         let ownerKey = item.owner_id as NSString
 
@@ -226,11 +226,21 @@ final class CategoryItemCell: UITableViewCell {
             return
         }
 
-        // 2) Async compute using DistanceService; it already caches geocoding/routing/DB
+        // 2) Async compute with progressive loading
         Task { [weak self] in
             guard let self else { return }
-            let text = await DistanceService.shared.distanceText(for: item)
-            // Cache for subsequent rows with same owner
+            
+            // Progressive loading: get initial distance (fast), then update with road distance
+            let text = await DistanceService.shared.distanceText(for: item) { [weak self] updatedText in
+                guard let self = self else { return }
+                // Update with accurate road distance when available
+                if self.currentOwnerId == item.owner_id, self.currentItemId == item.id {
+                    self.itemDistance?.text = updatedText
+                    CategoryItemCell.distanceCache.setObject(updatedText as NSString, forKey: ownerKey)
+                }
+            }
+            
+            // Cache initial distance for subsequent rows
             CategoryItemCell.distanceCache.setObject(text as NSString, forKey: ownerKey)
 
             await MainActor.run { [weak self] in
