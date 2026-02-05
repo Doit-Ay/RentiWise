@@ -134,6 +134,15 @@ class AddItemDetailViewController: UIViewController {
 
         // Reset and add tap gestures so each row opens its own inline dropdown
         resetGestures()
+
+        // Keyboard dismissal improvements:
+        // 1) Tap anywhere to dismiss keyboard
+        let tap = UITapGestureRecognizer(target: self, action: #selector(dismissKeyboard))
+        tap.cancelsTouchesInView = false
+        view.addGestureRecognizer(tap)
+
+        // 2) Provide Done accessory above keyboard for the description text view
+        descriptionTextView.inputAccessoryView = makeDoneToolbar()
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -174,7 +183,7 @@ class AddItemDetailViewController: UIViewController {
             case .category:
                 return ["Electronics", "Tools", "Events", "Fitness", "Hobbies", "Outdoor", "Custom"]
             case .condition:
-                return ["New", "Good", "Bad"]
+                return ["New", "Good", "Poor"]
             }
         }
     }
@@ -246,6 +255,21 @@ class AddItemDetailViewController: UIViewController {
         ])
     }
 
+    // Dismiss keyboard utility
+    @objc private func dismissKeyboard() {
+        view.endEditing(true)
+    }
+
+    // Toolbar with Done button for inputs that need an explicit dismiss
+    private func makeDoneToolbar() -> UIToolbar {
+        let tb = UIToolbar()
+        tb.sizeToFit()
+        let flex = UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil)
+        let done = UIBarButtonItem(barButtonSystemItem: .done, target: self, action: #selector(dismissKeyboard))
+        tb.items = [flex, done]
+        return tb
+    }
+
     // MARK: - Alerts
 
     private func presentAlert(title: String, message: String) {
@@ -271,7 +295,7 @@ private final class InlineDropdownController: NSObject, UITableViewDataSource, U
     private var leadingConstraint: NSLayoutConstraint?
     private var trailingConstraint: NSLayoutConstraint?
 
-    private let rowHeight: CGFloat = 44
+    private let rowHeight: CGFloat = 52
     private let maxVisibleRows: Int = 6
     private let horizontalInset: CGFloat = 20
     private let cornerRadius: CGFloat = 12

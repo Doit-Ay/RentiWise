@@ -234,7 +234,7 @@ class BookingApprovalViewController: UIViewController {
         // Style buttons
         [paymentButton, getdirectionbutton, copybutton].forEach {
             $0?.layer.borderColor = UIColor.black.cgColor
-            $0?.layer.borderWidth = 1
+            $0?.layer.borderWidth = 0
             $0?.layer.cornerRadius = 8
             $0?.layer.masksToBounds = true
         }

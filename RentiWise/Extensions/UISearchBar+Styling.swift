@@ -2,7 +2,7 @@
 //  UISearchBar+Styling.swift
 //  RentiWise
 //
-//  Created by Antigravity on 2026-02-05.
+//  Created by admin99 on 2026-02-05.
 //
 
 import UIKit

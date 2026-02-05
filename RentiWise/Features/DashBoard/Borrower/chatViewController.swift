@@ -505,12 +505,12 @@ private final class BubbleCell: UITableViewCell {
     func configure(text: String, isCurrentUser: Bool) {
         label.text = text
         if isCurrentUser {
-            bubble.backgroundColor = UIColor.systemBlue
+            bubble.backgroundColor = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1.0)
             label.textColor = .white
             leading.isActive = false
             trailing.isActive = true
         } else {
-            bubble.backgroundColor = UIColor.secondarySystemBackground
+            bubble.backgroundColor = UIColor.systemGray5
             label.textColor = .label
             trailing.isActive = false
             leading.isActive = true

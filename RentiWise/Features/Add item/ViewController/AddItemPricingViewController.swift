@@ -21,13 +21,34 @@ class AddItemPricingViewController: UIViewController {
         pricePerDay?.keyboardType = .decimalPad
         refundableDeposit?.keyboardType = .decimalPad
 
-        // Prefill if editing
-        if draft.pricePerDay > 0 {
-            pricePerDay?.text = String(format: "%.2f", draft.pricePerDay)
-        }
-        if draft.depositAmount >= 0 {
-            refundableDeposit?.text = String(format: "%.2f", draft.depositAmount)
-        }
+        // Ensure fields start empty (no prefill)
+        pricePerDay?.text = ""
+        refundableDeposit?.text = ""
+
+        // 1) Tap anywhere to dismiss keyboard
+        let tap = UITapGestureRecognizer(target: self, action: #selector(dismissKeyboard))
+        tap.cancelsTouchesInView = false
+        view.addGestureRecognizer(tap)
+
+        // 2) Add Done accessory above decimal keypad (optional but helpful)
+        let doneToolbar = makeDoneToolbar()
+        pricePerDay?.inputAccessoryView = doneToolbar
+        refundableDeposit?.inputAccessoryView = doneToolbar
+    }
+
+    // Dismiss keyboard utility
+    @objc private func dismissKeyboard() {
+        view.endEditing(true)
+    }
+
+    // Toolbar with Done button for inputs that need an explicit dismiss
+    private func makeDoneToolbar() -> UIToolbar {
+        let tb = UIToolbar()
+        tb.sizeToFit()
+        let flex = UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil)
+        let done = UIBarButtonItem(barButtonSystemItem: .done, target: self, action: #selector(dismissKeyboard))
+        tb.items = [flex, done]
+        return tb
     }
 
     @IBAction func continueTapped(_ sender: UIButton) {
@@ -97,4 +118,3 @@ class AddItemPricingViewController: UIViewController {
         present(a, animated: true)
     }
 }
-
