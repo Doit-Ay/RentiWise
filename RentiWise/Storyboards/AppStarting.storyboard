@@ -485,13 +485,16 @@
                                                                 <buttonConfiguration key="configuration" style="plain" title="Rent"/>
                                                             </button>
                                                             <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Label" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="7fc-oy-02d">
-                                                                <rect key="frame" x="187.66666666666666" y="96.000000000000114" width="69.333333333333343" height="17"/>
+                                                                <rect key="frame" x="188" y="96.000000000000114" width="69" height="17"/>
                                                                 <fontDescription key="fontDescription" type="system" pointSize="14"/>
                                                                 <nil key="textColor"/>
                                                                 <nil key="highlightedColor"/>
                                                             </label>
                                                             <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="252" verticalHuggingPriority="251" text="By:" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="0i4-Bm-lfg">
-                                                                <rect key="frame" x="162" y="96.000000000000114" width="20.666666666666657" height="17"/>
+                                                                <rect key="frame" x="162" y="96.000000000000114" width="21" height="17"/>
+                                                                <constraints>
+                                                                    <constraint firstAttribute="width" constant="21" id="dI0-pQ-DwE"/>
+                                                                </constraints>
                                                                 <fontDescription key="fontDescription" type="system" pointSize="14"/>
                                                                 <nil key="textColor"/>
                                                                 <nil key="highlightedColor"/>
@@ -588,13 +591,16 @@
                                                                 <buttonConfiguration key="configuration" style="plain" title="Rent"/>
                                                             </button>
                                                             <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Label" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="e1q-7g-naT">
-                                                                <rect key="frame" x="187.66666666666666" y="96" width="69.333333333333343" height="17"/>
+                                                                <rect key="frame" x="188" y="96" width="69" height="17"/>
                                                                 <fontDescription key="fontDescription" type="system" pointSize="14"/>
                                                                 <nil key="textColor"/>
                                                                 <nil key="highlightedColor"/>
                                                             </label>
                                                             <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="252" verticalHuggingPriority="251" text="By:" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="aPc-Fo-kH4">
-                                                                <rect key="frame" x="162" y="96" width="20.666666666666657" height="17"/>
+                                                                <rect key="frame" x="162" y="96" width="21" height="17"/>
+                                                                <constraints>
+                                                                    <constraint firstAttribute="width" constant="21" id="NFJ-ni-7dm"/>
+                                                                </constraints>
                                                                 <fontDescription key="fontDescription" type="system" pointSize="14"/>
                                                                 <nil key="textColor"/>
                                                                 <nil key="highlightedColor"/>
@@ -691,16 +697,16 @@
                                                                 <buttonConfiguration key="configuration" style="plain" title="Rent"/>
                                                             </button>
                                                             <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="252" verticalHuggingPriority="251" text="By:" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="KMG-2m-ABt">
-                                                                <rect key="frame" x="162" y="96" width="20.666666666666657" height="17"/>
+                                                                <rect key="frame" x="162" y="96" width="21" height="17"/>
                                                                 <constraints>
-                                                                    <constraint firstAttribute="width" constant="20.670000000000002" id="Qpn-Tu-YMy"/>
+                                                                    <constraint firstAttribute="width" constant="21" id="WZ8-ue-09e"/>
                                                                 </constraints>
                                                                 <fontDescription key="fontDescription" type="system" pointSize="14"/>
                                                                 <nil key="textColor"/>
                                                                 <nil key="highlightedColor"/>
                                                             </label>
                                                             <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Label" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="gcM-DE-vR7">
-                                                                <rect key="frame" x="187.66666666666666" y="96" width="69.333333333333343" height="17"/>
+                                                                <rect key="frame" x="188" y="96" width="69" height="17"/>
                                                                 <fontDescription key="fontDescription" type="system" pointSize="14"/>
                                                                 <nil key="textColor"/>
                                                                 <nil key="highlightedColor"/>
