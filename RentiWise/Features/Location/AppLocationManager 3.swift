@@ -32,7 +32,24 @@ final class AppLocationManager: NSObject {
         case failed
         case reverseGeocodeFailed
     }
+}
 
+extension AppLocationManager.LocationError: LocalizedError {
+    var errorDescription: String? {
+        switch self {
+        case .permissionDenied:
+            return "Location access is denied. Enable it in Settings > Privacy > Location Services for RentiWise."
+        case .servicesDisabled:
+            return "Location Services are turned off on this device. Please enable Location Services in Settings."
+        case .failed:
+            return "Couldn't determine your current location. Please try again."
+        case .reverseGeocodeFailed:
+            return "Couldn't find a place name for your location. Please try again."
+        }
+    }
+}
+
+extension AppLocationManager {
     // Request When-In-Use authorization if needed.
     func ensureWhenInUseAuthorization() async throws {
         guard CLLocationManager.locationServicesEnabled() else {
@@ -69,6 +86,16 @@ final class AppLocationManager: NSObject {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String, Error>) in
             geocoder.reverseGeocodeLocation(location) { placemarks, error in
                 if let error = error {
+                    // Map Core Location/Geocoder errors to a friendly message when possible
+                    if let clErr = error as? CLError {
+                        switch clErr.code {
+                        case .denied:
+                            continuation.resume(throwing: LocationError.permissionDenied)
+                            return
+                        default:
+                            break
+                        }
+                    }
                     continuation.resume(throwing: error)
                     return
                 }
@@ -124,6 +151,12 @@ extension AppLocationManager: CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         guard let continuation = locationContinuation else { return }
         locationContinuation = nil
+
+        // Map denied to a friendly, consistent error
+        if let clErr = error as? CLError, clErr.code == .denied {
+            continuation.resume(throwing: LocationError.permissionDenied)
+            return
+        }
         continuation.resume(throwing: error)
     }
 }
