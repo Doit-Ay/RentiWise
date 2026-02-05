@@ -157,31 +157,13 @@ final class MyRentalsViewController: UIViewController {
         // Configure search bar
         searchBar.translatesAutoresizingMaskIntoConstraints = false
         searchBar.placeholder = "Search rentals"
-        searchBar.searchBarStyle = .minimal
         searchBar.delegate = self
         searchBar.autocapitalizationType = .none
         searchBar.autocorrectionType = .no
         searchBar.returnKeyType = .search
         
-        // Remove default background for clean look
-        searchBar.setBackgroundImage(UIImage(), for: .any, barMetrics: .default)
-        searchBar.backgroundImage = UIImage()
-        searchBar.backgroundColor = .clear
-        
-        if #available(iOS 13.0, *) {
-            let tf = searchBar.searchTextField
-            tf.backgroundColor = .white
-            tf.layer.borderWidth = 1
-            tf.layer.borderColor = UIColor.separator.cgColor
-            tf.layer.cornerRadius = 10
-            tf.layer.masksToBounds = true
-            tf.textColor = .label
-            tf.clearButtonMode = .whileEditing
-            tf.attributedPlaceholder = NSAttributedString(
-                string: searchBar.placeholder ?? "Search rentals",
-                attributes: [.foregroundColor: UIColor.secondaryLabel]
-            )
-        }
+        // Apply consistent RentiWise styling
+        searchBar.applyRentiWiseStyle()
         
         searchBarContainer.addSubview(searchBar)
         
@@ -198,7 +180,13 @@ final class MyRentalsViewController: UIViewController {
             searchBar.centerYAnchor.constraint(equalTo: searchBarContainer.centerYAnchor),
             searchBar.heightAnchor.constraint(equalToConstant: 36)
         ])
+        
+        // Apply rounded corners after layout
+        DispatchQueue.main.async { [weak self] in
+            self?.searchBar.applyRoundedCorners()
+        }
     }
+
     
     private func setupTable() {
         // Set up table view

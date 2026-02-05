@@ -112,7 +112,7 @@ extension ManageAddressesViewController: UITableViewDataSource, UITableViewDeleg
         cell.accessoryType = .disclosureIndicator
         if addr.is_default {
             cell.imageView?.image = UIImage(systemName: "bookmark.fill")
-            cell.imageView?.tintColor = .systemBlue
+            cell.imageView?.tintColor = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0)  // Brand teal
         } else {
             cell.imageView?.image = UIImage(systemName: "bookmark")
             cell.imageView?.tintColor = .secondaryLabel
@@ -145,7 +145,7 @@ extension ManageAddressesViewController: UITableViewDataSource, UITableViewDeleg
             self?.edit(address: addr)
             done(true)
         }
-        edit.backgroundColor = .systemBlue
+        edit.backgroundColor = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0)  // Brand teal
 
         let makeDefault = UIContextualAction(style: .normal, title: "Default") { [weak self] _, _, done in
             self?.setDefault(address: addr)

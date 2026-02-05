@@ -225,6 +225,7 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
                     await MainActor.run {
                         self.isWishlisted = false
                         self.updateWishlistButtonAppearanceInView()
+                        self.updateBottomWishlistButtonAppearance() // keep bottom heart in sync
                     }
                 } catch {
                     await MainActor.run { self.presentError(error.localizedDescription) }
@@ -243,6 +244,7 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
                 await MainActor.run {
                     self.isWishlisted = true
                     self.updateWishlistButtonAppearanceInView()
+                    self.updateBottomWishlistButtonAppearance() // keep bottom heart in sync
                 }
             } catch {
                 let msg = error.localizedDescription.lowercased()
@@ -250,6 +252,7 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
                     await MainActor.run {
                         self.isWishlisted = true
                         self.updateWishlistButtonAppearanceInView()
+                        self.updateBottomWishlistButtonAppearance() // keep bottom heart in sync
                     }
                 } else {
                     await MainActor.run { self.presentError(error.localizedDescription) }
@@ -266,6 +269,7 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
             await MainActor.run {
                 self.isWishlisted = false
                 self.updateWishlistButtonAppearanceInView()
+                self.updateBottomWishlistButtonAppearance() // keep bottom heart in sync
             }
             return
         }
@@ -280,11 +284,13 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
             await MainActor.run {
                 self.isWishlisted = exists
                 self.updateWishlistButtonAppearanceInView()
+                self.updateBottomWishlistButtonAppearance() // keep bottom heart in sync
             }
         } catch {
             await MainActor.run {
                 self.isWishlisted = false
                 self.updateWishlistButtonAppearanceInView()
+                self.updateBottomWishlistButtonAppearance() // keep bottom heart in sync
             }
         }
     }
@@ -819,6 +825,7 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
             heroImageView?.isHidden = false
             heroImageView?.contentMode = .scaleAspectFill
             heroImageView?.clipsToBounds = true
+            heroImageView?.backgroundColor = .systemBackground  // Add background
             let path = images[0]
             if let url = urlForImagePath(path) {
                 UIImageView.rw_loadImage(from: url) { [weak self] img in
@@ -840,6 +847,9 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         scroll.isPagingEnabled = true
         scroll.showsHorizontalScrollIndicator = false
         scroll.delegate = self
+        scroll.clipsToBounds = true
+        // Match heroImageView corner radius
+        scroll.layer.cornerRadius = heroImageView?.layer.cornerRadius ?? 12
         view.addSubview(scroll)
         galleryScrollView = scroll
 
@@ -869,6 +879,8 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
             iv.translatesAutoresizingMaskIntoConstraints = false
             iv.contentMode = .scaleAspectFill
             iv.clipsToBounds = true
+            iv.layer.cornerRadius = heroImageView?.layer.cornerRadius ?? 12
+            iv.backgroundColor = .systemBackground
             scroll.addSubview(iv)
 
             NSLayoutConstraint.activate([
@@ -1386,6 +1398,7 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         
         // Set initial wishlist button appearance
         updateWishlistButtonAppearanceInView()
+        updateBottomWishlistButtonAppearance() // keep bottom heart initial state consistent
 
         // Prepare runtime constraint (if outlets are connected)
         if let desc = descriptionCard, let reviewsTitle = reviewsTitleLabel {
@@ -1606,3 +1619,4 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         }
     }
 }
+

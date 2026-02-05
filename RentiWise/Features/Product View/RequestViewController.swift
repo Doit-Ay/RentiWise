@@ -198,9 +198,10 @@ class RequestViewController: UIViewController {
         guard item == nil, let itemId = itemId else { return }
         do {
             let client = SupabaseManager.shared.client
+            // Fetch all columns so Item.average_rating/review_count are populated if available
             let response = try await client
                 .from("items")
-                .select("id,title,price_per_day,images,owner_id,deposit_amount")
+                .select() // all columns (matches ItemsService)
                 .eq("id", value: itemId)
                 .single()
                 .execute()
@@ -208,6 +209,7 @@ class RequestViewController: UIViewController {
             if let data = response.data as? Data {
                 let decoder = JSONDecoder()
                 decoder.keyDecodingStrategy = .convertFromSnakeCase
+                decoder.dateDecodingStrategy = .iso8601
                 let fetched = try decoder.decode(Item.self, from: data)
                 self.item = fetched
                 await populateUI()
@@ -231,6 +233,18 @@ class RequestViewController: UIViewController {
         await fetchAndDisplayOwnerUnified(for: item.owner_id)
         securityDeposit = item.deposit_amount
         recalculatePricing()
+        
+        // Update distance using DistanceService (async)
+        productDistance?.text = "..."
+        ownerDist?.text = "..."
+        Task { [weak self] in
+            guard let self = self, let it = self.item else { return }
+            let text = await DistanceService.shared.distanceText(for: it)
+            await MainActor.run {
+                self.productDistance?.text = text
+                self.ownerDist?.text = text
+            }
+        }
     }
     
     // Unify with ProductViewController behavior: try user_profiles first, then profiles; handle http vs storage; fallback to initials.
@@ -284,13 +298,13 @@ class RequestViewController: UIViewController {
     private func renderOwner(fullName: String?, avatarURLString: String?) {
         let name = (fullName?.isEmpty == false) ? fullName! : "Owner"
         ownerName?.text = name
+        // If rating not set yet, keep a neutral placeholder; product rating will be set from item stats
         if ownerRating?.text?.isEmpty ?? true {
             ownerRating?.text = "★ 4.5"
-            productRatingLabel?.text = "★ 4.5"
         }
+        // Distance will be updated via DistanceService; keep placeholder if empty
         if ownerDist?.text?.isEmpty ?? true {
-            ownerDist?.text = "2.3 km"
-            productDistance?.text = "2.3 km"
+            ownerDist?.text = "..."
         }
         
         if let avatar = avatarURLString, !avatar.isEmpty, let url = urlForAvatarPath(avatar) {
@@ -728,6 +742,16 @@ class RequestViewController: UIViewController {
             productRateLabel?.text = nil
         }
         
+        // Rating from item stats if available; else show a friendly placeholder
+        if let avg = currentItem.average_rating, let count = currentItem.review_count, count > 0 {
+            productRatingLabel?.attributedText = makeYellowStarRatingText(valueText: String(format: "%.1f", avg), reviewsText: nil)
+        } else {
+            productRatingLabel?.attributedText = nil
+            productRatingLabel?.text = "No reviews"
+            productRatingLabel?.textColor = .secondaryLabel
+            productRatingLabel?.font = .systemFont(ofSize: 13, weight: .regular)
+        }
+        
         if let firstImagePath = currentItem.images.first, let url = StorageURLBuilder.publicFileURL(for: firstImagePath) {
             UIImageView.rw_loadImage(from: url) { [weak self] img in
                 DispatchQueue.main.async {
@@ -742,7 +766,30 @@ class RequestViewController: UIViewController {
             productThumbImageView?.contentMode = .scaleAspectFit
         }
         
+        // Distance will be updated asynchronously in populateUI()
+        if productDistance?.text?.isEmpty ?? true {
+            productDistance?.text = "..."
+        }
+        
         if rentalUnit != .none { recalculatePricing() }
+    }
+    
+    private func makeYellowStarRatingText(valueText: String, reviewsText: String? = nil) -> NSAttributedString {
+        let star = "★"
+        let space = " "
+        let rest = [valueText, reviewsText].compactMap { $0 }.joined(separator: " ")
+        let full = star + space + rest
+
+        let attr = NSMutableAttributedString(string: full, attributes: [
+            .foregroundColor: UIColor.label,
+            .font: UIFont.systemFont(ofSize: 14, weight: .regular)
+        ])
+
+        if let starRange = full.range(of: star) {
+            let ns = NSRange(starRange, in: full)
+            attr.addAttribute(.foregroundColor, value: UIColor.systemYellow, range: ns)
+        }
+        return attr
     }
     
     private func loadItemIfNeeded() {

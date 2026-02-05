@@ -173,40 +173,14 @@ private extension CategoriesViewController {
         sb.delegate = self
         sb.placeholder = "Search items"
         sb.showsCancelButton = false
-        sb.searchBarStyle = .minimal
-        sb.isTranslucent = true
-        sb.backgroundColor = .clear
-        sb.setBackgroundImage(UIImage(), for: .any, barMetrics: .default)
-        sb.setSearchFieldBackgroundImage(UIImage(), for: .normal)
-        sb.tintColor = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0) // brand teal for cursor
-
-        // Deeper styling for rounded pill look (iOS 13+)
-        let tf = sb.searchTextField
-        tf.backgroundColor = UIColor.secondarySystemBackground.withAlphaComponent(0.9)
-        tf.textColor = .label
-        tf.tintColor = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0)
-        tf.clearButtonMode = .whileEditing
-        tf.borderStyle = .none
-        tf.layer.masksToBounds = false
-        tf.leftView?.tintColor = .tertiaryLabel
-
-        // Placeholder subtle color
-        let placeholder = tf.placeholder ?? "Search items"
-        tf.attributedPlaceholder = NSAttributedString(
-            string: placeholder,
-            attributes: [.foregroundColor: UIColor.secondaryLabel]
-        )
+        
+        // Apply consistent RentiWise styling
+        sb.applyRentiWiseStyle()
 
         // Rounded pill corner radius adjusted after layout
         DispatchQueue.main.async { [weak self] in
             self?.layoutSearchBarRounded()
         }
-
-        // Subtle shadow to lift the pill
-        tf.layer.shadowColor = UIColor.black.cgColor
-        tf.layer.shadowOpacity = 0.08
-        tf.layer.shadowRadius = 6
-        tf.layer.shadowOffset = CGSize(width: 0, height: 3)
 
         // Dismiss keyboard by tapping outside
         let tap = UITapGestureRecognizer(target: self, action: #selector(dismissKeyboardTap))
@@ -216,11 +190,7 @@ private extension CategoriesViewController {
 
     func layoutSearchBarRounded() {
         guard let sb = categorySearchBar else { return }
-        let tf = sb.searchTextField
-        let h = tf.bounds.height > 0 ? tf.bounds.height : 36
-        tf.layer.cornerRadius = h / 2
-        tf.layer.borderWidth = 0.5
-        tf.layer.borderColor = UIColor.separator.withAlphaComponent(0.5).cgColor
+        sb.applyRoundedCorners()
     }
 
     @objc func dismissKeyboardTap() {

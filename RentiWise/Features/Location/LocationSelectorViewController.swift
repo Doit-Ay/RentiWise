@@ -31,6 +31,9 @@ final class LocationSelectorViewController: UIViewController {
     // Data (backend addresses)
     private var saved: [Address] = []
     private let service: AddressServicing = AddressService()
+    
+    // App brand color used across the app (matches Home/others)
+    private let brandTeal = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0)
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -243,8 +246,13 @@ extension LocationSelectorViewController: UITableViewDataSource {
             }
         }
 
+        // Apply app brand tint to all row icons
+        config.imageProperties.tintColor = brandTeal
+
         cell.contentConfiguration = config
         cell.accessoryType = .disclosureIndicator
+        // Also set cell tint in case any accessory/image uses it
+        cell.tintColor = brandTeal
         return cell
     }
 }

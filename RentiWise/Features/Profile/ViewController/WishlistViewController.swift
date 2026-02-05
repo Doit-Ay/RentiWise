@@ -32,6 +32,16 @@ class WishlistViewController: UITableViewController {
         tableView.register(WishlistCell.self, forCellReuseIdentifier: "WishlistCell")
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "Cell")
         tableView.backgroundColor = .systemGroupedBackground
+        tableView.separatorStyle = .none
+        
+        // Remove extra side insets so the only visible gap is the cell card’s 20pt
+        tableView.contentInset = .zero
+        tableView.scrollIndicatorInsets = .zero
+        tableView.separatorInset = .zero
+        tableView.layoutMargins = .zero
+        tableView.directionalLayoutMargins = .zero
+        tableView.insetsContentViewsToSafeArea = false
+        tableView.cellLayoutMarginsFollowReadableWidth = false
         
         refreshControl = UIRefreshControl()
         refreshControl?.addTarget(self, action: #selector(handleRefresh), for: .valueChanged)
@@ -123,34 +133,47 @@ class WishlistViewController: UITableViewController {
             cell.textLabel?.font = .preferredFont(forTextStyle: .footnote)
             cell.textLabel?.numberOfLines = 0
             cell.selectionStyle = .none
+            // Remove inherited margins
+            cell.preservesSuperviewLayoutMargins = false
+            cell.layoutMargins = .zero
+            cell.directionalLayoutMargins = .zero
             return cell
         }
         
         if items.isEmpty && !isLoading {
             let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
             cell.contentView.subviews.forEach { $0.removeFromSuperview() }
+            cell.backgroundColor = .clear
+            // Remove inherited margins
+            cell.preservesSuperviewLayoutMargins = false
+            cell.layoutMargins = .zero
+            cell.directionalLayoutMargins = .zero
             
             let stack = UIStackView()
             stack.axis = .vertical
-            stack.spacing = 12
+            stack.spacing = 16
             stack.alignment = .center
             stack.translatesAutoresizingMaskIntoConstraints = false
             
-            let icon = UIImageView(image: UIImage(systemName: "heart"))
+            // Larger, more prominent heart icon
+            let icon = UIImageView(image: UIImage(systemName: "heart.fill"))
             icon.contentMode = .scaleAspectFit
-            icon.tintColor = .secondaryLabel
+            icon.tintColor = brandTeal.withAlphaComponent(0.3)
             icon.translatesAutoresizingMaskIntoConstraints = false
-            icon.widthAnchor.constraint(equalToConstant: 36).isActive = true
-            icon.heightAnchor.constraint(equalToConstant: 36).isActive = true
+            icon.widthAnchor.constraint(equalToConstant: 80).isActive = true
+            icon.heightAnchor.constraint(equalToConstant: 80).isActive = true
             
             let titleLabel = UILabel()
-            titleLabel.text = "Wishlist"
-            titleLabel.font = .preferredFont(forTextStyle: .headline)
+            titleLabel.text = "Your Wishlist is Empty"
+            titleLabel.font = .systemFont(ofSize: 24, weight: .bold)
+            titleLabel.textColor = .label
             
             let subtitleLabel = UILabel()
-            subtitleLabel.text = "Add items to your wishlist from Explore."
-            subtitleLabel.font = .preferredFont(forTextStyle: .subheadline)
+            subtitleLabel.text = "Start adding items you love!\nExplore our catalog and tap the heart icon."
+            subtitleLabel.font = .systemFont(ofSize: 16, weight: .regular)
             subtitleLabel.textColor = .secondaryLabel
+            subtitleLabel.numberOfLines = 0
+            subtitleLabel.textAlignment = .center
             
             stack.addArrangedSubview(icon)
             stack.addArrangedSubview(titleLabel)
@@ -160,8 +183,10 @@ class WishlistViewController: UITableViewController {
             NSLayoutConstraint.activate([
                 stack.centerXAnchor.constraint(equalTo: cell.contentView.centerXAnchor),
                 stack.centerYAnchor.constraint(equalTo: cell.contentView.centerYAnchor),
-                stack.topAnchor.constraint(greaterThanOrEqualTo: cell.contentView.topAnchor, constant: 24),
-                stack.bottomAnchor.constraint(lessThanOrEqualTo: cell.contentView.bottomAnchor, constant: -24)
+                stack.leadingAnchor.constraint(greaterThanOrEqualTo: cell.contentView.leadingAnchor, constant: 32),
+                stack.trailingAnchor.constraint(lessThanOrEqualTo: cell.contentView.trailingAnchor, constant: -32),
+                stack.topAnchor.constraint(greaterThanOrEqualTo: cell.contentView.topAnchor, constant: 40),
+                stack.bottomAnchor.constraint(lessThanOrEqualTo: cell.contentView.bottomAnchor, constant: -40)
             ])
             
             cell.selectionStyle = .none
@@ -169,6 +194,11 @@ class WishlistViewController: UITableViewController {
         }
         
         let cell = tableView.dequeueReusableCell(withIdentifier: "WishlistCell", for: indexPath) as! WishlistCell
+        // Remove inherited margins so the card’s own 20pt is the only side gap
+        cell.preservesSuperviewLayoutMargins = false
+        cell.layoutMargins = .zero
+        cell.directionalLayoutMargins = .zero
+        
         let item = items[indexPath.row]
         cell.configure(with: item, brandTeal: brandTeal)
         return cell
@@ -196,7 +226,7 @@ class WishlistViewController: UITableViewController {
     
     override func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
         if items.isEmpty && !isLoading && errorMessage == nil {
-            return 200
+            return 350
         }
         return UITableView.automaticDimension
     }
@@ -221,51 +251,73 @@ private class WishlistCell: UITableViewCell {
     }
     
     private func setupUI() {
-        accessoryType = .disclosureIndicator
+        backgroundColor = .clear
+        selectionStyle = .none
         
-        // Image view
+        // Card container for modern look
+        let cardView = UIView()
+        cardView.backgroundColor = .systemBackground
+        cardView.layer.cornerRadius = 12
+        cardView.layer.shadowColor = UIColor.black.cgColor
+        cardView.layer.shadowOpacity = 0.08
+        cardView.layer.shadowOffset = CGSize(width: 0, height: 2)
+        cardView.layer.shadowRadius = 4
+        cardView.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(cardView)
+        
+        // Image view - larger and more prominent
         itemImageView.contentMode = .scaleAspectFill
         itemImageView.clipsToBounds = true
-        itemImageView.layer.cornerRadius = 8
+        itemImageView.layer.cornerRadius = 10
         itemImageView.backgroundColor = .secondarySystemBackground
         itemImageView.translatesAutoresizingMaskIntoConstraints = false
-        contentView.addSubview(itemImageView)
+        cardView.addSubview(itemImageView)
         
         // Labels stack
         let stack = UIStackView(arrangedSubviews: [titleLabel, priceLabel])
         stack.axis = .vertical
-        stack.spacing = 4
+        stack.spacing = 6
         stack.translatesAutoresizingMaskIntoConstraints = false
-        contentView.addSubview(stack)
+        cardView.addSubview(stack)
         
-        titleLabel.font = .preferredFont(forTextStyle: .headline)
+        titleLabel.font = .systemFont(ofSize: 15, weight: .semibold)
         titleLabel.numberOfLines = 2
         
-        priceLabel.font = .preferredFont(forTextStyle: .subheadline)
+        priceLabel.font = .systemFont(ofSize: 13, weight: .medium)
         priceLabel.textColor = .secondaryLabel
         
         // Heart icon
         heartIcon.image = UIImage(systemName: "heart.fill")
         heartIcon.contentMode = .scaleAspectFit
         heartIcon.translatesAutoresizingMaskIntoConstraints = false
-        contentView.addSubview(heartIcon)
+        cardView.addSubview(heartIcon)
         
         NSLayoutConstraint.activate([
-            itemImageView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
-            itemImageView.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
-            itemImageView.widthAnchor.constraint(equalToConstant: 60),
-            itemImageView.heightAnchor.constraint(equalToConstant: 60),
+            // Card constraints - 20px from sides
+            cardView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 10),
+            cardView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -10),
+            cardView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
+            cardView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -8),
             
-            stack.leadingAnchor.constraint(equalTo: itemImageView.trailingAnchor, constant: 12),
-            stack.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
-            stack.trailingAnchor.constraint(lessThanOrEqualTo: heartIcon.leadingAnchor, constant: -8),
+            // Image - larger size
+            itemImageView.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 12),
+            itemImageView.centerYAnchor.constraint(equalTo: cardView.centerYAnchor),
+            itemImageView.widthAnchor.constraint(equalToConstant: 90),
+            itemImageView.heightAnchor.constraint(equalToConstant: 90),
             
-            heartIcon.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -32),
-            heartIcon.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
-            heartIcon.widthAnchor.constraint(equalToConstant: 22),
-            heartIcon.heightAnchor.constraint(equalToConstant: 22),
+            // Stack
+            stack.leadingAnchor.constraint(equalTo: itemImageView.trailingAnchor, constant: 16),
+            stack.centerYAnchor.constraint(equalTo: cardView.centerYAnchor),
+            stack.trailingAnchor.constraint(equalTo: heartIcon.leadingAnchor, constant: -12),
             
-            contentView.heightAnchor.constraint(greaterThanOrEqualToConstant: 76)
+            // Heart icon
+            heartIcon.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -16),
+            heartIcon.centerYAnchor.constraint(equalTo: cardView.centerYAnchor),
+            heartIcon.widthAnchor.constraint(equalToConstant: 26),
+            heartIcon.heightAnchor.constraint(equalToConstant: 26),
+            
+            // Card height
+            cardView.heightAnchor.constraint(greaterThanOrEqualToConstant: 110)
         ])
     }
     

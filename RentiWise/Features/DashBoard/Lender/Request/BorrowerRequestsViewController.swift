@@ -56,10 +56,9 @@ final class BorrowerRequestsViewController: UIViewController {
         searchBar.translatesAutoresizingMaskIntoConstraints = false
         searchBar.placeholder = "Search rentals"
         searchBar.delegate = self
-        searchBar.searchBarStyle = .minimal
-        searchBar.backgroundImage = UIImage()
-        searchBar.setBackgroundImage(UIImage(), for: .any, barMetrics: .default)
-        searchBar.searchTextField.backgroundColor = UIColor.secondarySystemBackground
+        
+        // Apply consistent styling
+        searchBar.applyRentiWiseStyle()
 
         // Filter button
         filterButton.translatesAutoresizingMaskIntoConstraints = false
@@ -89,6 +88,11 @@ final class BorrowerRequestsViewController: UIViewController {
             // Make filter button hug its content
             filterButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 44)
         ])
+        
+        // Apply rounded corners after layout
+        DispatchQueue.main.async { [weak self] in
+            self?.searchBar.applyRoundedCorners()
+        }
     }
 
     @objc private func didTapFilter() {

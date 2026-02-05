@@ -38,8 +38,12 @@ class EditProfileViewController: UITableViewController {
         super.viewDidLoad()
         
         title = "Edit Profile"
+        let save = UIBarButtonItem(title: "Save", style: .done, target: self, action: #selector(saveTapped))
+        // Use the same brand tint as elsewhere
+        save.tintColor = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0)
+        navigationItem.rightBarButtonItem = save
+        
         navigationItem.leftBarButtonItem = UIBarButtonItem(title: "Cancel", style: .plain, target: self, action: #selector(cancelTapped))
-        navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Save", style: .done, target: self, action: #selector(saveTapped))
         
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "Cell")
         tableView.keyboardDismissMode = .interactive

@@ -388,17 +388,7 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
         tf.layer.shadowRadius = 6
         tf.layer.shadowOffset = CGSize(width: 0, height: 3)
 
-        // Content insets for text for a comfortable left/right padding
-        // UISearchTextField doesn’t expose direct text insets; we can nudge using a transparent left/right view
-        let pad: CGFloat = 4
-        let leftPadView = UIView(frame: CGRect(x: 0, y: 0, width: pad, height: 1))
-        leftPadView.isUserInteractionEnabled = false
-        tf.leftView = leftPadView
-        tf.leftViewMode = .always
-
-        // Keep the search icon visible but shift via leftView? The system uses a magnifier as left view.
-        // If you want the default icon + padding, comment out the leftPad override above.
-
+        // The search icon is preserved by default via leftView
         // Cancel button tint to match brand
         sb.tintColor = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0)
     }
@@ -1096,7 +1086,7 @@ private extension HomeViewController {
             v.contentEdgeInsets = UIEdgeInsets(top: 8, left: 14, bottom: 8, right: 14)
 
             v.applyGlassEffect(
-                cornerRadius: 12,
+                cornerRadius: 16,
                 style: .systemThickMaterial,
                 addsVibrancy: false,
                 showsShadow: true,
@@ -2007,7 +1997,7 @@ private final class TrendingItemCell: UICollectionViewCell {
         if let avgRating = item.average_rating, let count = item.review_count, count > 0 {
             ratingLabel.text = String(format: "%.1f", avgRating)
         } else {
-            ratingLabel.text = "New"
+            ratingLabel.text = "No Rating"
         }
 
         // Distance: fetch road distance asynchronously

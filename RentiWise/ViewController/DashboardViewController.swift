@@ -222,19 +222,15 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
         }
 
         do {
-            let response = try await SupabaseManager.shared.client
-                .from("items")
-                .select()
-                .eq("owner_id", value: userId)
-                .order("created_at", ascending: false)
-                .execute()
-
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .iso8601
-            let rows = try decoder.decode([Item].self, from: response.data)
+            // Use ItemsService to fetch enriched items then filter to owner
+            let service = ItemsService()
+            let allItems = try await service.fetchItems(category: "")
+            let ownerItems = allItems
+                .filter { $0.owner_id.lowercased() == userId.lowercased() }
+                .sorted { ($0.created_at ?? Date.distantPast) > ($1.created_at ?? Date.distantPast) }
 
             await MainActor.run {
-                self.items = rows
+                self.items = ownerItems
                 self.tableView.reloadData()
                 self.loadEmptyStateIfNeeded()
             }
@@ -421,4 +417,3 @@ extension DashboardViewController: UITableViewDelegate {
         }
     }
 }
-

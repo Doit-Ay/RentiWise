@@ -54,6 +54,9 @@ final class ManualAddressViewController: UIViewController {
     // Geocoder
     private let geocoder = CLGeocoder()
 
+    // App brand tint (used for borders)
+    private let brandTeal = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0)
+
     override func viewDidLoad() {
         super.viewDidLoad()
         title = existing == nil ? "Add Address" : "Edit Address"
@@ -73,15 +76,23 @@ final class ManualAddressViewController: UIViewController {
         let tap = UITapGestureRecognizer(target: self, action: #selector(dismissKeyboard))
         tap.cancelsTouchesInView = false
         scroll.addGestureRecognizer(tap)
+        
+        // Explicitly ensure text color is black for all fields
+        [labelField, fullNameField, phoneField, line1Field, line2Field, cityField, stateField, postalField, countryField].forEach {
+            $0.textColor = UIColor.black
+        }
     }
 
     private func setupNavBar() {
-        navigationItem.rightBarButtonItem = UIBarButtonItem(
+        let save = UIBarButtonItem(
             title: "Save",
             style: .done,
             target: self,
             action: #selector(saveTapped)
         )
+        // Ensure the Save button uses brand tint (not default blue)
+        save.tintColor = brandTeal
+        navigationItem.rightBarButtonItem = save
     }
 
     private func setupLayout() {
@@ -157,7 +168,7 @@ final class ManualAddressViewController: UIViewController {
         addSection(title: "Default", stack: defaultSection)
     }
 
-    // Improved styled text field
+    // Styled text field: white text + brand teal border
     private func makeStyledField(_ placeholder: String,
                                  keyboard: UIKeyboardType = .default,
                                  contentType: UITextContentType? = nil,
@@ -170,14 +181,28 @@ final class ManualAddressViewController: UIViewController {
         tf.textContentType = contentType
         tf.autocapitalizationType = autocap
         tf.autocorrectionType = .no
-        tf.backgroundColor = UIColor.secondarySystemBackground
-        tf.returnKeyType = returnKey
-        tf.clearButtonMode = .whileEditing
+
+        // Background and text
+        tf.backgroundColor = .white
+        tf.textColor = UIColor.black    // inside text black
+        tf.tintColor = brandTeal        // cursor teal
+        tf.keyboardAppearance = .light
+
+        // Border in app tint
         tf.layer.cornerRadius = 10
         tf.layer.borderWidth = 1
-        tf.layer.borderColor = UIColor.separator.withAlphaComponent(0.6).cgColor
+        tf.layer.borderColor = brandTeal.cgColor
+
         tf.font = .systemFont(ofSize: 16)
-        tf.textColor = .label
+
+        // Placeholder with readable contrast
+        tf.attributedPlaceholder = NSAttributedString(
+            string: placeholder,
+            attributes: [.foregroundColor: UIColor.lightGray]
+        )
+
+        tf.returnKeyType = returnKey
+        tf.clearButtonMode = .whileEditing
 
         tf.translatesAutoresizingMaskIntoConstraints = false
         tf.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
@@ -431,12 +456,14 @@ final class ManualAddressViewController: UIViewController {
     @objc private func dismissKeyboard() { view.endEditing(true) }
 
     @objc private func editingDidBegin(_ sender: UITextField) {
-        sender.layer.borderColor = UIColor.systemBlue.withAlphaComponent(0.9).cgColor
+        // On focus, keep brand border (could make thicker if you prefer)
+        sender.layer.borderColor = brandTeal.cgColor
         sender.layer.borderWidth = 1.0
     }
 
     @objc private func editingDidEnd(_ sender: UITextField) {
-        sender.layer.borderColor = UIColor.separator.withAlphaComponent(0.6).cgColor
+        // At rest, keep brand border as well
+        sender.layer.borderColor = brandTeal.cgColor
         sender.layer.borderWidth = 1.0
     }
 
@@ -539,6 +566,7 @@ final class ManualAddressViewController: UIViewController {
                 let placemarks = try await geocoder.geocodeAddressString(fallback)
                 if let loc = placemarks.first?.location {
                     print("[Address] Geocoded fallback OK: \(fallback) -> \(loc.coordinate.latitude), \(loc.coordinate.longitude)")
+                    // FIX: use loc.coordinate.longitude (not loc.longitude)
                     return (loc.coordinate.latitude, loc.coordinate.longitude)
                 } else {
                     print("[Address] Geocode returned no results for fallback: \(fallback)")
@@ -679,4 +707,3 @@ private final class PaddedTextField: UITextField {
         return bounds.inset(by: inset)
     }
 }
-
