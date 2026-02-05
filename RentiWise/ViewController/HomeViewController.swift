@@ -810,17 +810,17 @@ private extension HomeViewController {
     func refreshLocationButtonTitle() {
         // Always use full geocodable address for accurate distance calculations
         if SavedAddressesStore.shared.getDefaultSelectedAddress() == nil {
-            // Use full geocodable default for DistanceService (same for all users)
-            let defaultGeocodable = "SRM Institute of Science and Technology, Kattankulathur, Tamil Nadu, India"
+            // Default to Chennai, Tamil Nadu for all users
+            let defaultGeocodable = "Chennai, Tamil Nadu, India"
             SavedAddressesStore.shared.setDefaultSelectedAddress(defaultGeocodable)
         }
 
-        let storedAddress = SavedAddressesStore.shared.getDefaultSelectedAddress() ?? "SRMIST"
+        let storedAddress = SavedAddressesStore.shared.getDefaultSelectedAddress() ?? "Chennai"
         
         // Extract only the city or label (first meaningful component) for display
         let displayText: String = {
             let trimmed = storedAddress.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty else { return "SRMIST" }
+            guard !trimmed.isEmpty else { return "Chennai" }
             
             // Split by comma and take the first non-empty part (typically city or label)
             let components = trimmed.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }

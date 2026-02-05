@@ -28,6 +28,9 @@ final class ProfileViewController: UITableViewController {
         set { UserDefaults.standard.set(newValue, forKey: "notificationsEnabled") }
     }
     
+    // App brand color
+    private let brandTeal = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0)
+    
     // MARK: - Sections
     private enum Section: Int, CaseIterable {
         case account
@@ -125,7 +128,7 @@ final class ProfileViewController: UITableViewController {
                 target: self,
                 action: #selector(editProfileTapped)
             )
-            editButton.tintColor = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0)
+            editButton.tintColor = brandTeal
             navigationItem.rightBarButtonItem = editButton
         } else {
             navigationItem.rightBarButtonItem = nil
@@ -147,7 +150,7 @@ final class ProfileViewController: UITableViewController {
         
         switch sectionType {
         case .account:
-            return isLoggedIn ? 1 : 2 // header + sign in button if not logged in
+            return isLoggedIn ? 1 : 2 // header + sign up button if not logged in
         case .more:
             return 4 // My Rentals, Wishlist, Privacy & Security, Contact Us
         case .settings:
@@ -199,37 +202,37 @@ final class ProfileViewController: UITableViewController {
         cell.accessoryType = .none
         cell.accessoryView = nil
         cell.imageView?.image = nil
-        cell.imageView?.tintColor = .systemBlue
+        cell.imageView?.tintColor = brandTeal
         cell.selectionStyle = .default
         
         switch sectionType {
         case .account:
-            // Account header cell is handled above, this must be the sign in button
-            cell.textLabel?.text = "Sign In"
-            cell.textLabel?.textColor = .systemBlue
+            // Account header cell is handled above, this must be the sign up button
+            cell.textLabel?.text = "Sign Up"
+            cell.textLabel?.textColor = brandTeal
             return cell
             
         case .more:
             cell.accessoryType = .disclosureIndicator
-            cell.textLabel?.textColor = .label  // Use default label color (black/white based on theme)
+            cell.textLabel?.textColor = .label
             
             switch indexPath.row {
             case 0:
                 cell.textLabel?.text = "My Rentals"
                 cell.imageView?.image = UIImage(systemName: "bag")
-                cell.imageView?.tintColor = .systemBlue
+                cell.imageView?.tintColor = brandTeal
             case 1:
                 cell.textLabel?.text = "Wishlist"
                 cell.imageView?.image = UIImage(systemName: "heart")
-                cell.imageView?.tintColor = .systemBlue
+                cell.imageView?.tintColor = brandTeal
             case 2:
                 cell.textLabel?.text = "Privacy & Security"
                 cell.imageView?.image = UIImage(systemName: "lock.shield")
-                cell.imageView?.tintColor = .systemBlue
+                cell.imageView?.tintColor = brandTeal
             case 3:
                 cell.textLabel?.text = "Contact Us"
                 cell.imageView?.image = UIImage(systemName: "message")
-                cell.imageView?.tintColor = .systemBlue
+                cell.imageView?.tintColor = brandTeal
             default:
                 break
             }
@@ -240,9 +243,10 @@ final class ProfileViewController: UITableViewController {
             cell.textLabel?.text = "Notifications"
             cell.textLabel?.textColor = .label
             cell.imageView?.image = UIImage(systemName: "bell")
-            cell.imageView?.tintColor = .systemBlue
+            cell.imageView?.tintColor = brandTeal
             
             let toggle = UISwitch()
+            toggle.onTintColor = brandTeal
             toggle.isOn = notificationsEnabled
             toggle.addTarget(self, action: #selector(notificationsToggled(_:)), for: .valueChanged)
             cell.accessoryView = toggle
@@ -255,8 +259,8 @@ final class ProfileViewController: UITableViewController {
             cell.textLabel?.textColor = .systemRed
             cell.textLabel?.textAlignment = .center
             cell.accessoryType = .none
-            cell.accessoryView = nil // Explicitly remove any accessory view
-            cell.imageView?.image = nil // No icon for sign out
+            cell.accessoryView = nil
+            cell.imageView?.image = nil
             return cell
         }
     }
@@ -275,30 +279,26 @@ final class ProfileViewController: UITableViewController {
         switch sectionType {
         case .account:
             if indexPath.row == 1 && !isLoggedIn {
-                // Sign in button
-                openSignIn()
+                // Sign up button
+                openSignUp()
             }
             
         case .more:
             switch indexPath.row {
             case 0:
-                // My Rentals
                 let vc = MyRentalsViewController()
                 vc.title = "My Rentals"
                 vc.hidesBottomBarWhenPushed = true
                 navigationController?.pushViewController(vc, animated: true)
             case 1:
-                // Wishlist
                 let vc = WishlistViewController()
                 vc.hidesBottomBarWhenPushed = true
                 navigationController?.pushViewController(vc, animated: true)
             case 2:
-                // Privacy & Security
                 let vc = PrivacySecurityViewController()
                 vc.hidesBottomBarWhenPushed = true
                 navigationController?.pushViewController(vc, animated: true)
             case 3:
-                // Contact Us
                 let vc = SupportChatViewController()
                 vc.title = "Support"
                 vc.hidesBottomBarWhenPushed = true
@@ -308,7 +308,7 @@ final class ProfileViewController: UITableViewController {
             }
             
         case .settings:
-            break // Toggle handled by switch
+            break
             
         case .signOut:
             Task { await signOut() }
@@ -317,23 +317,23 @@ final class ProfileViewController: UITableViewController {
     
     // MARK: - Auth helpers
     
-    private func openSignIn() {
-        let nibName = "SignViewController"
-        let signInVC: SignViewController
+    private func openSignUp() {
+        let nibName = "SignUpViewController"
+        let vc: SignUpViewController
         if Bundle.main.path(forResource: nibName, ofType: "nib") != nil ||
             Bundle.main.path(forResource: nibName, ofType: "xib") != nil {
-            signInVC = SignViewController(nibName: nibName, bundle: nil)
+            vc = SignUpViewController(nibName: nibName, bundle: nil)
         } else {
-            signInVC = SignViewController(service: SignInService())
+            vc = SignUpViewController(service: SignUpService())
         }
-        signInVC.routeContext = .fromProfile
-        signInVC.title = "Sign in"
+        vc.title = "Sign Up"
+        vc.hidesBottomBarWhenPushed = true
         
         if let nav = navigationController {
             nav.setNavigationBarHidden(false, animated: true)
-            nav.pushViewController(signInVC, animated: true)
+            nav.pushViewController(vc, animated: true)
         } else {
-            let nav = UINavigationController(rootViewController: signInVC)
+            let nav = UINavigationController(rootViewController: vc)
             nav.modalPresentationStyle = .fullScreen
             present(nav, animated: true)
         }
@@ -342,6 +342,8 @@ final class ProfileViewController: UITableViewController {
     private func signOut() async {
         do {
             try await SupabaseManager.shared.signOut()
+            // Reset location to default (Chennai, Tamil Nadu)
+            SavedAddressesStore.shared.resetToDefault()
             await refreshAuthState()
         } catch {
             print("Sign out error:", error)
@@ -427,6 +429,9 @@ private class AccountHeaderCell: UITableViewCell {
     private let phoneLabel = UILabel()
     private let messageLabel = UILabel()
     
+    // App brand color
+    private let brandTeal = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0)
+    
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
         setupUI()
@@ -442,7 +447,7 @@ private class AccountHeaderCell: UITableViewCell {
         // Icon
         iconView.image = UIImage(systemName: "person.crop.circle.fill")
         iconView.contentMode = .scaleAspectFit
-        iconView.tintColor = .secondaryLabel
+        iconView.tintColor = brandTeal
         iconView.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(iconView)
         
@@ -486,7 +491,7 @@ private class AccountHeaderCell: UITableViewCell {
         } else {
             emailLabel.isHidden = true
             phoneLabel.isHidden = true
-            messageLabel.text = "Sign in to sync and manage bookings"
+            messageLabel.text = "Create an account to sync and manage bookings"
             messageLabel.isHidden = false
         }
     }

@@ -101,4 +101,10 @@ final class SavedAddressesStore {
     func clearSelectedAddress() {
         defaults.removeObject(forKey: selectedAddressKey)
     }
+    
+    /// Resets the selected address to defaults (clears stored location).
+    /// The app will use the default location (Chennai) on next refresh.
+    func resetToDefault() {
+        clearSelectedAddress()
+    }
 }

@@ -203,6 +203,8 @@ class ManageDataViewController: UITableViewController {
             _ = try await client.from("users").delete().eq("id", value: userId).execute()
             
             try await SupabaseManager.shared.signOut()
+            // Reset location to default (Chennai, Tamil Nadu)
+            SavedAddressesStore.shared.resetToDefault()
             
             // Navigate back to profile
             await MainActor.run {

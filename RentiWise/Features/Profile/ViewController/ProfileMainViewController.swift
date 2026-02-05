@@ -91,6 +91,8 @@ class ProfileMainViewController: UIViewController {
         Task {
             do {
                 try await SupabaseManager.shared.client.auth.signOut()
+                // Reset location to default (Chennai, Tamil Nadu)
+                SavedAddressesStore.shared.resetToDefault()
                 await MainActor.run {
                     // After logout, always reset root to Home
                     self.resetRootToHome()
