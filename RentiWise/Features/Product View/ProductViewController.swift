@@ -1130,6 +1130,7 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
                 let editButton = UIButton(type: .system)
                 editButton.setTitle("Edit", for: .normal)
                 editButton.titleLabel?.font = .systemFont(ofSize: 13, weight: .semibold)
+                editButton.setTitleColor(UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1.0), for: .normal)
                 editButton.addAction(UIAction(handler: { [weak self] _ in
                     self?.presentEditReview(review)
                 }), for: .touchUpInside)

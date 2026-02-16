@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<document type="com.apple.InterfaceBuilder3.CocoaTouch.XIB" version="3.0" toolsVersion="24128" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES">
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.XIB" version="3.0" toolsVersion="24506" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES">
     <device id="retina6_12" orientation="portrait" appearance="light"/>
     <dependencies>
-        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="24063"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="24504"/>
         <capability name="Safe area layout guides" minToolsVersion="9.0"/>
         <capability name="System colors in document resources" minToolsVersion="11.0"/>
         <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
@@ -185,7 +185,7 @@
                     <rect key="frame" x="20" y="222" width="353" height="462"/>
                     <subviews>
                         <label opaque="NO" userInteractionEnabled="NO" contentMode="center" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Photo Tips" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="f9S-yR-lxn">
-                            <rect key="frame" x="20" y="318.66666666666663" width="313" height="26.333333333333314"/>
+                            <rect key="frame" x="2" y="318.66666666666663" width="331" height="26.333333333333314"/>
                             <constraints>
                                 <constraint firstAttribute="height" constant="26.333333333333314" id="Kb6-zW-jyS"/>
                             </constraints>
@@ -194,7 +194,7 @@
                             <nil key="highlightedColor"/>
                         </label>
                         <stackView opaque="NO" contentMode="scaleToFill" axis="vertical" distribution="fillEqually" alignment="top" spacing="5" translatesAutoresizingMaskIntoConstraints="NO" id="pAh-I0-kAp" userLabel="TipsStack">
-                            <rect key="frame" x="20" y="355" width="313" height="87"/>
+                            <rect key="frame" x="2" y="355" width="331" height="87"/>
                             <subviews>
                                 <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Use good lighting and clear backgrounds" lineBreakMode="tailTruncation" numberOfLines="0" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="gdh-WQ-otO">
                                     <rect key="frame" x="0.0" y="0.0" width="281" height="18"/>
@@ -227,22 +227,24 @@
                     <constraints>
                         <constraint firstAttribute="bottom" secondItem="pAh-I0-kAp" secondAttribute="bottom" constant="20" id="4XL-Zk-oSf"/>
                         <constraint firstAttribute="trailing" secondItem="f9S-yR-lxn" secondAttribute="trailing" constant="20" id="BRx-4o-P3m"/>
-                        <constraint firstItem="pAh-I0-kAp" firstAttribute="leading" secondItem="dlm-BC-CT4" secondAttribute="leading" constant="20" id="IqF-hq-zbI"/>
-                        <constraint firstItem="f9S-yR-lxn" firstAttribute="leading" secondItem="dlm-BC-CT4" secondAttribute="leading" constant="20" id="cww-yh-rfi"/>
+                        <constraint firstItem="pAh-I0-kAp" firstAttribute="leading" secondItem="dlm-BC-CT4" secondAttribute="leading" constant="2" id="IqF-hq-zbI"/>
+                        <constraint firstItem="f9S-yR-lxn" firstAttribute="leading" secondItem="dlm-BC-CT4" secondAttribute="leading" constant="2" id="cww-yh-rfi"/>
                         <constraint firstItem="pAh-I0-kAp" firstAttribute="top" secondItem="f9S-yR-lxn" secondAttribute="bottom" constant="10" id="m5L-de-ayt"/>
                         <constraint firstAttribute="trailing" secondItem="pAh-I0-kAp" secondAttribute="trailing" constant="20" id="pbT-TS-u5n"/>
                     </constraints>
                 </view>
                 <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="5Ee-d7-1F0">
-                    <rect key="frame" x="46.666666666666657" y="706" width="300" height="48"/>
+                    <rect key="frame" x="16" y="710" width="361" height="44"/>
                     <color key="backgroundColor" red="0.43921568630000002" green="0.65490196079999996" blue="0.70588235290000001" alpha="1" colorSpace="custom" customColorSpace="displayP3"/>
                     <constraints>
-                        <constraint firstAttribute="height" constant="48" id="JFT-uy-exq"/>
-                        <constraint firstAttribute="width" constant="300" id="urv-0c-lQr"/>
+                        <constraint firstAttribute="height" constant="44" id="JFT-uy-exq"/>
+                        <constraint firstAttribute="width" constant="361" id="urv-0c-lQr"/>
                     </constraints>
                     <color key="tintColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                     <state key="normal" title="Button"/>
-                    <buttonConfiguration key="configuration" style="plain" title="Continue"/>
+                    <buttonConfiguration key="configuration" style="plain" title="Continue">
+                        <fontDescription key="titleFontDescription" type="system" weight="semibold" pointSize="18"/>
+                    </buttonConfiguration>
                 </button>
             </subviews>
             <viewLayoutGuide key="safeArea" id="fnl-2z-Ty3"/>

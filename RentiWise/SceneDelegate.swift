@@ -36,6 +36,9 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         ]
         appearance.stackedLayoutAppearance.selected.titleTextAttributes = selectedAttributes
         
+        appearance.stackedLayoutAppearance.selected.iconColor = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1.0)
+        appearance.stackedLayoutAppearance.normal.iconColor = UIColor.gray
+        
         // Ensure title is positioned below icon
         appearance.stackedLayoutAppearance.normal.titlePositionAdjustment = UIOffset(horizontal: 0, vertical: 0)
         appearance.stackedLayoutAppearance.selected.titlePositionAdjustment = UIOffset(horizontal: 0, vertical: 0)
@@ -124,3 +127,4 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         return nil
     }
 }
+
