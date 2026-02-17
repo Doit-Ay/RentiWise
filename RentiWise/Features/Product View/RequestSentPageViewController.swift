@@ -84,18 +84,31 @@ class RequestSentPageViewController: UIViewController {
         
         let cards: [UIView?] = [rentalItemCardView, rentalIteminsideView, bookingPeriodCardView, ownerCardView, priceBreakdownCardView]
         cards.forEach { card in
-            card?.layer.cornerRadius = 16
-            card?.layer.masksToBounds = true
+            guard let card = card else { return }
+            card.rw_applyGlassEffect(
+                cornerRadius: 16,
+                style: .systemThickMaterial,
+                addsVibrancy: false,
+                showsShadow: true,
+                borderAlpha: 0.30,
+                tintColorOverride: .white,
+                tintAlpha: 0.14,
+                showsHighlight: true,
+                highlightAlpha: 0.15
+            )
+            card.layer.shadowOpacity = 0.12
+            card.layer.shadowRadius = 8
+            card.layer.shadowOffset = CGSize(width: 0, height: 4)
         }
         
         CircleView.layer.cornerRadius = CircleView.bounds.height / 2
         CircleView.layer.masksToBounds = true
         
-        // Apply glass effect to primary cards for visual consistency
-        rentalItemCardView?.applyGlassEffectSimple()
-        bookingPeriodCardView?.applyGlassEffectSimple()
-        ownerCardView?.applyGlassEffectSimple()
-        priceBreakdownCardView?.applyGlassEffectSimple()
+        // Commented out because glass effect handles background
+//        rentalItemCardView?.backgroundColor = .white
+//        bookingPeriodCardView?.backgroundColor = .white
+//        ownerCardView?.backgroundColor = .white
+//        priceBreakdownCardView?.backgroundColor = .white
         
         // Initialize toggle visual state
         updateToggleUI()
@@ -116,6 +129,18 @@ class RequestSentPageViewController: UIViewController {
         // Re-assert rounding in case the view resizes
         productThumbImageView?.layer.cornerRadius = 16
         productThumbImageView?.clipsToBounds = true
+        
+        // Ensure card views keep a 16pt corner radius after layout changes
+        [rentalItemCardView, bookingPeriodCardView, ownerCardView, priceBreakdownCardView].forEach { v in
+            guard let view = v else { return }
+            view.layer.cornerRadius = 16
+            view.layer.masksToBounds = false // keep shadows visible from glass effect
+            // Also round/clip the material subviews (blur/tint) so the visible edge is rounded
+            for sub in view.subviews where sub.tag == 987654 {
+                sub.layer.cornerRadius = 16
+                sub.layer.masksToBounds = true
+            }
+        }
     }
     
     override func viewDidAppear(_ animated: Bool) {
@@ -540,3 +565,93 @@ private extension RequestSentPageViewController {
         }
     }
 }
+
+// MARK: - Local fallback for UIExtension.applyGlassEffect
+private extension UIView {
+    /// Lightweight glass effect to replace missing UIExtension.applyGlassEffect
+    func rw_applyGlassEffect(
+        cornerRadius: CGFloat = 16,
+        style: UIBlurEffect.Style = .systemMaterial,
+        addsVibrancy: Bool = false,
+        showsShadow: Bool = true,
+        borderAlpha: CGFloat = 0.2,
+        tintColorOverride: UIColor? = nil,
+        tintAlpha: CGFloat = 0.12,
+        showsHighlight: Bool = false,
+        highlightAlpha: CGFloat = 0.12
+    ) {
+        // Corner radius & clipping
+        layer.cornerRadius = cornerRadius
+        layer.masksToBounds = false
+        // Remove existing blur/vibrancy subviews if reapplying
+        subviews.filter { $0.tag == 987654 }.forEach { $0.removeFromSuperview() }
+
+        let blurEffect = UIBlurEffect(style: style)
+        let blurView = UIVisualEffectView(effect: blurEffect)
+        blurView.tag = 987654
+        blurView.isUserInteractionEnabled = false
+        blurView.frame = bounds
+        blurView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        addSubview(blurView)
+        sendSubviewToBack(blurView)
+
+        // Optional vibrancy layer
+        if addsVibrancy {
+            let vibrancyView = UIVisualEffectView(effect: UIVibrancyEffect(blurEffect: blurEffect))
+            vibrancyView.frame = blurView.bounds
+            vibrancyView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            blurView.contentView.addSubview(vibrancyView)
+        }
+
+        // Subtle tint overlay to simulate material tinting
+        if let tint = tintColorOverride {
+            let tintView = UIView(frame: bounds)
+            tintView.tag = 987654
+            tintView.backgroundColor = tint.withAlphaComponent(tintAlpha)
+            tintView.isUserInteractionEnabled = false
+            tintView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            addSubview(tintView)
+            sendSubviewToBack(tintView)
+        }
+
+        // Border (hairline) to improve contrast on light backgrounds
+        if borderAlpha > 0 {
+            layer.borderColor = UIColor.label.withAlphaComponent(borderAlpha * 0.15).cgColor
+            layer.borderWidth = 0.5
+        } else {
+            layer.borderWidth = 0
+        }
+
+        // Shadow
+        if showsShadow {
+            layer.shadowColor = UIColor.black.cgColor
+            if layer.shadowOpacity == 0 { layer.shadowOpacity = 0.10 }
+            if layer.shadowRadius == 0 { layer.shadowRadius = 6 }
+            if layer.shadowOffset == .zero { layer.shadowOffset = CGSize(width: 0, height: 4) }
+        } else {
+            layer.shadowOpacity = 0
+        }
+
+        // Optional highlight overlay (top sheen)
+        if showsHighlight {
+            let highlight = CAGradientLayer()
+            highlight.colors = [
+                UIColor.white.withAlphaComponent(highlightAlpha).cgColor,
+                UIColor.white.withAlphaComponent(0.0).cgColor
+            ]
+            highlight.startPoint = CGPoint(x: 0.5, y: 0.0)
+            highlight.endPoint = CGPoint(x: 0.5, y: 1.0)
+            highlight.frame = bounds
+            highlight.cornerRadius = cornerRadius
+            highlight.masksToBounds = true
+            highlight.name = "glassHighlightLayer"
+
+            // Remove existing highlight
+            layer.sublayers?.removeAll(where: { $0.name == "glassHighlightLayer" })
+            layer.insertSublayer(highlight, at: 0)
+        } else {
+            layer.sublayers?.removeAll(where: { $0.name == "glassHighlightLayer" })
+        }
+    }
+}
+

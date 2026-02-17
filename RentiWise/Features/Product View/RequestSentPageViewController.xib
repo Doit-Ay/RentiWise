@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<document type="com.apple.InterfaceBuilder3.CocoaTouch.XIB" version="3.0" toolsVersion="24412" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES">
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.XIB" version="3.0" toolsVersion="24506" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES">
     <device id="retina6_12" orientation="portrait" appearance="light"/>
     <dependencies>
-        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="24405"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="24504"/>
         <capability name="Safe area layout guides" minToolsVersion="9.0"/>
         <capability name="System colors in document resources" minToolsVersion="11.0"/>
         <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
@@ -74,7 +74,7 @@
                                     <nil key="highlightedColor"/>
                                 </label>
                                 <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="9HE-MN-zSj" userLabel="product card view">
-                                    <rect key="frame" x="16" y="120.33333333333334" width="361" height="160.00000000000003"/>
+                                    <rect key="frame" x="16" y="120.33333333333334" width="361" height="170.00000000000003"/>
                                     <subviews>
                                         <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="Image 3" translatesAutoresizingMaskIntoConstraints="NO" id="Uzs-qZ-S1G">
                                             <rect key="frame" x="16" y="45.999999999999972" width="130" height="108"/>
@@ -85,7 +85,7 @@
                                             </constraints>
                                         </imageView>
                                         <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Item Name" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="3gm-Cw-Xl2">
-                                            <rect key="frame" x="162" y="59.999999999999972" width="183" height="18"/>
+                                            <rect key="frame" x="162" y="45.999999999999972" width="183" height="18"/>
                                             <fontDescription key="fontDescription" type="system" weight="medium" pointSize="15"/>
                                             <nil key="textColor"/>
                                             <nil key="highlightedColor"/>
@@ -97,7 +97,7 @@
                                             <nil key="highlightedColor"/>
                                         </label>
                                         <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Category" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="E98-Hu-ZBM">
-                                            <rect key="frame" x="162" y="87.999999999999972" width="65" height="18"/>
+                                            <rect key="frame" x="162" y="73.999999999999972" width="65" height="18"/>
                                             <fontDescription key="fontDescription" type="system" weight="medium" pointSize="15"/>
                                             <nil key="textColor"/>
                                             <nil key="highlightedColor"/>
@@ -107,12 +107,12 @@
                                     <constraints>
                                         <constraint firstItem="09T-mM-hzB" firstAttribute="top" secondItem="9HE-MN-zSj" secondAttribute="top" constant="16" id="1zt-rq-EwG"/>
                                         <constraint firstItem="Uzs-qZ-S1G" firstAttribute="top" secondItem="09T-mM-hzB" secondAttribute="bottom" constant="8" id="9wK-Jq-fNJ"/>
-                                        <constraint firstItem="3gm-Cw-Xl2" firstAttribute="top" secondItem="9HE-MN-zSj" secondAttribute="top" constant="60" id="Dfa-5x-M6d"/>
+                                        <constraint firstItem="3gm-Cw-Xl2" firstAttribute="top" secondItem="9HE-MN-zSj" secondAttribute="top" constant="46" id="Dfa-5x-M6d"/>
                                         <constraint firstItem="Uzs-qZ-S1G" firstAttribute="leading" secondItem="9HE-MN-zSj" secondAttribute="leading" constant="16" id="UUY-b3-q20"/>
                                         <constraint firstItem="09T-mM-hzB" firstAttribute="leading" secondItem="9HE-MN-zSj" secondAttribute="leading" constant="16" id="Ue4-XB-VEJ"/>
                                         <constraint firstItem="3gm-Cw-Xl2" firstAttribute="leading" secondItem="Uzs-qZ-S1G" secondAttribute="trailing" constant="16" id="hyL-8s-QtP"/>
                                         <constraint firstItem="E98-Hu-ZBM" firstAttribute="leading" secondItem="3gm-Cw-Xl2" secondAttribute="leading" id="sbe-ES-eb4"/>
-                                        <constraint firstAttribute="height" constant="160" id="uRe-1V-CmR"/>
+                                        <constraint firstAttribute="height" constant="170" id="uRe-1V-CmR"/>
                                         <constraint firstItem="E98-Hu-ZBM" firstAttribute="top" secondItem="3gm-Cw-Xl2" secondAttribute="bottom" constant="10" id="x7Q-Je-2WA"/>
                                         <constraint firstAttribute="trailing" secondItem="3gm-Cw-Xl2" secondAttribute="trailing" constant="16" id="xKr-04-f2l"/>
                                     </constraints>
@@ -121,10 +121,13 @@
                                             <integer key="value" value="20"/>
                                         </userDefinedRuntimeAttribute>
                                         <userDefinedRuntimeAttribute type="boolean" keyPath="layer.masksToBounds" value="YES"/>
+                                        <userDefinedRuntimeAttribute type="number" keyPath="ibCornerRadius">
+                                            <real key="value" value="16"/>
+                                        </userDefinedRuntimeAttribute>
                                     </userDefinedRuntimeAttributes>
                                 </view>
                                 <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="Vcy-U6-sun" userLabel="bookingperiodView">
-                                    <rect key="frame" x="16" y="296.33333333333331" width="361" height="138"/>
+                                    <rect key="frame" x="16" y="306.33333333333331" width="361" height="138"/>
                                     <subviews>
                                         <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" verticalCompressionResistancePriority="751" text="Booking Period" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="ePo-qy-L95">
                                             <rect key="frame" x="16" y="16" width="337" height="21.666666666666671"/>
@@ -183,9 +186,14 @@
                                         <constraint firstItem="ePo-qy-L95" firstAttribute="top" secondItem="Vcy-U6-sun" secondAttribute="top" constant="16" id="uak-bV-cN7"/>
                                         <constraint firstAttribute="height" constant="138" id="xyF-nA-LsT"/>
                                     </constraints>
+                                    <userDefinedRuntimeAttributes>
+                                        <userDefinedRuntimeAttribute type="number" keyPath="ibCornerRadius">
+                                            <real key="value" value="16"/>
+                                        </userDefinedRuntimeAttribute>
+                                    </userDefinedRuntimeAttributes>
                                 </view>
                                 <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="qFu-ZL-WAt" userLabel="OwnerCard">
-                                    <rect key="frame" x="16" y="450.33333333333337" width="361" height="85"/>
+                                    <rect key="frame" x="16" y="460.33333333333337" width="361" height="85"/>
                                     <subviews>
                                         <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="Image 4" translatesAutoresizingMaskIntoConstraints="NO" id="l6b-P9-h9V">
                                             <rect key="frame" x="16" y="14.666666666666629" width="56" height="56"/>
@@ -211,7 +219,7 @@
                                     </constraints>
                                 </view>
                                 <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="SYA-cA-olG" userLabel="summaryView">
-                                    <rect key="frame" x="16" y="551.33333333333337" width="361" height="146"/>
+                                    <rect key="frame" x="16" y="561.33333333333337" width="361" height="146"/>
                                     <subviews>
                                         <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Price Breakdown" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="JGv-UT-1l4">
                                             <rect key="frame" x="16" y="16" width="337" height="21.666666666666671"/>
@@ -288,9 +296,14 @@
                                         <constraint firstItem="edR-Nm-gMT" firstAttribute="trailing" secondItem="fSe-z2-hDe" secondAttribute="trailing" id="vZW-26-bd4"/>
                                         <constraint firstItem="MIj-5s-qYv" firstAttribute="top" secondItem="ErC-aU-k5Z" secondAttribute="bottom" constant="8" id="x1T-He-FNb"/>
                                     </constraints>
+                                    <userDefinedRuntimeAttributes>
+                                        <userDefinedRuntimeAttribute type="number" keyPath="ibCornerRadius">
+                                            <real key="value" value="16"/>
+                                        </userDefinedRuntimeAttribute>
+                                    </userDefinedRuntimeAttributes>
                                 </view>
                                 <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="oUy-IT-ok0">
-                                    <rect key="frame" x="16" y="717.33333333333337" width="361" height="44"/>
+                                    <rect key="frame" x="16" y="727.33333333333337" width="361" height="44"/>
                                     <color key="backgroundColor" red="0.36470588240000001" green="0.66274509800000003" blue="0.71372549019999998" alpha="1" colorSpace="calibratedRGB"/>
                                     <constraints>
                                         <constraint firstAttribute="height" constant="44" id="4Ep-RI-Mdr"/>
