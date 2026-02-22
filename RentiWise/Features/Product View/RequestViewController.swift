@@ -700,6 +700,7 @@ class RequestViewController: UIViewController {
             sentVC.bookingStartDate = bookingStartDate
             sentVC.bookingEndDate = bookingEndDate
             sentVC.pickupTime = pickupTime
+            sentVC.isPerHour = (rentalUnit == .hour)
             navigationController?.pushViewController(sentVC, animated: true)
         } catch {
             presentAlert(title: "Request Failed", message: error.localizedDescription)

@@ -6,8 +6,15 @@ import Supabase
 final class SupabaseManager {
     static let shared = SupabaseManager()
 
-    private let urlString = "https://assshmccdkktfxqycufv.supabase.co"
-    private let anonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFzc3NobWNjZGtrdGZ4cXljdWZ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMyMjc4NDEsImV4cCI6MjA3ODgwMzg0MX0.x_WZdOdzs3F6juZBJx9tl3e7cM4ycCt__qadpqpxmaI"
+    private static func infoPlistValue(for key: String) -> String {
+        guard let val = Bundle.main.object(forInfoDictionaryKey: key) as? String, !val.isEmpty else {
+            fatalError("Missing Info.plist key '\(key)'. Add it to Info.plist (or your .xcconfig).")
+        }
+        return val
+    }
+
+    private let urlString = SupabaseManager.infoPlistValue(for: "SUPABASE_URL")
+    private let anonKey   = SupabaseManager.infoPlistValue(for: "SUPABASE_ANON_KEY")
 
     let client: SupabaseClient
 

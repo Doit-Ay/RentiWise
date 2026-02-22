@@ -88,6 +88,13 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
 
         title = "My Listings"
 
+        // Replace back button with a home icon that always goes to Home
+        navigationItem.hidesBackButton = true
+        let homeIcon = UIImage(systemName: "house.fill")
+        let homeBtn = UIBarButtonItem(image: homeIcon, style: .plain, target: self, action: #selector(didTapHome))
+        homeBtn.tintColor = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1.0)
+        navigationItem.leftBarButtonItem = homeBtn
+
         setupNavigationFilterButton()
         setupTable()
         setupSegmentedControl()
@@ -102,6 +109,30 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
         }
 
         reloadForSelectedSegment()
+    }
+
+    @objc private func didTapHome() {
+        routeToHome()
+    }
+
+    private func routeToHome() {
+        // 1. If there's a HomeViewController already in the nav stack, pop to it
+        if let nav = navigationController {
+            if let homeVC = nav.viewControllers.first(where: { $0 is HomeViewController }) {
+                nav.popToViewController(homeVC, animated: true)
+                return
+            }
+            // 2. Pop to root (root is usually HomeViewController)
+            nav.popToRootViewController(animated: true)
+            return
+        }
+        // 3. Switch to the Home tab if inside a tab bar
+        if let tab = tabBarController {
+            tab.selectedIndex = 0
+            return
+        }
+        // 4. Last resort: dismiss
+        dismiss(animated: true)
     }
 
     override func viewWillAppear(_ animated: Bool) {

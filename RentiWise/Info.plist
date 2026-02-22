@@ -55,6 +55,10 @@
 	<string>RentiWise needs your location to show nearby items and calculate distances to help you find rentals close to you.</string>
 	<key>UIUserInterfaceStyle</key>
 	<string>Light</string>
+	<key>SUPABASE_URL</key>
+	<string>https://assshmccdkktfxqycufv.supabase.co</string>
+	<key>SUPABASE_ANON_KEY</key>
+	<string>eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFzc3NobWNjZGtrdGZ4cXljdWZ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMyMjc4NDEsImV4cCI6MjA3ODgwMzg0MX0.x_WZdOdzs3F6juZBJx9tl3e7cM4ycCt__qadpqpxmaI</string>
 </dict>
 </plist>
 

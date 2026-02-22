@@ -50,13 +50,13 @@ final class DistanceService {
     /// Owner-level cache (item_id = null).
     /// For progressive loading, optionally provide a callback to receive road distance update.
     func distanceText(for item: Item, progressiveUpdate: ((String) -> Void)? = nil) async -> String {
-        // 0) Get viewer address and user ID
+        // 0) Get viewer address
         let viewerAddressString = SavedAddressesStore.shared.getDefaultSelectedAddress()?.trimmingCharacters(in: .whitespacesAndNewlines)
         let viewerAddress = (viewerAddressString?.isEmpty == false) ? viewerAddressString! : defaultViewerAddress
         let viewerAddressHash = normalizeAddressKey(viewerAddress)
         let viewerUserId = await SupabaseManager.shared.currentUserId()
 
-        // 1) FAST PATH: Check DB cache first (no geocoding needed!)
+        // 1) FAST PATH: DB cache (logged-in users)
         if let viewerUserId {
             if let cached = await fetchCachedDistanceMeters(
                 viewerUserId: viewerUserId,
@@ -70,99 +70,63 @@ final class DistanceService {
             }
         }
 
-        // 2) SLOW PATH: Need to geocode and calculate
-        // Resolve owner coords with fallback
-        var ownerCoord = await fetchOwnerCoordinate(ownerId: item.owner_id)
-        if ownerCoord == nil {
-            ownerCoord = fallbackOwnerCoordinate
-        }
-        let resolvedOwnerCoord = ownerCoord!
+        // 2) Resolve owner coordinate (with wide fallbacks — never nil after this)
+        let ownerCoord = await fetchOwnerCoordinate(ownerId: item.owner_id) ?? fallbackOwnerCoordinate
 
-        // Resolve viewer coords with fallback (NOW MUCH FASTER with persistent caching!)
+        // 3) Resolve viewer coordinate (with wide fallbacks — never nil after this)
         var viewerCoord = await geocodeAddressString(viewerAddress)
-        if viewerCoord == nil {
-            viewerCoord = await geocodeAddressString(defaultViewerAddress)
-        }
-        if viewerCoord == nil {
-            viewerCoord = fallbackOwnerCoordinate
-        }
-        let resolvedViewerCoord = viewerCoord!
+        if viewerCoord == nil { viewerCoord = await geocodeAddressString(defaultViewerAddress) }
+        let resolvedViewerCoord = viewerCoord ?? fallbackOwnerCoordinate
 
-        // 3) Try in-memory directions cache
-        let memKey = directionsCacheKey(viewer: resolvedViewerCoord, owner: resolvedOwnerCoord, transport: transportType)
-        if let meters = directionsCache.object(forKey: memKey as NSString)?.doubleValue {
+        // 4) INSTANT straight-line distance — guarantees we always return something
+        let straight = resolvedViewerCoord.distance(from: ownerCoord)
+        let prelimText = formatDistance(meters: straight)
+
+        // 5) Check in-memory directions cache
+        let memKey = directionsCacheKey(viewer: resolvedViewerCoord, owner: ownerCoord, transport: transportType)
+        if let cached = directionsCache.object(forKey: memKey as NSString)?.doubleValue {
             if let viewerUserId {
                 Task { [weak self] in
-                    await self?.upsertDistanceMeters(
-                        meters,
-                        viewerUserId: viewerUserId,
-                        ownerUserId: item.owner_id,
-                        itemId: nil,
-                        viewerAddressHash: viewerAddressHash,
-                        transportType: "automobile"
-                    )
+                    await self?.upsertDistanceMeters(cached, viewerUserId: viewerUserId, ownerUserId: item.owner_id,
+                        itemId: nil, viewerAddressHash: viewerAddressHash, transportType: "automobile")
                 }
             }
-            return formatDistance(meters: meters)
+            return formatDistance(meters: cached)
         }
 
-        // 4) PROGRESSIVE LOADING: Show straight-line distance immediately
-        let straight = resolvedViewerCoord.distance(from: resolvedOwnerCoord)
-        let prelimText = formatDistance(meters: straight)
-        
-        // If callback provided, compute road distance in background and update
+        // 6) Fire road-distance calculation in background; update via callback if provided
         if let progressiveUpdate {
-            Task {
-                if let meters = await routeDistanceMeters(from: resolvedViewerCoord, to: resolvedOwnerCoord, transport: transportType) {
+            Task { [weak self] in
+                guard let self else { return }
+                if let meters = await routeDistanceMeters(from: resolvedViewerCoord, to: ownerCoord, transport: transportType) {
                     directionsCache.setObject(NSNumber(value: meters), forKey: memKey as NSString)
                     if let viewerUserId {
-                        await upsertDistanceMeters(
-                            meters,
-                            viewerUserId: viewerUserId,
-                            ownerUserId: item.owner_id,
-                            itemId: nil,
-                            viewerAddressHash: viewerAddressHash,
-                            transportType: "automobile"
-                        )
+                        await upsertDistanceMeters(meters, viewerUserId: viewerUserId, ownerUserId: item.owner_id,
+                            itemId: nil, viewerAddressHash: viewerAddressHash, transportType: "automobile")
                     }
-                    // Call update with road distance
-                    await MainActor.run {
-                        progressiveUpdate(formatDistance(meters: meters))
-                    }
+                    let roadText = formatDistance(meters: meters)
+                    await MainActor.run { progressiveUpdate(roadText) }
                 }
             }
+            // Return straight-line immediately — never blank
+            return prelimText
         } else {
-            // No callback - compute road distance synchronously (old behavior)
-            if let meters = await routeDistanceMeters(from: resolvedViewerCoord, to: resolvedOwnerCoord, transport: transportType) {
+            // Synchronous path: compute road distance now
+            if let meters = await routeDistanceMeters(from: resolvedViewerCoord, to: ownerCoord, transport: transportType) {
                 directionsCache.setObject(NSNumber(value: meters), forKey: memKey as NSString)
                 if let viewerUserId {
-                    await upsertDistanceMeters(
-                        meters,
-                        viewerUserId: viewerUserId,
-                        ownerUserId: item.owner_id,
-                        itemId: nil,
-                        viewerAddressHash: viewerAddressHash,
-                        transportType: "automobile"
-                    )
+                    await upsertDistanceMeters(meters, viewerUserId: viewerUserId, ownerUserId: item.owner_id,
+                        itemId: nil, viewerAddressHash: viewerAddressHash, transportType: "automobile")
                 }
                 return formatDistance(meters: meters)
             }
-            
-            // Fallback: save straight-line distance to DB
+            // Road distance failed — cache straight-line in DB and return it
             if let viewerUserId {
-                await upsertDistanceMeters(
-                    straight,
-                    viewerUserId: viewerUserId,
-                    ownerUserId: item.owner_id,
-                    itemId: nil,
-                    viewerAddressHash: viewerAddressHash,
-                    transportType: "automobile",
-                    straightMeters: straight
-                )
+                await upsertDistanceMeters(straight, viewerUserId: viewerUserId, ownerUserId: item.owner_id,
+                    itemId: nil, viewerAddressHash: viewerAddressHash, transportType: "automobile", straightMeters: straight)
             }
+            return prelimText
         }
-        
-        return prelimText
     }
 
     // MARK: - Owner coordinate from public view (with fallback)
@@ -174,40 +138,79 @@ final class DistanceService {
         let city: String?
         let state: String?
         let country: String?
-        let is_default: Bool?
-        let created_at: String?
     }
 
     private func fetchOwnerCoordinate(ownerId: String) async -> CLLocation? {
-        // Try view first
+        // Try user_default_address view first (use limit+first, NOT .single() — avoids error when no row)
         do {
             let response = try await client
                 .from("user_default_address")
-                .select("user_id,latitude,longitude,city,state,country,is_default,created_at")
+                .select("user_id,latitude,longitude,city,state,country")
                 .eq("user_id", value: ownerId)
-                .single()
+                .limit(1)
                 .execute()
 
-            if let data = response.data as? Data {
-                let row = try JSONDecoder().decode(OwnerDefaultAddressRow.self, from: data)
-                if let lat = row.latitude, let lon = row.longitude {
+            let rows = try JSONDecoder().decode([OwnerDefaultAddressRow].self, from: response.data)
+            if let row = rows.first {
+                if let lat = row.latitude, let lon = row.longitude,
+                   lat != 0.0, lon != 0.0 {
                     return CLLocation(latitude: lat, longitude: lon)
                 }
-                // Fallback to geocoding city/state/country if lat/lon missing
+                // Fallback to geocoding city/state/country if lat/lon missing/zero
                 let parts = [row.city, row.state, row.country]
                     .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
                     .filter { !$0.isEmpty }
                     .joined(separator: ", ")
-                if !parts.isEmpty {
-                    if let geocoded = await geocodeAddressString(parts) {
-                        return geocoded
-                    }
+                if !parts.isEmpty, let geocoded = await geocodeAddressString(parts) {
+                    return geocoded
                 }
             }
         } catch {
-            // ignore and continue to fallback
+            // table/view may not exist — fall through
         }
-        // Final fallback: only return fallback if all attempts failed
+
+        // Second attempt: try profiles table for city/state
+        do {
+            struct ProfileCityRow: Decodable { let city: String?; let state: String? }
+            let response = try await client
+                .from("profiles")
+                .select("city,state")
+                .eq("id", value: ownerId)
+                .limit(1)
+                .execute()
+            let rows = try JSONDecoder().decode([ProfileCityRow].self, from: response.data)
+            if let row = rows.first {
+                let parts = [row.city, row.state]
+                    .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+                    .joined(separator: ", ")
+                if !parts.isEmpty, let geocoded = await geocodeAddressString(parts) {
+                    return geocoded
+                }
+            }
+        } catch { }
+
+        // Third attempt: users table
+        do {
+            struct UsersCityRow: Decodable { let city: String?; let state: String? }
+            let response = try await client
+                .from("users")
+                .select("city,state")
+                .eq("id", value: ownerId)
+                .limit(1)
+                .execute()
+            let rows = try JSONDecoder().decode([UsersCityRow].self, from: response.data)
+            if let row = rows.first {
+                let parts = [row.city, row.state]
+                    .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+                    .joined(separator: ", ")
+                if !parts.isEmpty, let geocoded = await geocodeAddressString(parts) {
+                    return geocoded
+                }
+            }
+        } catch { }
+
         return nil
     }
 

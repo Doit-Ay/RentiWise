@@ -20,6 +20,8 @@ class RequestSentPageViewController: UIViewController {
     var bookingStartDate: Date?
     var bookingEndDate: Date?
     var pickupTime: Date?
+    /// Set to true when the user selected the per-hour rental mode in RequestViewController.
+    var isPerHour: Bool = false
     
     @IBOutlet weak var CircleView: UIView!
     @IBOutlet weak var checkmark: UIImageView!
@@ -81,6 +83,9 @@ class RequestSentPageViewController: UIViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        // Hide back button — the request is already submitted, Done is the only exit
+        navigationItem.hidesBackButton = true
+        navigationItem.leftBarButtonItem = nil
         
         let cards: [UIView?] = [rentalItemCardView, rentalIteminsideView, bookingPeriodCardView, ownerCardView, priceBreakdownCardView]
         cards.forEach { card in
@@ -165,6 +170,9 @@ class RequestSentPageViewController: UIViewController {
     private func updateUI() {
         guard let item = item else { return }
 
+        // Sync rental unit from the flag passed by RequestViewController
+        rentalUnit = isPerHour ? .perHour : .perDay
+
         // Title
         productTitleLabel?.text = item.title
 
@@ -209,41 +217,48 @@ class RequestSentPageViewController: UIViewController {
     }
     
     private func updateBookingLabels() {
-        // bookingdateLabel: date from bookingStartDate
-        if let start = bookingStartDate {
-            bookingdateLabel?.text = dateFormatter.string(from: start)
-        } else {
-            bookingdateLabel?.text = "—"
-        }
-        // bookingPickupTimeLabel: time from pickupTime if provided, else from bookingStartDate if available
-        if let pickup = pickupTime {
-            bookingPickupTimeLabel?.text = timeFormatter.string(from: pickup)
-        } else if let start = bookingStartDate {
-            bookingPickupTimeLabel?.text = timeFormatter.string(from: start)
-        } else {
+        guard let start = bookingStartDate, let end = bookingEndDate else {
+            bookingDateRangeLabel?.text = "—"
             bookingPickupTimeLabel?.text = "—"
+            bookingDurationLabel?.text = "—"
+            return
         }
-        // pickuptimeLabel: return time from bookingEndDate
-        if let end = bookingEndDate {
-            pickuptimeLabel?.text = timeFormatter.string(from: end)
-        } else {
-            pickuptimeLabel?.text = "—"
-        }
-        // Date range and duration
-        if let start = bookingStartDate, let end = bookingEndDate {
-            bookingDateRangeLabel?.text = "\(dateFormatter.string(from: start)) — \(dateFormatter.string(from: end))"
+
+        if rentalUnit == .perHour {
+            // Per-hour booking
+            // bookingDateRangeLabel → shows the single date (e.g. "5 Feb 2026")
+            bookingDateRangeLabel?.text = dateFormatter.string(from: start)
+
+            // bookingPickupTimeLabel → shows the time range (e.g. "4:00 PM – 8:00 PM")
+            let startTime = timeFormatter.string(from: start)
+            let endTime   = timeFormatter.string(from: end)
+            bookingPickupTimeLabel?.text = "\(startTime) – \(endTime)"
+
+            // bookingDurationLabel → hours/minutes
             let duration = max(0, end.timeIntervalSince(start))
-            switch rentalUnit {
-            case .perHour:
-                let hours = Int(ceil(duration / 3600.0))
-                bookingDurationLabel?.text = "\(max(1, hours))h"
-            case .perDay:
-                let days = Int(ceil(duration / 86400.0))
-                bookingDurationLabel?.text = "\(max(1, days))d"
+            let hoursRaw = duration / 3600.0
+            let h = Int(hoursRaw)
+            let m = Int((hoursRaw - Double(h)) * 60)
+            if h > 0 && m > 0 {
+                bookingDurationLabel?.text = "\(h)h \(m)m"
+            } else if h > 0 {
+                bookingDurationLabel?.text = "\(h)h"
+            } else {
+                bookingDurationLabel?.text = "\(max(1, m))m"
             }
         } else {
-            bookingDateRangeLabel?.text = "—"
-            bookingDurationLabel?.text = "—"
+            // Per-day booking
+            // bookingDateRangeLabel → shows the date range (e.g. "5 Feb 2026 – 7 Feb 2026")
+            bookingDateRangeLabel?.text = "\(dateFormatter.string(from: start)) – \(dateFormatter.string(from: end))"
+
+            // bookingPickupTimeLabel → shows single pickup time (e.g. "10:00 AM")
+            let pickupDisplay = pickupTime ?? start
+            bookingPickupTimeLabel?.text = timeFormatter.string(from: pickupDisplay)
+
+            // bookingDurationLabel → number of days
+            let duration = max(0, end.timeIntervalSince(start))
+            let days = max(1, Int(ceil(duration / 86400.0)))
+            bookingDurationLabel?.text = "\(days)d"
         }
     }
     
@@ -654,4 +669,3 @@ private extension UIView {
         }
     }
 }
-

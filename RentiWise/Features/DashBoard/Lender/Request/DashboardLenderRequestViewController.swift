@@ -52,11 +52,16 @@ class DashboardLenderRequestViewController: UIViewController {
     // Programmatic status row (shown when status != pending)
     private var statusRowContainer: UIStackView?
     private var statusValueLabel: UILabel?
-    private var changeStatusButton: UIButton?
+    private var changeStatusButton: UIButton?      // the single "Deny" or "Accept" action button
+    private var changeWindowMessageLabel: UILabel? // "You can change within 24 h or before payment"
 
     // White background bar behind the status row
     private var statusBackgroundView: UIView?
     private var statusBackgroundBottomConstraint: NSLayoutConstraint?
+
+    /// Timestamp when the most recent accept/deny decision was made.
+    /// Used to enforce the 24-hour change window on the client side.
+    private var decisionTimestamp: Date?
 
     private let displayDateFormatter: DateFormatter = {
         let df = DateFormatter()
@@ -131,70 +136,82 @@ class DashboardLenderRequestViewController: UIViewController {
     private func ensureStatusRow() {
         guard statusRowContainer == nil else { return }
 
-        // Build inner stack: [ "Status: <value>", spacer, Change ]
+        // ── Message line ────────────────────────────────────────────────
+        let messageLabel = UILabel()
+        messageLabel.font = .systemFont(ofSize: 12, weight: .regular)
+        messageLabel.textColor = .secondaryLabel
+        messageLabel.numberOfLines = 0
+        messageLabel.textAlignment = .center
+        messageLabel.text = "You can change your decision within 24 hours or before the borrower makes the payment."
+
+        // ── Status label ─────────────────────────────────────────────────
         let label = UILabel()
         label.font = .systemFont(ofSize: 16, weight: .semibold)
         label.textColor = .label
 
+        // ── Single opposite-action button ─────────────────────────────────
         let change = UIButton(type: .system)
-        change.setTitle("Change", for: .normal)
         change.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
         change.addTarget(self, action: #selector(didTapChangeStatus), for: .touchUpInside)
+        change.layer.cornerRadius = 12
+        change.layer.borderWidth = 1.5
+        change.layer.borderColor = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1.0).cgColor
+        change.contentEdgeInsets = UIEdgeInsets(top: 6, left: 14, bottom: 6, right: 14)
+        change.setContentHuggingPriority(.required, for: .horizontal)
 
-        let stack = UIStackView(arrangedSubviews: [label, UIView(), change])
-        stack.axis = .horizontal
-        stack.alignment = .center
-        stack.spacing = 8
+        // Horizontal row: [ status label ] [ spacer ] [ change button ]
+        let row = UIStackView(arrangedSubviews: [label, UIView(), change])
+        row.axis = .horizontal
+        row.alignment = .center
+        row.spacing = 8
+        row.translatesAutoresizingMaskIntoConstraints = false
+
+        // Vertical stack: message on top, then the status row
+        let stack = UIStackView(arrangedSubviews: [messageLabel, row])
+        stack.axis = .vertical
+        stack.alignment = .fill
+        stack.spacing = 10
         stack.translatesAutoresizingMaskIntoConstraints = false
 
-        // Background container pinned to very bottom (not safe area), full width, white bg
+        // Background bar pinned to bottom
         let bg = UIView()
         bg.translatesAutoresizingMaskIntoConstraints = false
-        bg.backgroundColor = .white // starts from bottom edge of screen
-        // Rounded top corners like a bottom bar (optional)
+        bg.backgroundColor = .systemBackground
+        bg.layer.shadowColor = UIColor.black.cgColor
+        bg.layer.shadowOpacity = 0.08
+        bg.layer.shadowRadius = 8
+        bg.layer.shadowOffset = CGSize(width: 0, height: -3)
         if #available(iOS 11.0, *) {
             bg.layer.cornerRadius = 16
             bg.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
-            bg.layer.masksToBounds = true
+            bg.layer.masksToBounds = false // shadows need false
         }
 
-        // Always host in the main view so it sits at the bottom of the screen
         let host = view!
         host.addSubview(bg)
         bg.addSubview(stack)
 
-        // Constrain background to bottom edges (view.bottomAnchor, not safe area)
-        let leading = bg.leadingAnchor.constraint(equalTo: host.leadingAnchor)
-        let trailing = bg.trailingAnchor.constraint(equalTo: host.trailingAnchor)
-        let bottom = bg.bottomAnchor.constraint(equalTo: host.bottomAnchor) // <- to screen bottom
-        NSLayoutConstraint.activate([leading, trailing, bottom])
-
-        // Give the bar a minimum height so it feels like a bottom section
-        let minHeight = bg.heightAnchor.constraint(greaterThanOrEqualToConstant: 64)
-        minHeight.priority = .required
-
-        // Add content insets inside bg
-        let topInset: CGFloat = 14
-        let bottomInset: CGFloat = 28 // push content up a bit for visibility
+        let bottom = bg.bottomAnchor.constraint(equalTo: host.bottomAnchor)
         NSLayoutConstraint.activate([
-            minHeight,
+            bg.leadingAnchor.constraint(equalTo: host.leadingAnchor),
+            bg.trailingAnchor.constraint(equalTo: host.trailingAnchor),
+            bottom,
+            bg.heightAnchor.constraint(greaterThanOrEqualToConstant: 80),
             stack.leadingAnchor.constraint(equalTo: bg.leadingAnchor, constant: 16),
             stack.trailingAnchor.constraint(equalTo: bg.trailingAnchor, constant: -16),
-            stack.topAnchor.constraint(equalTo: bg.topAnchor, constant: topInset),
-            stack.bottomAnchor.constraint(equalTo: bg.bottomAnchor, constant: -bottomInset)
+            stack.topAnchor.constraint(equalTo: bg.topAnchor, constant: 14),
+            stack.bottomAnchor.constraint(equalTo: bg.safeAreaLayoutGuide.bottomAnchor, constant: -12)
         ])
 
-        // Ensure it sits above other content visually
         host.bringSubviewToFront(bg)
-
-        // Initially hidden until we have a non-pending status
         bg.isHidden = true
         stack.isHidden = true
 
-        statusRowContainer = stack
-        statusValueLabel = label
-        changeStatusButton = change
-        statusBackgroundView = bg
+        statusRowContainer    = stack
+        statusValueLabel      = label
+        changeStatusButton    = change
+        changeWindowMessageLabel = messageLabel
+        statusBackgroundView  = bg
         statusBackgroundBottomConstraint = bottom
     }
 
@@ -213,6 +230,11 @@ class DashboardLenderRequestViewController: UIViewController {
             totalLabel?.text = ""
             updateButtonsAndStatusUI(status: nil)
             return
+        }
+
+        // Restore persisted decision timestamp so the 24h window is enforced after app restart
+        if decisionTimestamp == nil {
+            decisionTimestamp = loadDecisionTimestamp(requestId: req.id)
         }
 
         // Title from joined item, fallback to item_id
@@ -328,20 +350,76 @@ class DashboardLenderRequestViewController: UIViewController {
     private func updateButtonsAndStatusUI(status: String?) {
         let current = (status ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let isPending = current.isEmpty || current == "pending"
+        let isPaid    = current == "paid"
 
-        // Accept/Deny buttons visible only when pending
-        acceptButton?.isHidden = !isPending
-        denyButton?.isHidden = !isPending
-        denybutton?.isHidden = !isPending // keep in sync if this is wired to a second button
+        // Accept/Deny buttons visible only while pending
+        acceptButton?.isHidden  = !isPending
+        denyButton?.isHidden    = !isPending
+        denybutton?.isHidden    = !isPending
 
-        // Status row + background visible only when not pending
-        statusRowContainer?.isHidden = isPending
-        statusBackgroundView?.isHidden = isPending
+        // Status bar visible when decision has been made
+        let showBar = !isPending
+        statusRowContainer?.isHidden    = !showBar
+        statusBackgroundView?.isHidden  = !showBar
 
-        if !isPending {
-            let display = current.capitalized.isEmpty ? "—" : current.capitalized
-            statusValueLabel?.text = "Status: \(display)"
+        guard showBar else { return }
+
+        // Status label
+        let display = current.capitalized.isEmpty ? "—" : current.capitalized
+        statusValueLabel?.text = "Status: \(display)"
+
+        // Determine if the change window is still open:
+        //   • within 24 h of the decision, AND
+        //   • request has NOT been paid
+        let windowOpen = isWithinChangeWindow() && !isPaid
+
+        // Show the OPPOSITE action button only while the window is open
+        changeStatusButton?.isHidden = !windowOpen
+        changeWindowMessageLabel?.isHidden = !windowOpen
+
+        if windowOpen {
+            switch current {
+            case "accepted":
+                // Accepted → offer Deny
+                changeStatusButton?.setTitle("Deny", for: .normal)
+                changeStatusButton?.tintColor = UIColor(red: 0xE5/255.0, green: 0x53/255.0, blue: 0x3A/255.0, alpha: 1.0)
+                changeStatusButton?.layer.borderColor = UIColor(red: 0xE5/255.0, green: 0x53/255.0, blue: 0x3A/255.0, alpha: 1.0).cgColor
+            case "denied":
+                // Denied → offer Accept
+                changeStatusButton?.setTitle("Accept", for: .normal)
+                changeStatusButton?.tintColor = UIColor(red: 0x34/255.0, green: 0xAA/255.0, blue: 0x69/255.0, alpha: 1.0)
+                changeStatusButton?.layer.borderColor = UIColor(red: 0x34/255.0, green: 0xAA/255.0, blue: 0x69/255.0, alpha: 1.0).cgColor
+            default:
+                changeStatusButton?.isHidden = true
+                changeWindowMessageLabel?.isHidden = true
+            }
         }
+    }
+
+    /// Returns true if the decision was recorded less than 24 hours ago.
+    private func isWithinChangeWindow() -> Bool {
+        guard let ts = decisionTimestamp else {
+            // No timestamp means the lender never changed from this device session,
+            // or the 24 h already passed and was cleaned up. Treat as expired → return false.
+            return false
+        }
+        return Date().timeIntervalSince(ts) < 24 * 60 * 60
+    }
+
+    // MARK: - Timestamp persistence helpers
+
+    private func decisionKey(for requestId: String) -> String {
+        "RW_DecisionTimestamp_\(requestId)"
+    }
+
+    private func saveDecisionTimestamp(_ date: Date, requestId: String) {
+        UserDefaults.standard.set(date.timeIntervalSince1970, forKey: decisionKey(for: requestId))
+    }
+
+    private func loadDecisionTimestamp(requestId: String) -> Date? {
+        let raw = UserDefaults.standard.double(forKey: decisionKey(for: requestId))
+        guard raw > 0 else { return nil }
+        return Date(timeIntervalSince1970: raw)
     }
 
     // MARK: - Owner name resolution
@@ -503,28 +581,37 @@ class DashboardLenderRequestViewController: UIViewController {
 
     @objc private func didTapChangeStatus() {
         guard let current = request?.status.lowercased() else { return }
-
-        let ac = UIAlertController(title: "Change Status", message: "Select a new status", preferredStyle: .actionSheet)
-
-        ac.addAction(UIAlertAction(title: "Accepted", style: .default, handler: { [weak self] _ in
-            guard let self else { return }
-            if current != "accepted" {
-                Task { await self.updateStatus(to: "accepted") }
-            }
-        }))
-        ac.addAction(UIAlertAction(title: "Denied", style: .default, handler: { [weak self] _ in
-            guard let self else { return }
-            if current != "denied" {
-                Task { await self.updateStatus(to: "denied") }
-            }
-        }))
-        ac.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-
-        if let pop = ac.popoverPresentationController, let btn = changeStatusButton {
-            pop.sourceView = btn
-            pop.sourceRect = btn.bounds
+        guard isWithinChangeWindow() else {
+            let alert = UIAlertController(
+                title: "Window Closed",
+                message: "You can only change your decision within 24 hours and before the borrower makes the payment.",
+                preferredStyle: .alert
+            )
+            alert.addAction(UIAlertAction(title: "OK", style: .default))
+            present(alert, animated: true)
+            return
         }
-        present(ac, animated: true)
+
+        // Button title tells us what action to take
+        let newStatus: String
+        switch current {
+        case "accepted": newStatus = "denied"
+        case "denied":   newStatus = "accepted"
+        default: return
+        }
+
+        let humanNew = newStatus.capitalized
+        let confirm = UIAlertController(
+            title: "Change to \(humanNew)?",
+            message: "This will update your decision to \(humanNew). You can change it again within 24 hours or before the borrower pays.",
+            preferredStyle: .alert
+        )
+        confirm.addAction(UIAlertAction(title: humanNew, style: .default, handler: { [weak self] _ in
+            guard let self else { return }
+            Task { await self.updateStatus(to: newStatus) }
+        }))
+        confirm.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        present(confirm, animated: true)
     }
 
     private func setButtonsEnabled(_ enabled: Bool) {
@@ -551,6 +638,13 @@ class DashboardLenderRequestViewController: UIViewController {
             // Update local model and UI
             current.status = newStatus
             self.request = current
+
+            // Record when the decision was made and persist it across restarts
+            let now = Date()
+            self.decisionTimestamp = now
+            if let reqId = self.request?.id {
+                self.saveDecisionTimestamp(now, requestId: reqId)
+            }
 
             await MainActor.run {
                 // Update buttons/status row visibility

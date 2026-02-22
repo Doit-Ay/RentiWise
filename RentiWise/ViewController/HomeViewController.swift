@@ -78,7 +78,6 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
                     self.present(nav, animated: true)
                 }
             } catch {
-                // Not logged in -> open Sign In
                 let nibName = "SignViewController"
                 let signInVC: SignViewController
                 if Bundle.main.path(forResource: nibName, ofType: "nib") != nil ||
@@ -1184,8 +1183,24 @@ private extension HomeViewController {
             // Fetch latest items, then take up to 4 for featured.
             let allItems = try await itemsService.fetchItems(category: "")
             let items = Array(allItems.prefix(4))
+
+            // 🔥 Pre-warm distance cache concurrently for ALL fetched items.
+            // This runs in background so that by the time the user sees any cell,
+            // the in-memory directionsCache already has accurate values ready.
+            Task.detached(priority: .utility) {
+                await withTaskGroup(of: Void.self) { group in
+                    for item in allItems {
+                        group.addTask {
+                            // Use the full signature with no progressiveUpdate — just warms the cache
+                            _ = await DistanceService.shared.distanceText(for: item)
+                        }
+                    }
+                }
+            }
+
             await MainActor.run {
                 self.applyFeatured(items: items)
+                self.updateTrendingItems(from: allItems)
             }
         } catch {
             await MainActor.run {
@@ -1217,9 +1232,6 @@ private extension HomeViewController {
             }
         }
         self.featuredItems = items
-
-        // Update trending with the same source (approximate "trending" as latest featured for now)
-        updateTrendingItems(from: items)
     }
 
     func configureFeaturedSlot(_ slot: (UIImageView?, UILabel?, UILabel?, UILabel?, UILabel?), with item: Item) {
@@ -2000,11 +2012,16 @@ private final class TrendingItemCell: UICollectionViewCell {
             ratingLabel.text = "No Rating"
         }
 
-        // Distance: fetch road distance asynchronously
-        distanceLabel.text = "..."
+        // Distance: show straight-line estimate instantly, then upgrade to road distance
+        distanceLabel.text = "…"
         Task { [weak self] in
             guard let self = self else { return }
-            let text = await DistanceService.shared.distanceText(for: item)
+            let text = await DistanceService.shared.distanceText(for: item) { [weak self] updatedText in
+                // progressiveUpdate is synchronous — dispatch to main via Task
+                Task { @MainActor [weak self] in
+                    self?.distanceLabel.text = updatedText
+                }
+            }
             await MainActor.run { self.distanceLabel.text = text }
         }
 
