@@ -174,17 +174,24 @@ extension UIView {
 
         // Optional top highlight gradient
         if showsHighlight {
-            let container: UIView
-            let grad: CAGradientLayer
-            if let existing = viewWithTag(highlightTag) as? UIView,
-               let g = existing.layer.sublayers?.first as? CAGradientLayer {
+            let container: GradientHighlightView
+            if let existing = viewWithTag(highlightTag) as? GradientHighlightView {
                 container = existing
-                grad = g
+                container.updateColors(
+                    top: UIColor.white.withAlphaComponent(highlightAlpha),
+                    bottom: UIColor.white.withAlphaComponent(0)
+                )
             } else {
-                container = UIView()
+                container = GradientHighlightView()
                 container.tag = highlightTag
                 container.isUserInteractionEnabled = false
                 container.translatesAutoresizingMaskIntoConstraints = false
+                container.layer.cornerRadius = cornerRadius
+                container.layer.masksToBounds = true
+                container.updateColors(
+                    top: UIColor.white.withAlphaComponent(highlightAlpha),
+                    bottom: UIColor.white.withAlphaComponent(0)
+                )
                 insertSubview(container, aboveSubview: tintView)
                 NSLayoutConstraint.activate([
                     container.leadingAnchor.constraint(equalTo: leadingAnchor),
@@ -192,19 +199,7 @@ extension UIView {
                     container.topAnchor.constraint(equalTo: topAnchor),
                     container.heightAnchor.constraint(equalTo: heightAnchor, multiplier: 0.35)
                 ])
-                container.layer.cornerRadius = cornerRadius
-                container.layer.masksToBounds = true
-
-                grad = CAGradientLayer()
-                grad.colors = [
-                    UIColor.white.withAlphaComponent(highlightAlpha).cgColor,
-                    UIColor.white.withAlphaComponent(0).cgColor
-                ]
-                grad.startPoint = CGPoint(x: 0.5, y: 0.0)
-                grad.endPoint = CGPoint(x: 0.5, y: 1.0)
-                container.layer.addSublayer(grad)
             }
-            grad.frame = container.bounds
         } else {
             viewWithTag(highlightTag)?.removeFromSuperview()
         }
@@ -277,7 +272,6 @@ extension UIView {
         container.addSublayer(left)
         container.addSublayer(right)
         container.mask = mask
-        container.name = "rimLayer_container"
 
         // Insert just above existing sublayers that draw blur/tint/highlight
         layer.addSublayer(container)
@@ -336,5 +330,38 @@ extension UIView {
     @IBInspectable public var ibShadowOffsetHeight: CGFloat {
         get { layer.shadowOffset.height }
         set { layer.shadowOffset = CGSize(width: layer.shadowOffset.width, height: newValue) }
+    }
+}
+
+// MARK: - GradientHighlightView
+/// Private UIView subclass used by applyGlassEffect to host the top highlight gradient.
+/// Overrides layoutSubviews so the CAGradientLayer frame stays in sync with the view's
+/// bounds on every layout pass (rotation, dynamic type, split-screen, etc.).
+private final class GradientHighlightView: UIView {
+    private let gradientLayer = CAGradientLayer()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        setup()
+    }
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        setup()
+    }
+
+    private func setup() {
+        gradientLayer.startPoint = CGPoint(x: 0.5, y: 0.0)
+        gradientLayer.endPoint   = CGPoint(x: 0.5, y: 1.0)
+        layer.addSublayer(gradientLayer)
+    }
+
+    func updateColors(top: UIColor, bottom: UIColor) {
+        gradientLayer.colors = [top.cgColor, bottom.cgColor]
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        // Keep the gradient frame in sync with bounds on every layout pass
+        gradientLayer.frame = bounds
     }
 }

@@ -44,7 +44,8 @@ class DashboardLenderRequestViewController: UIViewController {
     // Buttons
     @IBOutlet weak var acceptButton: UIButton!   // CONNECT THIS IN IB
     @IBOutlet weak var denyButton: UIButton!
-    @IBOutlet weak var denybutton: UIButton!     // if this is a duplicate, keep it connected; else you can remove it
+    /// Legacy outlet — still wired in IB. To remove: disconnect it in IB first, then delete this line.
+    @IBOutlet weak var denybutton: UIButton?
 
     // Cache fetched deposit so we don’t refetch repeatedly
     private var depositAmount: Double?
@@ -355,7 +356,6 @@ class DashboardLenderRequestViewController: UIViewController {
         // Accept/Deny buttons visible only while pending
         acceptButton?.isHidden  = !isPending
         denyButton?.isHidden    = !isPending
-        denybutton?.isHidden    = !isPending
 
         // Status bar visible when decision has been made
         let showBar = !isPending
@@ -419,7 +419,13 @@ class DashboardLenderRequestViewController: UIViewController {
     private func loadDecisionTimestamp(requestId: String) -> Date? {
         let raw = UserDefaults.standard.double(forKey: decisionKey(for: requestId))
         guard raw > 0 else { return nil }
-        return Date(timeIntervalSince1970: raw)
+        let date = Date(timeIntervalSince1970: raw)
+        // If the window has already closed, clean up the stale key and return nil
+        if Date().timeIntervalSince(date) >= 24 * 60 * 60 {
+            UserDefaults.standard.removeObject(forKey: decisionKey(for: requestId))
+            return nil
+        }
+        return date
     }
 
     // MARK: - Owner name resolution
@@ -618,7 +624,6 @@ class DashboardLenderRequestViewController: UIViewController {
         view.isUserInteractionEnabled = enabled
         acceptButton?.alpha = enabled ? 1.0 : 0.6
         denyButton?.alpha = enabled ? 1.0 : 0.6
-        denybutton?.alpha = enabled ? 1.0 : 0.6
         changeStatusButton?.isEnabled = enabled
         changeStatusButton?.alpha = enabled ? 1.0 : 0.6
     }

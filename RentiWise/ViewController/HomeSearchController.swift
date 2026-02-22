@@ -200,6 +200,7 @@ final class HomeSearchController: NSObject {
                 let response = try await SupabaseManager.shared.client
                     .from("items")
                     .select()
+                    .eq("is_active", value: true)
                     .or("title.ilike.%\(escapeLike(trimmed))%,description.ilike.%\(escapeLike(trimmed))%")
                     .order("created_at", ascending: false)
                     .limit(25)
@@ -252,8 +253,12 @@ extension HomeSearchController: UISearchBarDelegate {
     }
 
     func searchBarTextDidEndEditing(_ searchBar: UISearchBar) {
-        // Keep results visible; if you prefer to hide, uncomment:
-        // results = []
+        // Delay clearing so a simultaneous cell tap (didSelectRowAt) can fire first.
+        // Without this, the view's tap gesture dismisses the keyboard, which immediately
+        // triggers this callback and reloads/hides the table before the selection lands.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+            self?.results = []
+        }
     }
 }
 
@@ -366,6 +371,13 @@ private final class ResultCell: UITableViewCell {
             price.topAnchor.constraint(equalTo: title.bottomAnchor, constant: 6),
             price.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -12)
         ])
+    }
+
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        thumb.image = nil
+        title.text = nil
+        price.text = nil
     }
 
     func configure(with item: Item, currencyFormatter: NumberFormatter) {

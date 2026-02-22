@@ -43,6 +43,15 @@ final class SupabaseManager {
 
     // MARK: - Small convenience helpers
 
+    /// Synchronous read — returns the cached user ID if a session is already loaded.
+    /// Use this in hot paths (e.g. cell configuration) to avoid unnecessary async hops.
+    /// Falls back to `nil` if no session is cached yet.
+    func currentUserIdSync() -> String? {
+        client.auth.currentUser?.id.uuidString
+    }
+
+    /// Async version — triggers a network refresh of the session if needed.
+    /// Prefer `currentUserIdSync()` when a session is already known to exist.
     func currentUserId() async -> String? {
         do {
             let session = try await client.auth.session

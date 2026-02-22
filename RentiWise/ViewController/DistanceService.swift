@@ -40,15 +40,20 @@ final class DistanceService {
 
     private init(client: SupabaseClient = SupabaseManager.shared.client) {
         self.client = client
+        // Count-based limit to cap the number of entries
         geocodeCache.countLimit = 256
         directionsCache.countLimit = 512
+        // Cost-based limit to cap total memory usage on low-end devices
+        geocodeCache.totalCostLimit = 4 * 1024 * 1024    // 4 MB
+        directionsCache.totalCostLimit = 2 * 1024 * 1024 // 2 MB
     }
 
     // MARK: - Public API
 
     /// Returns a formatted distance string like "2.3 km" or "850 m".
     /// Owner-level cache (item_id = null).
-    /// For progressive loading, optionally provide a callback to receive road distance update.
+    /// - Parameter progressiveUpdate: Optional closure called on the **Main thread** when
+    ///   a more accurate road distance becomes available after the initial straight-line estimate.
     func distanceText(for item: Item, progressiveUpdate: ((String) -> Void)? = nil) async -> String {
         // 0) Get viewer address
         let viewerAddressString = SavedAddressesStore.shared.getDefaultSelectedAddress()?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -73,10 +78,12 @@ final class DistanceService {
         // 2) Resolve owner coordinate (with wide fallbacks — never nil after this)
         let ownerCoord = await fetchOwnerCoordinate(ownerId: item.owner_id) ?? fallbackOwnerCoordinate
 
-        // 3) Resolve viewer coordinate (with wide fallbacks — never nil after this)
+        // 3) Resolve viewer coordinate — only persist THIS to the user coord cache
         var viewerCoord = await geocodeAddressString(viewerAddress)
         if viewerCoord == nil { viewerCoord = await geocodeAddressString(defaultViewerAddress) }
         let resolvedViewerCoord = viewerCoord ?? fallbackOwnerCoordinate
+        // Persist the viewer's resolved coordinate so future launches skip geocoding
+        saveUserCoordinates(resolvedViewerCoord, for: viewerAddress)
 
         // 4) INSTANT straight-line distance — guarantees we always return something
         let straight = resolvedViewerCoord.distance(from: ownerCoord)
@@ -245,29 +252,28 @@ final class DistanceService {
     }
 
     private func geocodeAddressString(_ s: String) async -> CLLocation? {
-        // 1) Check persistent cache first (FASTEST - skip geocoding entirely)
+        // 1) Check persistent cache first (FASTEST — only populated for the viewer's own address)
         if let cached = getCachedUserCoordinates(for: s) {
-            // Also populate in-memory cache for consistency
+            // Also warm the in-memory cache for consistency
             let key = normalizeAddressKey(s) as NSString
             geocodeCache.setObject(cached, forKey: key)
             return cached
         }
-        
+
         // 2) Check in-memory cache
         let key = normalizeAddressKey(s) as NSString
         if let cached = geocodeCache.object(forKey: key) {
-            // Save to persistent cache for next time
-            saveUserCoordinates(cached, for: s)
+            // Note: do NOT call saveUserCoordinates here — this may be an owner/city address
             return cached
         }
-        
-        // 3) Geocode (SLOW - only happens once per address)
+
+        // 3) Geocode (SLOW — only happens once per address)
         do {
             let placemarks = try await geocoder.geocodeAddressString(s)
             if let loc = placemarks.first?.location {
-                // Save to both caches
+                // Save to in-memory cache only; persistent user coord cache is written
+                // exclusively by distanceText after resolving the viewer's own address.
                 geocodeCache.setObject(loc, forKey: key)
-                saveUserCoordinates(loc, for: s)
                 return loc
             }
         } catch {
@@ -359,6 +365,9 @@ final class DistanceService {
         return nil
     }
 
+    /// Payload for inserting/updating a cached distance row.
+    /// `computed_at` is intentionally omitted — the DB column has a server-side
+    /// default of `now()`, so it is set automatically on every upsert.
     private struct UpsertPayload: Encodable {
         let viewer_user_id: String
         let owner_user_id: String
@@ -408,35 +417,4 @@ final class DistanceService {
         }
     }
 
-    // MARK: - Non-DB fallback (not logged in)
-
-    private func computeAndFormatWithoutDB(viewerAddressString: String, ownerId: String) async -> String? {
-        // Owner
-        var ownerCoord = await fetchOwnerCoordinate(ownerId: ownerId)
-        if ownerCoord == nil {
-            ownerCoord = fallbackOwnerCoordinate
-        }
-        let resolvedOwnerCoord = ownerCoord!
-
-        // Viewer
-        var viewerCoord = await geocodeAddressString(viewerAddressString)
-        if viewerCoord == nil {
-            viewerCoord = await geocodeAddressString(defaultViewerAddress)
-        }
-        if viewerCoord == nil {
-            viewerCoord = fallbackOwnerCoordinate
-        }
-        let resolvedViewerCoord = viewerCoord!
-
-        let memKey = directionsCacheKey(viewer: resolvedViewerCoord, owner: resolvedOwnerCoord, transport: transportType)
-        if let meters = directionsCache.object(forKey: memKey as NSString)?.doubleValue {
-            return formatDistance(meters: meters)
-        }
-        if let meters = await routeDistanceMeters(from: resolvedViewerCoord, to: resolvedOwnerCoord, transport: transportType) {
-            directionsCache.setObject(NSNumber(value: meters), forKey: memKey as NSString)
-            return formatDistance(meters: meters)
-        }
-        return formatDistance(meters: resolvedViewerCoord.distance(from: resolvedOwnerCoord))
-    }
 }
-

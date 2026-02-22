@@ -163,7 +163,7 @@ final class CategoryItemCell: UITableViewCell {
         if let avg = item.average_rating, let count = item.review_count, count > 0 {
             let value = String(format: "%.1f", avg)
             // Show only star + number (no “review(s)”)
-            applyYellowStarRatingWithCount(valueText: value, count: count)
+            applyYellowStarRating(valueText: value)
         } else {
             itemRating?.attributedText = nil
             itemRating?.text = "New"
@@ -286,32 +286,30 @@ final class CategoryItemCell: UITableViewCell {
                     .from("users")
                     .select("full_name")
                     .eq("id", value: ownerId)
-                    .single()
+                    .limit(1)
                     .execute()
 
-                if let data = response.data as? Data {
-                    let dto = try JSONDecoder().decode(NameDTO.self, from: data)
-                    let name = (dto.full_name?.isEmpty == false) ? dto.full_name! : "Owner"
-                    await apply(name: name)
+                let rows = try JSONDecoder().decode([NameDTO].self, from: response.data)
+                if let fullName = rows.first?.full_name, !fullName.isEmpty {
+                    await apply(name: fullName)
                     return
                 }
             } catch {
                 // continue to fallback
             }
 
-            // Fallback: profiles table (used elsewhere in your app)
+            // Fallback: profiles table
             do {
                 let response = try await SupabaseManager.shared.client
                     .from("profiles")
                     .select("full_name")
                     .eq("id", value: ownerId)
-                    .single()
+                    .limit(1)
                     .execute()
 
-                if let data = response.data as? Data {
-                    let dto = try JSONDecoder().decode(NameDTO.self, from: data)
-                    let name = (dto.full_name?.isEmpty == false) ? dto.full_name! : "Owner"
-                    await apply(name: name)
+                let rows = try JSONDecoder().decode([NameDTO].self, from: response.data)
+                if let fullName = rows.first?.full_name, !fullName.isEmpty {
+                    await apply(name: fullName)
                     return
                 }
             } catch {
@@ -346,11 +344,6 @@ final class CategoryItemCell: UITableViewCell {
         }
 
         itemRating?.attributedText = attr
-    }
-
-    private func applyYellowStarRatingWithCount(valueText: String, count: Int) {
-        // Updated: show only star + number (remove “review/reviews” suffix)
-        applyYellowStarRating(valueText: valueText)
     }
 }
 

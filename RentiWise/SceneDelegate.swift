@@ -32,10 +32,10 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // Configure selected state
         let selectedAttributes: [NSAttributedString.Key: Any] = [
             .font: UIFont.systemFont(ofSize: 10),
-            .foregroundColor: UIColor(red: 0x70/255, green: 0xA7/255, blue: 0xB4/255, alpha: 1.0) // Brand teal color
+            .foregroundColor: UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0) // Brand teal
         ]
         appearance.stackedLayoutAppearance.selected.titleTextAttributes = selectedAttributes
-        
+
         appearance.stackedLayoutAppearance.selected.iconColor = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1.0)
         appearance.stackedLayoutAppearance.normal.iconColor = UIColor.gray
         
@@ -66,21 +66,21 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
     
     // MARK: - Deep Link Handling
-    
+
     private func handleDeepLink(_ url: URL) {
         guard url.scheme == "rentiwise" else { return }
-        
+
         // Parse: rentiwise://item/{id}
         if url.host == "item",
            let itemId = url.pathComponents.dropFirst().first {
             openItem(itemId: itemId)
         }
     }
-    
+
     private func openItem(itemId: String) {
-        // Get the tab bar controller
-        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-              let window = windowScene.windows.first,
+        // Use self.window — it is bound to THIS scene by UIKit, not connectedScenes.first
+        // which could return a background scene on multi-scene iPads.
+        guard let window = self.window,
               let tabBar = window.rootViewController as? UITabBarController else {
             return
         }
@@ -103,8 +103,16 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
                     nav.pushViewController(vc, animated: true)
                 }
             } else {
-                // Item not found - show error or just stay on current screen
-                print("⚠️ Deep link: Item not found with ID: \(itemId)")
+                // Item not found — show a user-visible alert
+                await MainActor.run {
+                    let alert = UIAlertController(
+                        title: "Item Not Found",
+                        message: "The item you're looking for is no longer available.",
+                        preferredStyle: .alert
+                    )
+                    alert.addAction(UIAlertAction(title: "OK", style: .default))
+                    nav.topViewController?.present(alert, animated: true)
+                }
             }
         }
     }
@@ -115,12 +123,11 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
                 .from("items")
                 .select()
                 .eq("id", value: id)
-                .single()
+                .limit(1)
                 .execute()
-            
-            if let data = response.data as? Data {
-                return try JSONDecoder().decode(Item.self, from: data)
-            }
+
+            let rows = try JSONDecoder().decode([Item].self, from: response.data)
+            return rows.first
         } catch {
             print("❌ Deep link: Failed to fetch item: \(error)")
         }
