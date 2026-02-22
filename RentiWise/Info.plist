@@ -32,6 +32,16 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>We need access to your camera to take a photo of the returned item.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>RentiWise needs your location to show nearby items and calculate distances to help you find rentals close to you.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>We need access to your photo library to choose an image for your rental return.</string>
+	<key>SUPABASE_ANON_KEY</key>
+	<string>eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFzc3NobWNjZGtrdGZ4cXljdWZ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMyMjc4NDEsImV4cCI6MjA3ODgwMzg0MX0.x_WZdOdzs3F6juZBJx9tl3e7cM4ycCt__qadpqpxmaI</string>
+	<key>SUPABASE_URL</key>
+	<string>https://assshmccdkktfxqycufv.supabase.co</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -51,14 +61,7 @@
 			</array>
 		</dict>
 	</dict>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>RentiWise needs your location to show nearby items and calculate distances to help you find rentals close to you.</string>
 	<key>UIUserInterfaceStyle</key>
 	<string>Light</string>
-	<key>SUPABASE_URL</key>
-	<string>https://assshmccdkktfxqycufv.supabase.co</string>
-	<key>SUPABASE_ANON_KEY</key>
-	<string>eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFzc3NobWNjZGtrdGZ4cXljdWZ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMyMjc4NDEsImV4cCI6MjA3ODgwMzg0MX0.x_WZdOdzs3F6juZBJx9tl3e7cM4ycCt__qadpqpxmaI</string>
 </dict>
 </plist>
-

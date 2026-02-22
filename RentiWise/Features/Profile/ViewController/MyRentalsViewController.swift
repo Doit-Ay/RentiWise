@@ -60,6 +60,9 @@ final class MyRentalsViewController: UIViewController {
     // MARK: - Tab bar visibility management (for UI-hosted path)
     private var didHideTabBarManually = false
 
+    // MARK: - Cancel request observer
+    private var cancelObserver: NSObjectProtocol?
+
     override func viewDidLoad() {
         super.viewDidLoad()
 
@@ -95,6 +98,15 @@ final class MyRentalsViewController: UIViewController {
         setupSearchBar()
         setupTable()
 
+        // Listen for cancel request notifications (registered once, lives for VC lifetime)
+        cancelObserver = NotificationCenter.default.addObserver(
+            forName: BookingApprovalViewController.requestCancelledNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            self?.handleRequestCancelled(notification)
+        }
+
         Task { await loadData(showSpinner: true) }
     }
 
@@ -115,8 +127,28 @@ final class MyRentalsViewController: UIViewController {
         navigationController?.navigationBar.barTintColor = .systemGroupedBackground
         navigationController?.navigationBar.backgroundColor = .systemGroupedBackground
 
-        
         ensureTabBarHiddenIfNeeded()
+    }
+
+    deinit {
+        if let token = cancelObserver {
+            NotificationCenter.default.removeObserver(token)
+        }
+    }
+
+    // MARK: - Cancel request handler
+    private func handleRequestCancelled(_ notification: Notification) {
+        guard let requestId = notification.userInfo?["requestId"] as? String else { return }
+
+        // Remove from data sources
+        allRequests.removeAll { $0.id == requestId }
+
+        // Find the section index in visibleRequests before removing
+        if let sectionIndex = visibleRequests.firstIndex(where: { $0.id == requestId }) {
+            visibleRequests.remove(at: sectionIndex)
+            tableView.deleteSections(IndexSet(integer: sectionIndex), with: .fade)
+            updateEmptyStateIfNeeded()
+        }
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -366,6 +398,7 @@ final class MyRentalsViewController: UIViewController {
                 .from("requests")
                 .select(selectClause())
                 .eq("borrower_id", value: userId)
+                .neq("status", value: "cancelled")
                 .order("created_at", ascending: orderClauseAscending())
                 .execute()
 

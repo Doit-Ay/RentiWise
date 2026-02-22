@@ -21,6 +21,7 @@ class BookingApprovalViewController: UIViewController {
     }
 
     static let requestApprovedNotification = Notification.Name("BookingApprovalRequestApprovedNotification")
+    static let requestCancelledNotification = Notification.Name("BookingApprovalRequestCancelledNotification")
 
     // Inject the selected request from the caller (e.g., MyRentalsViewController)
     var request: RequestWithItem? {
@@ -180,6 +181,9 @@ class BookingApprovalViewController: UIViewController {
         return nf
     }()
 
+    // Track whether we've shown the extension accepted alert
+    private var hasShownExtensionAlert = false
+
     // Track whether we hid the tab bar so we can restore it
     private var didHideTabBarManually = false
 
@@ -237,6 +241,23 @@ class BookingApprovalViewController: UIViewController {
             $0?.layer.borderWidth = 0
             $0?.layer.cornerRadius = 8
             $0?.layer.masksToBounds = true
+        }
+
+        // Style Extend & Return buttons: no SF symbols, height 44, 18pt semibold
+        for btn in [extendButton, returnButton] {
+            guard let b = btn else { continue }
+            // Clear any UIButton.Configuration that overrides traditional APIs
+            b.configuration = nil
+            b.setImage(nil, for: .normal)
+            b.imageView?.image = nil
+            b.titleLabel?.font = .systemFont(ofSize: 18, weight: .semibold)
+            b.layer.cornerRadius = 8
+            b.layer.masksToBounds = true
+            // Remove any existing height constraints and add 44pt
+            for c in b.constraints where c.firstAttribute == .height {
+                c.isActive = false
+            }
+            b.heightAnchor.constraint(equalToConstant: 44).isActive = true
         }
 
         // Ensure owner image is circular
@@ -454,6 +475,20 @@ class BookingApprovalViewController: UIViewController {
                 currentExtensionRequestId = latestRequest.id
                 currentExtensionRequestStatus = latestRequest.status
                 print("[BookingApproval] Extension request status: \(latestRequest.status)")
+                
+                // Show notification to borrower if accepted
+                if latestRequest.status == "accepted" && self.mode == .myRentals && !self.hasShownExtensionAlert {
+                    self.hasShownExtensionAlert = true
+                    await MainActor.run {
+                        // The user wanted "Extension request from - borrower name accepted", but since the borrower is viewing this, they know they are the borrower.
+                        // However, we can use the owner name or just a generic message. Let's strictly follow "Extension request for - [Borrower Name] accepted" as requested.
+                        let borrowerName = UserDefaults.standard.string(forKey: "user_full_name") ?? "You"
+                        let msg = "Extension request for - \(borrowerName) accepted"
+                        let alert = UIAlertController(title: "Extension Accepted", message: msg, preferredStyle: .alert)
+                        alert.addAction(UIAlertAction(title: "OK", style: .default))
+                        self.present(alert, animated: true)
+                    }
+                }
             } else {
                 currentExtensionRequestId = nil
                 currentExtensionRequestStatus = nil
@@ -469,7 +504,7 @@ class BookingApprovalViewController: UIViewController {
         
         if let status = currentReturnRequestStatus {
             statusLabel.isHidden = false
-            styleStatusLabel(statusLabel, status: status)
+            styleStatusLabel(statusLabel, status: status, isExtension: false)
             
             // Disable button if pending, enable if rejected or no status
             if status == "pending" {
@@ -494,9 +529,17 @@ class BookingApprovalViewController: UIViewController {
     private func updateExtensionButtonState() {
         guard let statusLabel = extensionStatusLabel else { return }
         
+        // If the return is already accepted, extending is no longer allowed
+        if currentReturnRequestStatus == "accepted" {
+            extendButton?.isEnabled = false
+            extendButton?.alpha = 0.5
+            statusLabel.isHidden = true
+            return
+        }
+        
         if let status = currentExtensionRequestStatus {
             statusLabel.isHidden = false
-            styleStatusLabel(statusLabel, status: status)
+            styleStatusLabel(statusLabel, status: status, isExtension: true)
             
             // Disable button if pending, enable if rejected or no status
             if status == "pending" {
@@ -518,16 +561,21 @@ class BookingApprovalViewController: UIViewController {
         }
     }
     
-    private func styleStatusLabel(_ label: UILabel, status: String) {
+    private func styleStatusLabel(_ label: UILabel, status: String, isExtension: Bool = false) {
         label.font = .systemFont(ofSize: 13, weight: .medium)
         label.textAlignment = .center
+        label.numberOfLines = 0
         
         switch status.lowercased() {
         case "pending":
             label.text = "Status: Pending"
             label.textColor = .systemOrange
         case "accepted":
-            label.text = "Status: Accepted ✓"
+            if isExtension {
+                label.text = "Status: Request Accepted ✓"
+            } else {
+                label.text = "Status: Accepted\nDeposit Credited ✓"
+            }
             label.textColor = .systemGreen
         case "rejected":
             label.text = "Status: Rejected"
@@ -793,18 +841,23 @@ class BookingApprovalViewController: UIViewController {
     }
     
     @IBAction func returnItemButtonTapped(_ sender: UIButton) {
-        print("[BookingApproval] Return Item button tapped")
-        
         guard let req = request else {
             print("[BookingApproval] No request available")
             return
         }
-        
-        // Create and configure ReturnProofViewController
+
+        // If pending, this button acts as "Cancel Request"
+        if status == .pending {
+            print("[BookingApproval] Cancel Request button tapped")
+            cancelRequest()
+            return
+        }
+
+        // Otherwise (approved), open Return Proof flow
+        print("[BookingApproval] Return Item button tapped")
         let returnVC = ReturnProofViewController(nibName: "ReturnProofViewController", bundle: nil)
         returnVC.request = req
         
-        // Present as modal
         returnVC.modalPresentationStyle = .pageSheet
         if let sheet = returnVC.sheetPresentationController {
             sheet.detents = [.large()]
@@ -812,6 +865,76 @@ class BookingApprovalViewController: UIViewController {
         }
         
         present(returnVC, animated: true)
+    }
+
+    // MARK: - Cancel Request
+
+    private func cancelRequest() {
+        let alert = UIAlertController(
+            title: "Cancel Request",
+            message: "Are you sure you want to cancel this rental request?",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "No", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Yes, Cancel", style: .destructive) { [weak self] _ in
+            self?.performCancelRequest()
+        })
+        present(alert, animated: true)
+    }
+
+    private func performCancelRequest() {
+        guard let reqId = request?.id else { return }
+
+        Task { [weak self] in
+            guard let self = self else { return }
+            do {
+                _ = try await SupabaseManager.shared.client
+                    .from("requests")
+                    .update(["status": "cancelled"])
+                    .eq("id", value: reqId)
+                    .execute()
+
+                await MainActor.run {
+                    // Notify My Rentals to remove the card
+                    NotificationCenter.default.post(
+                        name: BookingApprovalViewController.requestCancelledNotification,
+                        object: nil,
+                        userInfo: ["requestId": reqId]
+                    )
+                    // Pop back
+                    self.navigationController?.popViewController(animated: true)
+                }
+            } catch {
+                await MainActor.run {
+                    let a = UIAlertController(title: "Error", message: error.localizedDescription, preferredStyle: .alert)
+                    a.addAction(UIAlertAction(title: "OK", style: .default))
+                    self.present(a, animated: true)
+                }
+            }
+        }
+    }
+
+    // MARK: - Button title based on request status
+
+    private func updateReturnButtonForRequestStatus() {
+        let returnTitle = status == .pending ? "Cancel Request" : "Return Item"
+        let extendTitle = "Extend Rental"
+
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: UIFont.systemFont(ofSize: 18, weight: .semibold)
+        ]
+
+        // Ensure no SF symbols and clear configuration to prevent overrides
+        for btn in [extendButton, returnButton] {
+            guard let b = btn else { continue }
+            b.configuration = nil
+            b.setImage(nil, for: .normal)
+            b.imageView?.image = nil
+            b.titleLabel?.font = .systemFont(ofSize: 18, weight: .semibold)
+        }
+
+        returnButton?.setAttributedTitle(NSAttributedString(string: returnTitle, attributes: attrs), for: .normal)
+        extendButton?.setAttributedTitle(NSAttributedString(string: extendTitle, attributes: attrs), for: .normal)
     }
     
     @IBAction func debugForceApprove(_ sender: Any) {
@@ -950,6 +1073,9 @@ class BookingApprovalViewController: UIViewController {
         if mode == .history {
             updatePaymentStatusLabel()
         }
+
+        // Update extend/return button titles based on current request status
+        updateReturnButtonForRequestStatus()
     }
 
     private func applyRequestToUI() {

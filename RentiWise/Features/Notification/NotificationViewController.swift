@@ -163,6 +163,7 @@ class NotificationViewController: UIViewController {
             let id: String
             let request_id: String
             let notes: String?
+            let proof_media: [String]?
             let created_at: String
             let is_read: Bool?
             let requests: RequestInfo
@@ -184,6 +185,7 @@ class NotificationViewController: UIViewController {
                 id,
                 request_id,
                 notes,
+                proof_media,
                 created_at,
                 is_read,
                 requests!inner(
@@ -205,13 +207,15 @@ class NotificationViewController: UIViewController {
             let message = ret.notes?.isEmpty == false ? 
                 "Item returned with notes" : 
                 "Item has been returned"
+                
+            let proofImage = ret.proof_media?.first ?? ret.requests.items.images.first
             
             return NotificationItem(
                 id: ret.id,
                 type: .returnRequest,
                 requestId: ret.request_id,
                 itemTitle: ret.requests.items.title,
-                itemImage: ret.requests.items.images.first,
+                itemImage: proofImage,
                 borrowerId: ret.requests.borrower_id,
                 message: message,
                 createdAt: date,
@@ -495,10 +499,23 @@ class NotificationCell: UITableViewCell {
     }
     
     private func loadImage(from path: String) async {
-        // Simple placeholder for now
-        // TODO: Implement image loading from Supabase storage or URL
-        itemImageView.image = UIImage(systemName: "photo")
-        itemImageView.tintColor = .tertiaryLabel
+        if let url = StorageURLBuilder.publicFileURL(for: path) {
+            await MainActor.run {
+                UIImageView.rw_loadImage(from: url) { [weak self] image in
+                    if let img = image {
+                        self?.itemImageView.image = img
+                    } else {
+                        self?.itemImageView.image = UIImage(systemName: "photo")
+                        self?.itemImageView.tintColor = .tertiaryLabel
+                    }
+                }
+            }
+        } else {
+            await MainActor.run {
+                itemImageView.image = UIImage(systemName: "photo")
+                itemImageView.tintColor = .tertiaryLabel
+            }
+        }
     }
 }
 

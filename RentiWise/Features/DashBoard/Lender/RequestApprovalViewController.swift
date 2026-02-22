@@ -66,12 +66,24 @@ class RequestApprovalViewController: UIViewController {
     private func setupUI() {
         title = "Review Request"
         
+        let tealColor = UIColor(red: 93/255.0, green: 169/255.0, blue: 182/255.0, alpha: 1.0)
+        
         // Style buttons
         acceptButton.layer.cornerRadius = 14
         acceptButton.layer.masksToBounds = true
+        acceptButton.backgroundColor = tealColor
+        acceptButton.setTitleColor(.white, for: .normal)
+        acceptButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
         
         rejectButton.layer.cornerRadius = 14
         rejectButton.layer.masksToBounds = true
+        rejectButton.backgroundColor = tealColor
+        rejectButton.setTitleColor(.white, for: .normal)
+        rejectButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
+        
+        // Ensure height is 44 if not already set in XIB (handled in XIB or constraints, but we can set constraints here if needed, or rely on intrinsic/XIB)
+        acceptButton.heightAnchor.constraint(equalToConstant: 44).isActive = true
+        rejectButton.heightAnchor.constraint(equalToConstant: 44).isActive = true
     }
     
     // MARK: - Configuration
@@ -111,6 +123,7 @@ class RequestApprovalViewController: UIViewController {
                     let id: String
                     let request_id: String
                     let notes: String?
+                    let proof_media: [String]?
                     let status: String
                     let created_at: String
                 }
@@ -120,6 +133,11 @@ class RequestApprovalViewController: UIViewController {
                 
                 await MainActor.run {
                     self.returnNotesLabel?.text = request.notes?.isEmpty == false ? request.notes : "No notes provided"
+                    
+                    if let proofMedia = request.proof_media, let firstImage = proofMedia.first {
+                        self.setupProofImageView(with: firstImage)
+                    }
+                    
                     self.updateUI()
                 }
             } else {
@@ -203,12 +221,12 @@ class RequestApprovalViewController: UIViewController {
         do {
             struct ItemData: Decodable {
                 let id: String
-                let name: String
+                let title: String
             }
             
             let response = try await SupabaseManager.shared.client
                 .from("items")
-                .select("id, name")
+                .select("id, title")
                 .eq("id", value: itemId)
                 .single()
                 .execute()
@@ -216,7 +234,7 @@ class RequestApprovalViewController: UIViewController {
             let item = try JSONDecoder().decode(ItemData.self, from: response.data)
             
             await MainActor.run {
-                self.itemNameLabel?.text = item.name
+                self.itemNameLabel?.text = item.title
             }
         } catch {
             print("[RequestApproval] Error fetching item: \(error)")
@@ -230,13 +248,12 @@ class RequestApprovalViewController: UIViewController {
         do {
             struct ProfileData: Decodable {
                 let id: String
-                let name: String?
-                let email: String?
+                let full_name: String?
             }
             
             let response = try await SupabaseManager.shared.client
-                .from("profiles")
-                .select("id, name, email")
+                .from("user_profiles")
+                .select("id, full_name")
                 .eq("id", value: borrowerId)
                 .single()
                 .execute()
@@ -244,7 +261,7 @@ class RequestApprovalViewController: UIViewController {
             let profile = try JSONDecoder().decode(ProfileData.self, from: response.data)
             
             await MainActor.run {
-                let displayName = profile.name ?? profile.email ?? "Unknown"
+                let displayName = profile.full_name ?? "Unknown"
                 self.borrowerNameLabel?.text = displayName
             }
         } catch {
@@ -268,12 +285,76 @@ class RequestApprovalViewController: UIViewController {
             extensionDetailsView?.isHidden = false
         }
     }
+    
+    private func setupProofImageView(with path: String) {
+        // Ensure we don't add multiple image views if this is called multiple times
+        let existingTag = 999
+        if returnDetailsView.viewWithTag(existingTag) != nil { return }
+        
+        // Create title label for the proof image
+        let proofTitleLabel = UILabel()
+        proofTitleLabel.text = "RETURN PROOF"
+        proofTitleLabel.font = .systemFont(ofSize: 11, weight: .medium)
+        proofTitleLabel.textColor = .secondaryLabel
+        proofTitleLabel.translatesAutoresizingMaskIntoConstraints = false
+        
+        let imageView = UIImageView()
+        imageView.tag = existingTag
+        imageView.contentMode = .scaleAspectFill
+        imageView.clipsToBounds = true
+        imageView.layer.cornerRadius = 8
+        imageView.backgroundColor = .tertiarySystemGroupedBackground
+        imageView.translatesAutoresizingMaskIntoConstraints = false
+        
+        returnDetailsView.addSubview(proofTitleLabel)
+        returnDetailsView.addSubview(imageView)
+        
+        NSLayoutConstraint.activate([
+            proofTitleLabel.topAnchor.constraint(equalTo: returnNotesLabel.bottomAnchor, constant: 16),
+            proofTitleLabel.leadingAnchor.constraint(equalTo: returnDetailsView.leadingAnchor, constant: 20),
+            proofTitleLabel.trailingAnchor.constraint(equalTo: returnDetailsView.trailingAnchor, constant: -20),
+            
+            imageView.topAnchor.constraint(equalTo: proofTitleLabel.bottomAnchor, constant: 8),
+            imageView.leadingAnchor.constraint(equalTo: returnDetailsView.leadingAnchor, constant: 20),
+            imageView.trailingAnchor.constraint(equalTo: returnDetailsView.trailingAnchor, constant: -20),
+            imageView.heightAnchor.constraint(equalToConstant: 200),
+            imageView.bottomAnchor.constraint(equalTo: returnDetailsView.bottomAnchor, constant: -16)
+        ])
+        
+        // Dynamically adjust height constraint of the stack wrapper to fit the new content
+        if let heightConstraint = returnDetailsView.constraints.first(where: { $0.firstAttribute == .height }) {
+            returnDetailsView.removeConstraint(heightConstraint)
+        }
+        
+        if let url = StorageURLBuilder.publicFileURL(for: path) {
+            UIImageView.rw_loadImage(from: url) { image in
+                if let img = image {
+                    imageView.image = img
+                } else {
+                    imageView.image = UIImage(systemName: "photo")
+                    imageView.tintColor = .tertiaryLabel
+                }
+            }
+        }
+    }
 
     
     // MARK: - Actions
     
     @IBAction func acceptButtonTapped(_ sender: UIButton) {
-        showConfirmation(title: "Accept Request?", message: "Are you sure you want to accept this request?") {
+        let borrowerName = borrowerNameLabel?.text ?? "borrower"
+        let title: String
+        let msg: String
+        
+        if requestType == .extensionRequest {
+            title = "Accept Extension?"
+            msg = "Are you sure you want to accept this extension by - \(borrowerName)?"
+        } else {
+            title = "Accept Return?"
+            msg = "Are you sure? Deposit will be released for - \(borrowerName)."
+        }
+        
+        showConfirmation(title: title, message: msg) {
             Task {
                 await self.updateRequestStatus(to: "accepted")
             }
@@ -281,7 +362,19 @@ class RequestApprovalViewController: UIViewController {
     }
     
     @IBAction func rejectButtonTapped(_ sender: UIButton) {
-        showConfirmation(title: "Reject Request?", message: "Are you sure you want to reject this request?") {
+        let borrowerName = borrowerNameLabel?.text ?? "borrower"
+        let title: String
+        let msg: String
+        
+        if requestType == .extensionRequest {
+            title = "Reject Extension?"
+            msg = "Are you sure you want to reject this extension by - \(borrowerName)?"
+        } else {
+            title = "Reject Return?"
+            msg = "Are you sure you want to reject this return by - \(borrowerName)?"
+        }
+        
+        showConfirmation(title: title, message: msg) {
             Task {
                 await self.updateRequestStatus(to: "rejected")
             }
@@ -299,6 +392,66 @@ class RequestApprovalViewController: UIViewController {
                 .update(["status": status])
                 .eq("id", value: requestId)
                 .execute()
+            
+            // If accepting a return request, also complete the main booking
+            if requestType == .returnRequest && status == "accepted" {
+                let _ = try await SupabaseManager.shared.client
+                    .from("requests")
+                    .update(["status": "completed"])
+                    .eq("id", value: bookingId)
+                    .execute()
+                print("[RequestApproval] Main request \(bookingId) marked as completed.")
+            }
+            
+            // If accepting an extension request, update the main booking end_date and total_price
+            if requestType == .extensionRequest && status == "accepted" {
+                struct ExtensionRequestData: Decodable {
+                    let new_end_date: String
+                    let additional_cost: Double
+                }
+                
+                // Fetch extension details needed for the update
+                let extResponse = try await SupabaseManager.shared.client
+                    .from("extension_requests")
+                    .select("new_end_date, additional_cost")
+                    .eq("id", value: requestId)
+                    .single()
+                    .execute()
+                    
+                let extData = try JSONDecoder().decode(ExtensionRequestData.self, from: extResponse.data)
+                
+                // Fetch the current booking to get the current total_price
+                struct BookingData: Decodable {
+                    let total_price: Double?
+                }
+                
+                let bookingResponse = try await SupabaseManager.shared.client
+                    .from("requests")
+                    .select("total_price")
+                    .eq("id", value: bookingId)
+                    .single()
+                    .execute()
+                    
+                let currentBooking = try JSONDecoder().decode(BookingData.self, from: bookingResponse.data)
+                let currentTotal = currentBooking.total_price ?? 0.0
+                let newTotal = currentTotal + extData.additional_cost
+                
+                struct MainRequestUpdate: Encodable {
+                    let end_date: String
+                    let total_price: Double
+                }
+                
+                let updateData = MainRequestUpdate(end_date: extData.new_end_date, total_price: newTotal)
+                
+                // Update main request
+                let _ = try await SupabaseManager.shared.client
+                    .from("requests")
+                    .update(updateData)
+                    .eq("id", value: bookingId)
+                    .execute()
+                    
+                print("[RequestApproval] Main request \(bookingId) extended to \(extData.new_end_date) with new total: \(newTotal).")
+            }
             
             await MainActor.run {
                 let message = status == "accepted" ? "Request has been accepted" : "Request has been rejected"

@@ -352,10 +352,12 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         reviewsTitleLabel?.text = "Reviews"
         
         // AUTO-DETECT OWNERSHIP: if the current user is the owner, switch to ownItem mode (case-insensitive)
+        // Also check if non-owner already has an active request for this item
         Task { [weak self] in
             guard let self = self else { return }
-            if let me = await SupabaseManager.shared.currentUserId(),
-               me.lowercased() == item.owner_id.lowercased() {
+            guard let me = await SupabaseManager.shared.currentUserId() else { return }
+
+            if me.lowercased() == item.owner_id.lowercased() {
                 await MainActor.run {
                     self.displayMode = .ownItem
                     self.setupNavBarForDisplayMode()
@@ -365,6 +367,8 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
                     self.displayMode = .normal
                     self.setupNavBarForDisplayMode()
                 }
+                // Check if borrower already has an active request for this item
+                await self.checkExistingRequestForItem(itemId: item.id, borrowerId: me)
             }
         }
 
@@ -1515,6 +1519,8 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
 
     @IBAction func didTapRentNow(_ sender: UIButton) {
         guard let item = selectedItem else { return }
+        // Prevent if already requested
+        guard sender.isEnabled else { return }
 
         let nibName = "RequestViewController"
         let requestVC: RequestViewController
@@ -1536,6 +1542,41 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
             let nav = UINavigationController(rootViewController: requestVC)
             nav.modalPresentationStyle = .fullScreen
             present(nav, animated: true)
+        }
+    }
+
+    // MARK: - Duplicate Request Check
+
+    private func checkExistingRequestForItem(itemId: String, borrowerId: String) async {
+        do {
+            struct RequestCount: Decodable {
+                let id: String
+            }
+            let response = try await SupabaseManager.shared.client
+                .from("requests")
+                .select("id")
+                .eq("item_id", value: itemId)
+                .eq("borrower_id", value: borrowerId)
+                .in("status", values: ["pending", "accepted"])
+                .limit(1)
+                .execute()
+
+            let rows = try JSONDecoder().decode([RequestCount].self, from: response.data)
+
+            if !rows.isEmpty {
+                await MainActor.run { [weak self] in
+                    guard let self = self else { return }
+                    self.bottomRentButton?.isEnabled = false
+                    self.bottomRentButton?.setTitle("Already Requested", for: .normal)
+                    self.bottomRentButton?.backgroundColor = .systemGray4
+                    self.bottomRentButton?.setTitleColor(.secondaryLabel, for: .normal)
+                    // Also disable the XIB outlet if it exists
+                    self.rentNowoutlet?.isEnabled = false
+                    self.rentNowoutlet?.setTitle("Already Requested", for: .normal)
+                }
+            }
+        } catch {
+            print("[ProductVC] Error checking existing request: \(error)")
         }
     }
     

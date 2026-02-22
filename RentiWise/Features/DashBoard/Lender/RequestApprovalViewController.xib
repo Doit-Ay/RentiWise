@@ -251,10 +251,10 @@
                     <rect key="frame" x="24" y="762" width="345" height="50"/>
                     <subviews>
                         <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="Reject-Btn">
-                            <rect key="frame" x="0.0" y="0.0" width="164.5" height="50"/>
-                            <color key="backgroundColor" systemColor="tertiarySystemGroupedBackgroundColor"/>
+                            <rect key="frame" x="0.0" y="0.0" width="164.5" height="44"/>
+                            <color key="backgroundColor" red="0.36470588240000001" green="0.66274509800000003" blue="0.71372549019999998" alpha="1" colorSpace="calibratedRGB"/>
                             <constraints>
-                                <constraint firstAttribute="height" constant="50" id="Reject-Height"/>
+                                <constraint firstAttribute="height" constant="44" id="Reject-Height"/>
                             </constraints>
                             <fontDescription key="fontDescription" type="system" weight="medium" pointSize="16"/>
                             <state key="normal" title="Reject">
@@ -270,10 +270,10 @@
                             </connections>
                         </button>
                         <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="Accept-Btn">
-                            <rect key="frame" x="180.5" y="0.0" width="164.5" height="50"/>
+                            <rect key="frame" x="180.5" y="0.0" width="164.5" height="44"/>
                             <color key="backgroundColor" red="0.36470588240000001" green="0.66274509800000003" blue="0.71372549019999998" alpha="1" colorSpace="calibratedRGB"/>
                             <constraints>
-                                <constraint firstAttribute="height" constant="50" id="Accept-Height"/>
+                                <constraint firstAttribute="height" constant="44" id="Accept-Height"/>
                             </constraints>
                             <fontDescription key="fontDescription" type="system" weight="semibold" pointSize="16"/>
                             <state key="normal" title="Accept">
@@ -290,7 +290,7 @@
                         </button>
                     </subviews>
                     <constraints>
-                        <constraint firstAttribute="height" constant="50" id="BtnStack-Height"/>
+                        <constraint firstAttribute="height" constant="44" id="BtnStack-Height"/>
                     </constraints>
                 </stackView>
             </subviews>
