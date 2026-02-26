@@ -8,15 +8,68 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     var window: UIWindow?
 
+    // Reference so we never double-present the overlay
+    private weak var noInternetVC: NoInternetViewController?
+    private var networkObserver: NSObjectProtocol?
+
     func scene(_ scene: UIScene,
                willConnectTo session: UISceneSession,
                options connectionOptions: UIScene.ConnectionOptions) {
-        // If you use a storyboard as Main Interface, you can leave this empty.
-        // If you build UI in code, set up window here.
-        
-        // Configure tab bar appearance to show titles
         configureTabBarAppearance()
+        startNetworkMonitoring()
     }
+
+    // MARK: - Network Monitoring
+
+    private func startNetworkMonitoring() {
+        NetworkMonitor.shared.startMonitoring()
+
+        // If we're already offline when the app launches, show immediately after
+        // a short delay (so the root VC has time to load).
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            if !NetworkMonitor.shared.isConnected {
+                self?.showNoInternetOverlay()
+            }
+        }
+
+        networkObserver = NotificationCenter.default.addObserver(
+            forName: NetworkMonitor.connectivityChangedNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let self else { return }
+            let connected = (notification.userInfo?["isConnected"] as? Bool) ?? true
+            if !connected {
+                self.showNoInternetOverlay()
+            }
+            // Dismissal is handled inside NoInternetViewController itself when it
+            // receives the "back online" notification — no action needed here.
+        }
+    }
+
+    private func showNoInternetOverlay() {
+        // Prevent duplicate overlays
+        guard noInternetVC == nil else { return }
+
+        let overlay = NoInternetViewController()
+        overlay.modalPresentationStyle = .overFullScreen
+        overlay.modalTransitionStyle   = .crossDissolve
+
+        // Find the topmost presented view controller to present over
+        guard let root = window?.rootViewController else { return }
+        var presenter: UIViewController = root
+        while let next = presenter.presentedViewController,
+              !(next is NoInternetViewController) {
+            presenter = next
+        }
+
+        // If presenter is already showing NoInternetVC, skip
+        guard !(presenter is NoInternetViewController) else { return }
+
+        presenter.present(overlay, animated: true)
+        noInternetVC = overlay
+    }
+
     
     private func configureTabBarAppearance() {
         let appearance = UITabBarAppearance()

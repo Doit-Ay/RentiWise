@@ -10,21 +10,25 @@ import UIKit
 /// Global navigation delegate that automatically hides the tab bar when pushing view controllers
 class TabBarNavigationDelegate: NSObject, UINavigationControllerDelegate {
     
-    func navigationController(_ navigationController: UINavigationController, 
-                            willShow viewController: UIViewController, 
-                            animated: Bool) {
-        
-        // Get the view controllers in the navigation stack
-        let viewControllers = navigationController.viewControllers
-        
-        // If this is the root view controller (only one in stack), show the tab bar
-        // Otherwise, hide it
-        if viewControllers.count <= 1 {
-            viewController.hidesBottomBarWhenPushed = false
-            navigationController.tabBarController?.tabBar.isHidden = false
-        } else {
-            viewController.hidesBottomBarWhenPushed = true
-            navigationController.tabBarController?.tabBar.isHidden = true
+    func navigationController(_ navigationController: UINavigationController,
+                               willShow viewController: UIViewController,
+                               animated: Bool) {
+
+        let isRoot = navigationController.viewControllers.count <= 1
+        let tabBar = navigationController.tabBarController?.tabBar
+        let shouldHide = !isRoot
+
+        // Only mutate isHidden when the value actually changes.
+        // Setting tabBar.isHidden unconditionally triggers a full-window layout pass
+        // on every transition, which blocks the push animation on the main thread.
+        if tabBar?.isHidden != shouldHide {
+            tabBar?.isHidden = shouldHide
+        }
+
+        // UIKit already handles hidesBottomBarWhenPushed natively,
+        // so only force the property when it needs correcting.
+        if viewController.hidesBottomBarWhenPushed != shouldHide {
+            viewController.hidesBottomBarWhenPushed = shouldHide
         }
     }
 }

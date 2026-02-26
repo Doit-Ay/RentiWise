@@ -14,6 +14,8 @@ class ExtendRentalViewController: UIViewController {
     
     var request: RequestWithItem?
     var originalEndDate: Date?
+    /// Called on the caller when a request is successfully submitted (before dismiss).
+    var onRequestSubmitted: (() -> Void)?
     private var newEndDate: Date?
     private var additionalDays: Int = 0
     private var additionalCost: Double = 0.0
@@ -169,6 +171,7 @@ class ExtendRentalViewController: UIViewController {
             
             await MainActor.run {
                 self.sendRequestButton.isEnabled = true
+                self.onRequestSubmitted?()   // notify BookingApprovalVC instantly
                 self.showAlert(title: "Success", message: "Extension request sent to owner") {
                     self.dismiss(animated: true)
                 }

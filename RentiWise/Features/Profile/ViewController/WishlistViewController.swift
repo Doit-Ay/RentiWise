@@ -31,6 +31,7 @@ class WishlistViewController: UITableViewController {
         
         tableView.register(WishlistCell.self, forCellReuseIdentifier: "WishlistCell")
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "Cell")
+        tableView.register(SkeletonTableViewCell.self, forCellReuseIdentifier: SkeletonTableViewCell.reuseID)
         tableView.backgroundColor = .systemGroupedBackground
         tableView.separatorStyle = .none
         
@@ -120,12 +121,20 @@ class WishlistViewController: UITableViewController {
     }
     
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        if isLoading { return 4 }
         if errorMessage != nil { return 1 }
         if items.isEmpty && !isLoading { return 1 } // Empty state
         return items.count
     }
     
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        if isLoading {
+            let cell = tableView.dequeueReusableCell(withIdentifier: SkeletonTableViewCell.reuseID, for: indexPath) as! SkeletonTableViewCell
+            cell.preservesSuperviewLayoutMargins = false
+            cell.layoutMargins = .zero
+            return cell
+        }
+
         if let errorMessage {
             let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
             cell.textLabel?.text = errorMessage
@@ -206,7 +215,7 @@ class WishlistViewController: UITableViewController {
     
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-        
+        guard !isLoading else { return }
         guard indexPath.row < items.count else { return }
         let item = items[indexPath.row]
         
@@ -225,6 +234,7 @@ class WishlistViewController: UITableViewController {
     }
     
     override func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
+        if isLoading { return 110 }
         if items.isEmpty && !isLoading && errorMessage == nil {
             return 350
         }

@@ -205,17 +205,18 @@ class NotificationViewController: UIViewController {
             let date = dateFormatter.date(from: ret.created_at) ?? Date()
             
             let message = ret.notes?.isEmpty == false ? 
-                "Item returned with notes" : 
-                "Item has been returned"
+                "Return request submitted with notes" : 
+                "Return request submitted"
                 
-            let proofImage = ret.proof_media?.first ?? ret.requests.items.images.first
+            // Always use item image for thumbnail (proof_media upload is not fully implemented)
+            let itemImage = ret.requests.items.images.first
             
             return NotificationItem(
                 id: ret.id,
                 type: .returnRequest,
                 requestId: ret.request_id,
                 itemTitle: ret.requests.items.title,
-                itemImage: proofImage,
+                itemImage: itemImage,
                 borrowerId: ret.requests.borrower_id,
                 message: message,
                 createdAt: date,
@@ -311,7 +312,7 @@ extension NotificationViewController: UITableViewDelegate {
 
     
     func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
-        return 90
+        return 110
     }
 }
 
@@ -364,6 +365,8 @@ class NotificationCell: UITableViewCell {
     private let timeLabel = UILabel()
     private let unreadIndicator = UIView()
     private let itemImageView = UIImageView()
+    private var imageLoadTask: URLSessionDataTask?
+    private var currentImageURL: String?  // track which URL this cell is loading
     
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
@@ -372,6 +375,17 @@ class NotificationCell: UITableViewCell {
     
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+    
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        imageLoadTask?.cancel()
+        imageLoadTask = nil
+        currentImageURL = nil
+        itemImageView.image = nil
+        titleLabel.text = nil
+        messageLabel.text = nil
+        timeLabel.text = nil
     }
     
     private func setupUI() {
@@ -488,33 +502,35 @@ class NotificationCell: UITableViewCell {
         // Unread indicator
         unreadIndicator.isHidden = notification.isRead
         
-        // Item image
-        if let imageUrl = notification.itemImage {
-            Task {
-                await loadImage(from: imageUrl)
-            }
-        } else {
-            itemImageView.image = nil
-        }
-    }
-    
-    private func loadImage(from path: String) async {
-        if let url = StorageURLBuilder.publicFileURL(for: path) {
-            await MainActor.run {
-                UIImageView.rw_loadImage(from: url) { [weak self] image in
-                    if let img = image {
-                        self?.itemImageView.image = img
-                    } else {
+        // Item image — use StorageURLBuilder to build the full URL
+        if let imagePath = notification.itemImage,
+           let url = StorageURLBuilder.publicFileURL(for: imagePath) {
+            let urlString = url.absoluteString
+            currentImageURL = urlString
+            imageLoadTask?.cancel()
+            let request = URLRequest(url: url, cachePolicy: .returnCacheDataElseLoad, timeoutInterval: 15)
+            imageLoadTask = URLSession.shared.dataTask(with: request) { [weak self] data, _, _ in
+                guard let data = data, let image = UIImage(data: data) else {
+                    DispatchQueue.main.async {
+                        guard self?.currentImageURL == urlString else { return }
                         self?.itemImageView.image = UIImage(systemName: "photo")
                         self?.itemImageView.tintColor = .tertiaryLabel
+                        self?.itemImageView.contentMode = .scaleAspectFit
                     }
+                    return
+                }
+                DispatchQueue.main.async {
+                    guard self?.currentImageURL == urlString else { return }
+                    self?.itemImageView.image = image
+                    self?.itemImageView.contentMode = .scaleAspectFill
                 }
             }
+            imageLoadTask?.resume()
         } else {
-            await MainActor.run {
-                itemImageView.image = UIImage(systemName: "photo")
-                itemImageView.tintColor = .tertiaryLabel
-            }
+            currentImageURL = nil
+            itemImageView.image = UIImage(systemName: "photo")
+            itemImageView.tintColor = .tertiaryLabel
+            itemImageView.contentMode = .scaleAspectFit
         }
     }
 }

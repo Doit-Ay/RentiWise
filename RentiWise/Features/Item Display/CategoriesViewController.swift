@@ -20,6 +20,12 @@ final class CategoriesViewController: UIViewController {
     // MARK: - Private state
     private var items: [Item] = []
     private var filteredItems: [Item] = []
+    private var isLoading = false {
+        didSet {
+            tableViewForItem?.reloadData()
+            if isLoading { tableViewForItem?.backgroundView?.isHidden = true }
+        }
+    }
     private var isFiltering: Bool {
         guard let text = categorySearchBar?.text?.trimmingCharacters(in: .whitespacesAndNewlines) else { return false }
         return !text.isEmpty
@@ -93,6 +99,9 @@ final class CategoriesViewController: UIViewController {
         // IMPORTANT: Do not register UITableViewCell.self for "ItemCell" anywhere,
         // or you will override the storyboard prototype cell.
 
+        // Register skeleton cell programmatically (no nib needed)
+        tableViewForItem?.register(SkeletonTableViewCell.self, forCellReuseIdentifier: SkeletonTableViewCell.reuseID)
+
         // Fetch items for the selected category
         Task { await loadItems() }
     }
@@ -146,19 +155,23 @@ final class CategoriesViewController: UIViewController {
     }
 
     private func loadItems() async {
+        isLoading = true
+        defer {
+            Task { @MainActor in
+                self.isLoading = false
+                self.showLoading(false)
+            }
+        }
         showLoading(true)
-        defer { showLoading(false) }
 
         do {
             let cat = category ?? ""
             let fetched = try await service.fetchItems(category: cat)
             self.items = fetched
-            // Re-apply any active filter
             applyFilter(text: categorySearchBar?.text)
             await MainActor.run { self.reloadUI() }
         } catch {
             await MainActor.run {
-                // Keep items as-is (likely empty) and update empty state too
                 self.reloadUI()
                 self.presentError(error.localizedDescription)
             }
@@ -266,11 +279,17 @@ extension CategoriesViewController: UITableViewDataSource {
     func numberOfSections(in tableView: UITableView) -> Int { 1 }
 
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        (isFiltering ? filteredItems : items).count
+        if isLoading { return 4 }
+        return (isFiltering ? filteredItems : items).count
     }
 
     func tableView(_ tableView: UITableView,
                    cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        if isLoading {
+            let cell = tableView.dequeueReusableCell(withIdentifier: SkeletonTableViewCell.reuseID, for: indexPath) as! SkeletonTableViewCell
+            cell.backgroundColor = .clear
+            return cell
+        }
 
         let data = isFiltering ? filteredItems : items
 
@@ -315,6 +334,7 @@ extension CategoriesViewController: UITableViewDelegate {
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
+        guard !isLoading else { return }
 
         let data = isFiltering ? filteredItems : items
         let selectedItem = data[indexPath.row]

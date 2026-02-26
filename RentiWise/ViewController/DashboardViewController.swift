@@ -74,6 +74,14 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
     // New: keep the full requests we fetched for history so we can open details
     private var ownerHistoryRequests: [RequestWithItem] = []
 
+    // Loading state — shows skeleton placeholders while fetching
+    private var isLoading: Bool = false {
+        didSet {
+            tableView.reloadData()
+            if isLoading { tableView.backgroundView = nil }
+        }
+    }
+
     private let currencyFormatter: NumberFormatter = {
         let f = NumberFormatter()
         f.numberStyle = .currency
@@ -88,12 +96,8 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
 
         title = "My Listings"
 
-        // Replace back button with a home icon that always goes to Home
-        navigationItem.hidesBackButton = true
-        let homeIcon = UIImage(systemName: "house.fill")
-        let homeBtn = UIBarButtonItem(image: homeIcon, style: .plain, target: self, action: #selector(didTapHome))
-        homeBtn.tintColor = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1.0)
-        navigationItem.leftBarButtonItem = homeBtn
+        // Show the standard back button (navigates back to the previous screen)
+        navigationItem.hidesBackButton = false
 
         setupNavigationFilterButton()
         setupTable()
@@ -139,6 +143,18 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
         super.viewWillAppear(animated)
         hidesBottomBarWhenPushed = true
         navigationController?.setNavigationBarHidden(false, animated: animated)
+
+        // Create an explicit custom back button — tintColor on the item itself
+        // is the most reliable way to control icon color regardless of appearance settings.
+        let brandTeal = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0)
+        let chevron = UIImage(systemName: "chevron.left")
+        let backBtn = UIBarButtonItem(image: chevron, style: .plain, target: self, action: #selector(backTapped))
+        backBtn.tintColor = brandTeal
+        navigationItem.leftBarButtonItem = backBtn
+    }
+
+    @objc private func backTapped() {
+        navigationController?.popViewController(animated: true)
     }
 
     override func viewDidLayoutSubviews() {
@@ -151,6 +167,23 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
         let item = UIBarButtonItem(image: symbol, style: .plain, target: self, action: #selector(didTapNavFilter))
         item.tintColor = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0) // brand teal
         navigationItem.rightBarButtonItem = item
+        
+        // Initial visibility
+        updateFilterButtonVisibility()
+    }
+
+    private func updateFilterButtonVisibility() {
+        let isHistorySegment = (roleSegmented.selectedSegmentIndex == Segment.history.rawValue)
+        navigationItem.rightBarButtonItem?.isHidden = !isHistorySegment
+        
+        // Disabling it entirely is safer in some iOS versions if isHidden acts up on BarButtonItems
+        if !isHistorySegment {
+            navigationItem.rightBarButtonItem?.tintColor = .clear
+            navigationItem.rightBarButtonItem?.isEnabled = false
+        } else {
+            navigationItem.rightBarButtonItem?.tintColor = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0)
+            navigationItem.rightBarButtonItem?.isEnabled = true
+        }
     }
 
     @objc private func didTapNavFilter() {
@@ -158,18 +191,84 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
     }
 
     private func presentFilterSheet() {
-        let ac = UIAlertController(title: "Filter", message: "Select a filter option", preferredStyle: .actionSheet)
-        ac.addAction(UIAlertAction(title: "Active", style: .default, handler: { _ in
-            // TODO: implement filter
-        }))
-        ac.addAction(UIAlertAction(title: "Inactive", style: .default, handler: { _ in
-            // TODO: implement filter
-        }))
-        ac.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        let ac = UIAlertController(title: "Filter History", message: "Select a status to filter by", preferredStyle: .actionSheet)
+        
+        let inProgressAction = UIAlertAction(title: "In Progress", style: .default) { [weak self] _ in
+            self?.activeHistoryFilter = .inProgress
+            self?.applyHistoryFilter()
+        }
+        let completedAction = UIAlertAction(title: "Completed", style: .default) { [weak self] _ in
+            self?.activeHistoryFilter = .completed
+            self?.applyHistoryFilter()
+        }
+        let cancelledAction = UIAlertAction(title: "Cancelled", style: .default) { [weak self] _ in
+            self?.activeHistoryFilter = .cancelled
+            self?.applyHistoryFilter()
+        }
+        let allAction = UIAlertAction(title: "All", style: .default) { [weak self] _ in
+            self?.activeHistoryFilter = .all
+            self?.applyHistoryFilter()
+        }
+        let cancelAction = UIAlertAction(title: "Cancel", style: .cancel)
+        
+        // Mark current filter
+        switch activeHistoryFilter {
+        case .inProgress: inProgressAction.setValue(true, forKey: "checked")
+        case .completed: completedAction.setValue(true, forKey: "checked")
+        case .cancelled: cancelledAction.setValue(true, forKey: "checked")
+        case .all: allAction.setValue(true, forKey: "checked")
+        }
+
+        ac.addAction(allAction)
+        ac.addAction(inProgressAction)
+        ac.addAction(completedAction)
+        ac.addAction(cancelledAction)
+        ac.addAction(cancelAction)
+        
         if let pop = ac.popoverPresentationController {
             pop.barButtonItem = navigationItem.rightBarButtonItem
         }
         present(ac, animated: true)
+    }
+
+    enum HistoryFilter {
+        case all, inProgress, completed, cancelled
+    }
+    private var activeHistoryFilter: HistoryFilter = .all
+
+    private func applyHistoryFilter() {
+        // We will re-run the mapping from ownerHistoryRequests to historyRows using the active filter.
+        let filteredRequests: [RequestWithItem]
+        
+        switch activeHistoryFilter {
+        case .inProgress:
+            // pending or accepted
+            filteredRequests = ownerHistoryRequests.filter { $0.status == "pending" || $0.status == "accepted" }
+        case .completed:
+            // completed or returned (based on application logic, completed is a terminal state)
+            filteredRequests = ownerHistoryRequests.filter { $0.status == "completed" || $0.status == "returned" }
+        case .cancelled:
+            filteredRequests = ownerHistoryRequests.filter { $0.status == "cancelled" || $0.status == "rejected" }
+        case .all:
+            filteredRequests = ownerHistoryRequests
+        }
+        
+        self.historyRows = filteredRequests.map { req in
+            let title = req.items?.title ?? req.item_id
+            let rate = req.items?.price_per_day ?? 0
+            let borrowerOrStatus = req.status.capitalized
+            let imagePath = req.items?.images.first
+            return HistoryRow(title: title, ratePerDay: rate, borrowerName: borrowerOrStatus, imagePath: imagePath)
+        }
+        
+        DispatchQueue.main.async {
+            self.tableView.reloadData()
+            if self.historyRows.isEmpty {
+                self.loadEmptyStateIfNeeded()
+            } else {
+                self.tableView.backgroundView = nil
+            }
+        }
     }
 
     // MARK: - Setup
@@ -191,6 +290,7 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
 
         tableView.register(UINib(nibName: "LenderListingTableViewCell", bundle: nil), forCellReuseIdentifier: "Listing")
         tableView.register(UINib(nibName: "LenderHistoryTableViewCell", bundle: nil), forCellReuseIdentifier: "History")
+        tableView.register(SkeletonTableViewCell.self, forCellReuseIdentifier: SkeletonTableViewCell.reuseID)
 
         contentContainer.addSubview(tableView)
         NSLayoutConstraint.activate([
@@ -215,9 +315,13 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
 
     // MARK: - Segment handling
     @objc func roleChanged(_ sender: UISegmentedControl) { segmentedChanged(sender) }
-    @objc private func segmentedChanged(_ sender: UISegmentedControl) { reloadForSelectedSegment() }
+    @objc private func segmentedChanged(_ sender: UISegmentedControl) { 
+        updateFilterButtonVisibility()
+        reloadForSelectedSegment() 
+    }
 
     private func reloadForSelectedSegment() {
+        updateFilterButtonVisibility()
         guard let segment = Segment(rawValue: roleSegmented.selectedSegmentIndex) else { return }
         switch segment {
         case .listing: Task { await loadMyItems() }
@@ -243,17 +347,18 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
     }
 
     private func loadMyItems() async {
+        await MainActor.run { self.isLoading = true }
+
         guard let userId = await SupabaseManager.shared.currentUserId() else {
             await MainActor.run {
+                self.isLoading = false
                 self.items = []
-                self.tableView.reloadData()
                 self.loadEmptyStateIfNeeded()
             }
             return
         }
 
         do {
-            // Use ItemsService to fetch enriched items then filter to owner
             let service = ItemsService()
             let allItems = try await service.fetchItems(category: "")
             let ownerItems = allItems
@@ -261,12 +366,14 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
                 .sorted { ($0.created_at ?? Date.distantPast) > ($1.created_at ?? Date.distantPast) }
 
             await MainActor.run {
+                self.isLoading = false
                 self.items = ownerItems
                 self.tableView.reloadData()
                 self.loadEmptyStateIfNeeded()
             }
         } catch {
             await MainActor.run {
+                self.isLoading = false
                 self.items = []
                 self.tableView.reloadData()
                 self.loadEmptyStateIfNeeded()
@@ -276,10 +383,9 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
 
     private func loadOwnerHistoryFromDB() async {
         await MainActor.run {
+            self.isLoading = true
             self.historyRows = []
             self.ownerHistoryRequests = []
-            self.tableView.reloadData()
-            self.loadEmptyStateIfNeeded()
         }
 
         guard let userId = await SupabaseManager.shared.currentUserId() else { return }
@@ -301,23 +407,14 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
 
             let requests = try JSONDecoder().decode([RequestWithItem].self, from: response.data)
 
-            // Map to the existing HistoryRow UI:
-            let mapped: [HistoryRow] = requests.map { req in
-                let title = req.items?.title ?? req.item_id
-                let rate = req.items?.price_per_day ?? 0
-                let borrowerOrStatus = req.status.capitalized
-                let imagePath = req.items?.images.first
-                return HistoryRow(title: title, ratePerDay: rate, borrowerName: borrowerOrStatus, imagePath: imagePath)
-            }
-
             await MainActor.run {
+                self.isLoading = false
                 self.ownerHistoryRequests = requests
-                self.historyRows = mapped
-                self.tableView.reloadData()
-                self.loadEmptyStateIfNeeded()
+                self.applyHistoryFilter() // Replaces manual `mapped` logic and respects active filter
             }
         } catch {
             await MainActor.run {
+                self.isLoading = false
                 self.historyRows = []
                 self.ownerHistoryRequests = []
                 self.tableView.reloadData()
@@ -328,7 +425,10 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
 }
 
 extension DashboardViewController: UITableViewDataSource {
+    private static let skeletonCount = 4
+
     func numberOfSections(in tableView: UITableView) -> Int {
+        if isLoading { return Self.skeletonCount }
         if Segment(rawValue: roleSegmented.selectedSegmentIndex) == .listing { return items.count }
         else { return historyRows.count }
     }
@@ -336,6 +436,12 @@ extension DashboardViewController: UITableViewDataSource {
 
     func tableView(_ tableView: UITableView,
                    cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        // Show skeleton placeholders while loading
+        if isLoading {
+            let cell = tableView.dequeueReusableCell(withIdentifier: SkeletonTableViewCell.reuseID, for: indexPath) as! SkeletonTableViewCell
+            return cell
+        }
+
         if Segment(rawValue: roleSegmented.selectedSegmentIndex) == .listing {
             guard let cell = tableView.dequeueReusableCell(withIdentifier: "Listing", for: indexPath) as? LenderListingTableViewCell else {
                 return UITableViewCell()
@@ -384,7 +490,7 @@ extension DashboardViewController: UITableViewDelegate {
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         defer { tableView.deselectRow(at: indexPath, animated: true) }
-
+        guard !isLoading else { return }
         guard let segment = Segment(rawValue: roleSegmented.selectedSegmentIndex) else { return }
 
         switch segment {

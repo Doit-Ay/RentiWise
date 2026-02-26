@@ -15,6 +15,8 @@ class ReturnProofViewController: UIViewController {
     // MARK: - Properties
     
     var request: RequestWithItem?
+    /// Called on the caller when a request is successfully submitted (before dismiss).
+    var onRequestSubmitted: (() -> Void)?
     private var proofMediaURLs: [URL] = []
     private var notes: String = ""
     
@@ -186,6 +188,7 @@ class ReturnProofViewController: UIViewController {
             
             await MainActor.run {
                 self.submitButton.isEnabled = true
+                self.onRequestSubmitted?()   // notify BookingApprovalVC instantly
                 self.showAlert(title: "Success", message: "Return request submitted successfully") {
                     self.dismiss(animated: true)
                 }

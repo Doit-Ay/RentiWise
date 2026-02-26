@@ -95,7 +95,7 @@ class AddItemPublishViewController: UIViewController {
             _ = item
             await MainActor.run {
                 self.hideLoader()
-                self.routeToDashboard()
+                self.routeToHome()
             }
         } catch {
             await MainActor.run {
@@ -118,7 +118,7 @@ class AddItemPublishViewController: UIViewController {
             _ = updated
             await MainActor.run {
                 self.hideLoader()
-                self.routeToDashboard()
+                self.routeToHome()
             }
         } catch {
             await MainActor.run {
@@ -159,55 +159,23 @@ class AddItemPublishViewController: UIViewController {
         }
     }
 
-    private func routeToDashboard() {
-        // Instantiate Dashboard from storyboard
-        let sb = UIStoryboard(name: "AppStarting", bundle: nil)
-        guard let dashboard = sb.instantiateViewController(withIdentifier: "DashboardListing") as? DashboardViewController else {
-            // Fallback: if Dashboard storyboard ID is missing, try to recover by dismissing/popping
-            if presentingViewController != nil || navigationController?.presentingViewController != nil {
-                dismiss(animated: true)
-            } else {
-                navigationController?.popToRootViewController(animated: true)
-            }
-            return
-        }
-
-        // Configure Dashboard to show Listing segment without tab bar
-        dashboard.title = "My Listings"
-        dashboard.initialSegment = 0 // Listing
-        dashboard.hidesBottomBarWhenPushed = true
-
-        // Prefer pushing onto an existing navigation controller so we get a back button and no tab bar.
+    private func routeToHome() {
+        // Pop to HomeViewController if it's already in the nav stack
         if let nav = navigationController {
-            nav.setNavigationBarHidden(false, animated: true)
-            nav.pushViewController(dashboard, animated: true)
-            return
-        }
-
-        // If we were presented modally inside a nav controller, push there
-        if let presentingNav = presentingViewController as? UINavigationController {
-            presentingNav.setNavigationBarHidden(false, animated: true)
-            presentingNav.pushViewController(dashboard, animated: true)
-            dismiss(animated: true)
-            return
-        }
-
-        // Try tab bar’s selected navigation controller if available
-        if let tab = (view.window?.rootViewController as? UITabBarController) ?? tabBarController,
-           let nav = tab.selectedViewController as? UINavigationController {
-            nav.setNavigationBarHidden(false, animated: true)
-            nav.pushViewController(dashboard, animated: true)
-            // If we’re in another stack, close ourselves if needed
-            if presentingViewController != nil {
-                dismiss(animated: true)
+            if let homeVC = nav.viewControllers.first(where: { $0 is HomeViewController }) {
+                nav.popToViewController(homeVC, animated: true)
+                return
             }
+            nav.popToRootViewController(animated: true)
             return
         }
-
-        // Final fallback: present inside a fresh navigation controller
-        let nav = UINavigationController(rootViewController: dashboard)
-        nav.modalPresentationStyle = .fullScreen
-        present(nav, animated: true)
+        // Switch to the Home tab if available
+        if let tab = tabBarController ?? (view.window?.rootViewController as? UITabBarController) {
+            tab.selectedIndex = 0
+            return
+        }
+        // Final fallback
+        dismiss(animated: true)
     }
 }
 

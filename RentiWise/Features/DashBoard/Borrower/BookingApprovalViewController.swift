@@ -13,6 +13,9 @@ class BookingApprovalViewController: UIViewController {
     enum RequestStatus {
         case approved
         case pending
+        case cancelled
+        case rejected
+        case completed
     }
 
     enum PresentationMode {
@@ -181,11 +184,14 @@ class BookingApprovalViewController: UIViewController {
         return nf
     }()
 
-    // Track whether we've shown the extension accepted alert
-    private var hasShownExtensionAlert = false
-
     // Track whether we hid the tab bar so we can restore it
     private var didHideTabBarManually = false
+
+    // Prevents re-running the full data load on every viewDidAppear.
+    private var hasLoadedInitialData = false
+
+    // Periodic refresh timer — polls for status changes while on screen
+    private var refreshTimer: Timer?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -342,17 +348,8 @@ class BookingApprovalViewController: UIViewController {
             }
         }
 
-        Task {
-            await refreshRequestFromDBIfPossible()
-            // Skip payment refresh in history mode for payment button/code, but we will still update label
-            if mode == .myRentals {
-                await refreshPaymentFromDB()
-            } else {
-                await refreshPaymentStatusForHistory()
-            }
-            // Fetch return/extend request statuses
-            await fetchRequestStatuses()
-        }
+        // NOTE: DB refresh tasks are started in viewDidAppear (after push animation completes)
+        // to avoid main-thread dispatches during the push transition causing animation jank.
 
     }
 
@@ -370,10 +367,68 @@ class BookingApprovalViewController: UIViewController {
             tab.tabBar.isHidden = true
             didHideTabBarManually = true
         }
+
+        // On subsequent appearances (e.g. returning from a modal or child VC),
+        // only refresh the request row and button statuses — skip the full reload.
+        guard !hasLoadedInitialData else {
+            Task { [weak self] in
+                await self?.refreshRequestFromDBIfPossible()
+                await self?.fetchRequestStatuses()
+            }
+            startRefreshTimer() // Restart polling when returning from a modal/child VC
+            return
+        }
+        hasLoadedInitialData = true
+
+        // Start ALL network-dependent data here — AFTER the push animation completes.
+        // applyRequestToUI() only sets lightweight UI (text/status) from already-loaded request.
+        // Everything requiring a network call is deferred to here.
+        Task { [weak self] in
+            guard let self, let req = self.request else { return }
+
+            // Refresh the request row itself first
+            await refreshRequestFromDBIfPossible()
+
+            // Load owner name/avatar and address in parallel
+            async let ownerTask: Void = {
+                let userIdToShow = (self.mode == .history) ? req.borrower_id : req.owner_id
+                await self.fetchAndDisplayOwnerUnified(for: userIdToShow)
+            }()
+            async let addressTask: Void = {
+                let userIdForAddress = (self.mode == .history) ? req.borrower_id : req.owner_id
+                await self.fetchAndDisplayAddress(for: userIdForAddress)
+            }()
+            async let amountsTask: Void = {
+                let amounts = await self.computeAmounts(for: req)
+                await MainActor.run {
+                    self.updateAmountLabels(rental: amounts.rentalFee, deposit: amounts.deposit, total: amounts.rentalFee + amounts.deposit)
+                }
+            }()
+            // Await all three parallel tasks
+            _ = await (ownerTask, addressTask, amountsTask)
+
+            // Then payment info and request statuses
+            if mode == .myRentals {
+                await refreshPaymentFromDB()
+            } else {
+                await refreshPaymentFromDBForHistory()
+                await refreshPaymentStatusForHistory()
+            }
+            await fetchRequestStatuses()
+
+            // Start periodic refresh after initial load completes
+            await MainActor.run {
+                self.startRefreshTimer()
+            }
+        }
     }
     
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+
+        // Stop periodic refresh when leaving the screen
+        refreshTimer?.invalidate()
+        refreshTimer = nil
 
         // Only restore the tab bar if this screen is actually leaving (popped/dismissed),
         // not when presenting another controller (like Chat) over it.
@@ -393,6 +448,30 @@ class BookingApprovalViewController: UIViewController {
     
     func setStatus(_ newStatus: RequestStatus) {
         self.status = newStatus
+    }
+
+    // MARK: - Periodic Refresh
+
+    private func startRefreshTimer() {
+        refreshTimer?.invalidate()
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in
+            self?.performPeriodicRefresh()
+        }
+    }
+
+    /// Lightweight refresh that polls DB for status changes while the screen is visible.
+    private func performPeriodicRefresh() {
+        Task { [weak self] in
+            guard let self else { return }
+            await self.refreshRequestFromDBIfPossible()
+            if self.mode == .myRentals {
+                await self.refreshPaymentFromDB()
+            } else {
+                await self.refreshPaymentFromDBForHistory()
+                await self.refreshPaymentStatusForHistory()
+            }
+            await self.fetchRequestStatuses()
+        }
     }
 
     func configureDates(startDate: Date?, pickupTime: Date?, returnTime: Date?) {
@@ -476,12 +555,11 @@ class BookingApprovalViewController: UIViewController {
                 currentExtensionRequestStatus = latestRequest.status
                 print("[BookingApproval] Extension request status: \(latestRequest.status)")
                 
-                // Show notification to borrower if accepted
-                if latestRequest.status == "accepted" && self.mode == .myRentals && !self.hasShownExtensionAlert {
-                    self.hasShownExtensionAlert = true
+                // Show notification to borrower if accepted — only once per extension request
+                let alertKey = "extensionAlertShown_\(latestRequest.id)"
+                if latestRequest.status == "accepted" && self.mode == .myRentals && !UserDefaults.standard.bool(forKey: alertKey) {
+                    UserDefaults.standard.set(true, forKey: alertKey)
                     await MainActor.run {
-                        // The user wanted "Extension request from - borrower name accepted", but since the borrower is viewing this, they know they are the borrower.
-                        // However, we can use the owner name or just a generic message. Let's strictly follow "Extension request for - [Borrower Name] accepted" as requested.
                         let borrowerName = UserDefaults.standard.string(forKey: "user_full_name") ?? "You"
                         let msg = "Extension request for - \(borrowerName) accepted"
                         let alert = UIAlertController(title: "Extension Accepted", message: msg, preferredStyle: .alert)
@@ -500,62 +578,114 @@ class BookingApprovalViewController: UIViewController {
     }
     
     private func updateReturnButtonState() {
-        guard let statusLabel = returnStatusLabel else { return }
+        guard status != .completed else { return }
+
+        // Clear any attributed title set in Storyboard so setTitle(_:for:) works
+        returnButton?.setAttributedTitle(nil, for: .normal)
+        returnButton?.setTitleColor(.white, for: .normal)
+        
+        let fallbackTitle = (self.status == .pending) ? "Cancel Request" : "Return Item"
+        
+        // CROSS-DISABLE: If an extension is pending, you cannot return yet
+        // (Once extension is accepted, both buttons re-enable so user can extend again or return)
+        if currentExtensionRequestStatus == "pending" {
+            returnButton?.setTitle(fallbackTitle, for: .normal)
+            returnButton?.isEnabled = false
+            returnButton?.alpha = 0.5
+            returnStatusLabel?.isHidden = true
+            return
+        }
         
         if let status = currentReturnRequestStatus {
-            statusLabel.isHidden = false
-            styleStatusLabel(statusLabel, status: status, isExtension: false)
+            returnStatusLabel?.isHidden = false
+            if let lbl = returnStatusLabel { styleStatusLabel(lbl, status: status, isExtension: false) }
             
-            // Disable button if pending, enable if rejected or no status
-            if status == "pending" {
-                returnButton?.isEnabled = false
-                returnButton?.alpha = 0.5
-            } else if status == "rejected" {
+            switch status {
+            case "pending":
+                returnButton?.setTitle("Cancel Return", for: .normal)
+                returnButton?.backgroundColor = .systemRed
                 returnButton?.isEnabled = true
                 returnButton?.alpha = 1.0
-            } else if status == "accepted" {
-                // Keep disabled if accepted (request completed)
-                returnButton?.isEnabled = false
-                returnButton?.alpha = 0.5
+            case "rejected":
+                returnButton?.setTitle(fallbackTitle, for: .normal)
+                returnButton?.backgroundColor = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1)
+                returnButton?.isEnabled = true
+                returnButton?.alpha = 1.0
+            case "accepted":
+                // Extension/return was accepted — re-enable so user can extend again or return
+                returnButton?.setTitle(fallbackTitle, for: .normal)
+                returnButton?.backgroundColor = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1)
+                returnButton?.isEnabled = true
+                returnButton?.alpha = 1.0
+            default:
+                returnButton?.setTitle(fallbackTitle, for: .normal)
+                returnButton?.isEnabled = true
+                returnButton?.alpha = 1.0
             }
         } else {
-            // No request exists, enable button
-            statusLabel.isHidden = true
+            returnStatusLabel?.isHidden = true
+            returnButton?.setTitle(fallbackTitle, for: .normal)
+            if self.status == .pending {
+                returnButton?.backgroundColor = .systemRed
+            } else {
+                returnButton?.backgroundColor = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1)
+            }
             returnButton?.isEnabled = true
             returnButton?.alpha = 1.0
         }
     }
     
     private func updateExtensionButtonState() {
-        guard let statusLabel = extensionStatusLabel else { return }
-        
-        // If the return is already accepted, extending is no longer allowed
-        if currentReturnRequestStatus == "accepted" {
+        guard status != .completed else { return }
+
+        // Clear any attributed title set in Storyboard so setTitle(_:for:) works
+        extendButton?.setAttributedTitle(nil, for: .normal)
+        extendButton?.setTitleColor(.white, for: .normal)
+
+        // CROSS-DISABLE: If return is pending, extending is not allowed
+        // (Once return is accepted, both buttons re-enable so user can extend again or return)
+        if currentReturnRequestStatus == "pending" {
+            extendButton?.setTitle("Extend Rental", for: .normal)
             extendButton?.isEnabled = false
             extendButton?.alpha = 0.5
-            statusLabel.isHidden = true
+            extensionStatusLabel?.isHidden = true
             return
         }
         
         if let status = currentExtensionRequestStatus {
-            statusLabel.isHidden = false
-            styleStatusLabel(statusLabel, status: status, isExtension: true)
+            extensionStatusLabel?.isHidden = false
+            if let lbl = extensionStatusLabel { styleStatusLabel(lbl, status: status, isExtension: true) }
             
-            // Disable button if pending, enable if rejected or no status
-            if status == "pending" {
-                extendButton?.isEnabled = false
-                extendButton?.alpha = 0.5
-            } else if status == "rejected" {
+            switch status {
+            case "pending":
+                // Button becomes "Cancel Extend"
+                extendButton?.setTitle("Cancel Extend", for: .normal)
+                extendButton?.backgroundColor = .systemRed
                 extendButton?.isEnabled = true
                 extendButton?.alpha = 1.0
-            } else if status == "accepted" {
-                // Keep disabled if accepted (request completed)
-                extendButton?.isEnabled = false
-                extendButton?.alpha = 0.5
+            case "rejected":
+                extendButton?.setTitle("Extend Rental", for: .normal)
+                extendButton?.backgroundColor = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1)
+                extendButton?.isEnabled = true
+                extendButton?.alpha = 1.0
+            case "accepted":
+                // Extension was accepted — re-enable so user can send another extend request
+                extendButton?.setTitle("Extend Rental", for: .normal)
+                extendButton?.backgroundColor = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1)
+                extendButton?.isEnabled = true
+                extendButton?.alpha = 1.0
+            default:
+                extendButton?.setTitle("Extend Rental", for: .normal)
+                extendButton?.isEnabled = true
+                extendButton?.alpha = 1.0
             }
         } else {
-            // No request exists, enable button
-            statusLabel.isHidden = true
+            // No request exists
+            extensionStatusLabel?.isHidden = true
+            extendButton?.setTitle("Extend Rental", for: .normal)
+            if let teal = extendButton?.backgroundColor, teal == .systemRed {
+                extendButton?.backgroundColor = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1)
+            }
             extendButton?.isEnabled = true
             extendButton?.alpha = 1.0
         }
@@ -813,24 +943,29 @@ class BookingApprovalViewController: UIViewController {
     }
     
     @IBAction func extendRentalButtonTapped(_ sender: UIButton) {
-        print("[BookingApproval] Extend Rental button tapped")
-        
-        guard let req = request else {
-            print("[BookingApproval] No request available")
+        // If button is in "Cancel Extend" mode (pending state)
+        if currentExtensionRequestStatus == "pending" {
+            cancelExtensionRequest()
             return
         }
+
+        guard let req = request else { return }
         
-        // Create and configure ExtendRentalViewController
         let extendVC = ExtendRentalViewController(nibName: "ExtendRentalViewController", bundle: nil)
         extendVC.request = req
-        
-        // Parse end date from request
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
         dateFormatter.timeZone = TimeZone(secondsFromGMT: 0)
         extendVC.originalEndDate = dateFormatter.date(from: req.end_date)
         
-        // Present as modal
+        // Instantly update button state when request is submitted
+        extendVC.onRequestSubmitted = { [weak self] in
+            guard let self else { return }
+            self.currentExtensionRequestStatus = "pending"
+            self.updateExtensionButtonState()
+            self.updateReturnButtonState() // Cross-disable the return button
+        }
+        
         extendVC.modalPresentationStyle = .pageSheet
         if let sheet = extendVC.sheetPresentationController {
             sheet.detents = [.large()]
@@ -841,22 +976,31 @@ class BookingApprovalViewController: UIViewController {
     }
     
     @IBAction func returnItemButtonTapped(_ sender: UIButton) {
-        guard let req = request else {
-            print("[BookingApproval] No request available")
+        guard let req = request else { return }
+
+        // If return is pending → act as "Cancel Return"
+        if currentReturnRequestStatus == "pending" {
+            cancelReturnRequest()
             return
         }
 
-        // If pending, this button acts as "Cancel Request"
+        // If main booking is still pending → it's the "Cancel Request" action
         if status == .pending {
-            print("[BookingApproval] Cancel Request button tapped")
             cancelRequest()
             return
         }
 
-        // Otherwise (approved), open Return Proof flow
-        print("[BookingApproval] Return Item button tapped")
+        // Approved: open Return Proof flow
         let returnVC = ReturnProofViewController(nibName: "ReturnProofViewController", bundle: nil)
         returnVC.request = req
+        
+        // Instantly update button state when request is submitted
+        returnVC.onRequestSubmitted = { [weak self] in
+            guard let self else { return }
+            self.currentReturnRequestStatus = "pending"
+            self.updateReturnButtonState()
+            self.updateExtensionButtonState() // Cross-disable the extend button
+        }
         
         returnVC.modalPresentationStyle = .pageSheet
         if let sheet = returnVC.sheetPresentationController {
@@ -895,14 +1039,18 @@ class BookingApprovalViewController: UIViewController {
                     .execute()
 
                 await MainActor.run {
-                    // Notify My Rentals to remove the card
+                    // Update local request status
+                    self.request?.status = "cancelled"
+
+                    // Update UI live — show cancelled state without navigating away
+                    self.setStatus(.cancelled)
+
+                    // Notify My Rentals to update the card status
                     NotificationCenter.default.post(
                         name: BookingApprovalViewController.requestCancelledNotification,
                         object: nil,
                         userInfo: ["requestId": reqId]
                     )
-                    // Pop back
-                    self.navigationController?.popViewController(animated: true)
                 }
             } catch {
                 await MainActor.run {
@@ -914,10 +1062,86 @@ class BookingApprovalViewController: UIViewController {
         }
     }
 
+    // MARK: - Cancel Extension / Return Requests (while pending)
+
+    private func cancelExtensionRequest() {
+        let alert = UIAlertController(
+            title: "Cancel Extension Request",
+            message: "Are you sure you want to cancel your extension request?",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "No", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Yes, Cancel", style: .destructive) { [weak self] _ in
+            guard let self, let rowId = self.currentExtensionRequestId else { return }
+            Task {
+                do {
+                    _ = try await SupabaseManager.shared.client
+                        .from("extension_requests")
+                        .delete()
+                        .eq("id", value: rowId)
+                        .execute()
+                    await MainActor.run {
+                        self.currentExtensionRequestId = nil
+                        self.currentExtensionRequestStatus = nil
+                        self.updateExtensionButtonState()
+                        self.updateReturnButtonState()
+                    }
+                } catch {
+                    await MainActor.run {
+                        let a = UIAlertController(title: "Error", message: error.localizedDescription, preferredStyle: .alert)
+                        a.addAction(UIAlertAction(title: "OK", style: .default))
+                        self.present(a, animated: true)
+                    }
+                }
+            }
+        })
+        present(alert, animated: true)
+    }
+
+    private func cancelReturnRequest() {
+        let alert = UIAlertController(
+            title: "Cancel Return Request",
+            message: "Are you sure you want to cancel your return request?",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "No", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Yes, Cancel", style: .destructive) { [weak self] _ in
+            guard let self, let rowId = self.currentReturnRequestId else { return }
+            Task {
+                do {
+                    _ = try await SupabaseManager.shared.client
+                        .from("return_requests")
+                        .delete()
+                        .eq("id", value: rowId)
+                        .execute()
+                    await MainActor.run {
+                        self.currentReturnRequestId = nil
+                        self.currentReturnRequestStatus = nil
+                        self.updateReturnButtonState()
+                        self.updateExtensionButtonState()
+                    }
+                } catch {
+                    await MainActor.run {
+                        let a = UIAlertController(title: "Error", message: error.localizedDescription, preferredStyle: .alert)
+                        a.addAction(UIAlertAction(title: "OK", style: .default))
+                        self.present(a, animated: true)
+                    }
+                }
+            }
+        })
+        present(alert, animated: true)
+    }
+
     // MARK: - Button title based on request status
 
     private func updateReturnButtonForRequestStatus() {
-        let returnTitle = status == .pending ? "Cancel Request" : "Return Item"
+        if status == .cancelled || status == .rejected || status == .completed {
+            extendReturnButtonsStack?.isHidden = true
+            return
+        }
+        
+        let isPrePaymentPending = (status == .pending)
+        let returnTitle = isPrePaymentPending ? "Cancel Request" : "Return Item"
         let extendTitle = "Extend Rental"
 
         let attrs: [NSAttributedString.Key: Any] = [
@@ -935,6 +1159,15 @@ class BookingApprovalViewController: UIViewController {
 
         returnButton?.setAttributedTitle(NSAttributedString(string: returnTitle, attributes: attrs), for: .normal)
         extendButton?.setAttributedTitle(NSAttributedString(string: extendTitle, attributes: attrs), for: .normal)
+        
+        // Hide Extend Rental if we are pending (before payment)
+        if isPrePaymentPending {
+            extendButton?.isHidden = true
+            returnButton?.backgroundColor = .systemRed // visually communicate cancellation
+        } else {
+            extendButton?.isHidden = false
+            returnButton?.backgroundColor = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1) // restore standard teal
+        }
     }
     
     @IBAction func debugForceApprove(_ sender: Any) {
@@ -944,6 +1177,8 @@ class BookingApprovalViewController: UIViewController {
 
     
     deinit {
+        refreshTimer?.invalidate()
+        refreshTimer = nil
         NotificationCenter.default.removeObserver(self, name: BookingApprovalViewController.requestApprovedNotification, object: nil)
     }
 
@@ -956,20 +1191,22 @@ class BookingApprovalViewController: UIViewController {
         paymentButton.isHidden = hidePayment
         paymentButton.isEnabled = hidePayment ? false : paymentButton.isEnabled
 
-        // Code section visibility depends on payment status, not mode
-        // Don't force hide in history - let updateStatusUI() control it based on payment
-        
-        // Payment status label visibility
-        paymentStatus?.isHidden = (mode == .myRentals)
-        
+        // Payment status label visibility — show in history, and also for cancelled/rejected in my rentals
+        if mode == .myRentals {
+            paymentStatus?.isHidden = (status != .cancelled && status != .rejected && status != .completed)
+        } else {
+            paymentStatus?.isHidden = false
+        }
+
         // Hide Extend and Return buttons for owners (only show to borrowers)
         let hideExtendReturnButtons = (mode == .history)
         extendReturnButtonsStack?.isHidden = hideExtendReturnButtons
 
         // Update UI based on current payment and approval status
         updateStatusUI()
+        // Note: do NOT call layoutIfNeeded() here — it forces a
+        // synchronous layout pass on the main thread during the push animation.
         view.setNeedsLayout()
-        view.layoutIfNeeded()
     }
 
     private func updateDatesUI() {
@@ -1017,9 +1254,15 @@ class BookingApprovalViewController: UIViewController {
     }
 
     private func updateStatusUI() {
+        let tealColor = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1)
+
+        // circ2 is the teal circle behind the icon — always teal
+        circ2?.backgroundColor = tealColor
+
         switch status {
         case .approved:
             approvedpending.text = "Approved"
+            approvedpending.textColor = .label
             tickimage.image = UIImage(systemName: "checkmark.circle")
             tickimage.tintColor = .white
             // In history mode, keep payment disabled/hidden regardless
@@ -1029,10 +1272,50 @@ class BookingApprovalViewController: UIViewController {
             }
         case .pending:
             approvedpending.text = "Pending"
+            approvedpending.textColor = .label
             tickimage.image = UIImage(systemName: "questionmark.circle.dashed")
             tickimage.tintColor = .white
             paymentButton.isEnabled = false
             paymentButton.alpha = 0.5
+        case .cancelled:
+            approvedpending.text = "Cancelled"
+            approvedpending.textColor = .label
+            tickimage.image = UIImage(systemName: "xmark.circle.fill")
+            tickimage.tintColor = .white
+            // Hide payment and action buttons
+            paymentButton.isHidden = true
+            extendReturnButtonsStack?.isHidden = true
+            returnStatusLabel?.isHidden = true
+            extensionStatusLabel?.isHidden = true
+            // Show "No Payment" for cancelled items
+            paymentStatus?.text = "No Payment"
+            paymentStatus?.textColor = .secondaryLabel
+            paymentStatus?.isHidden = false
+        case .rejected:
+            approvedpending.text = "Rejected"
+            approvedpending.textColor = .label
+            tickimage.image = UIImage(systemName: "xmark.circle.fill")
+            tickimage.tintColor = .white
+            // Hide payment and action buttons
+            paymentButton.isHidden = true
+            extendReturnButtonsStack?.isHidden = true
+            returnStatusLabel?.isHidden = true
+            extensionStatusLabel?.isHidden = true
+            // Show "No Payment" for rejected items
+            paymentStatus?.text = "No Payment"
+            paymentStatus?.textColor = .secondaryLabel
+            paymentStatus?.isHidden = false
+        case .completed:
+            approvedpending.text = "Completed"
+            approvedpending.textColor = .label
+            tickimage.image = UIImage(systemName: "checkmark.seal.fill")
+            tickimage.tintColor = .white
+            circ2?.backgroundColor = tealColor
+            // Hide payment and action buttons (rental is done)
+            paymentButton.isHidden = true
+            extendReturnButtonsStack?.isHidden = true
+            returnStatusLabel?.isHidden = true
+            extensionStatusLabel?.isHidden = true
         }
 
         tickimage.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 22, weight: .regular)
@@ -1041,7 +1324,7 @@ class BookingApprovalViewController: UIViewController {
         // Show/hide View Code container depending on DB payment status
         // Show in BOTH myRentals and history modes when payment is completed
         // (Borrower needs code to show owner, Owner needs code to verify)
-        let shouldShowCode = hasCompletedPayment
+        let shouldShowCode = hasCompletedPayment && (status != .cancelled && status != .rejected && status != .completed)
         viewCodeUIView.isHidden = !shouldShowCode
         if shouldShowCode {
             viewCodeHeight?.constant = collapsedViewCodeHeight
@@ -1052,7 +1335,7 @@ class BookingApprovalViewController: UIViewController {
         }
 
         // Button title from payment state (only applies in myRentals mode where button is visible)
-        if mode == .myRentals {
+        if mode == .myRentals && status != .cancelled && status != .rejected {
             if hasCompletedPayment {
                 paymentButton.setTitle("Payment Successful", for: .normal)
                 paymentButton.setTitleColor(.black, for: .normal)
@@ -1069,10 +1352,12 @@ class BookingApprovalViewController: UIViewController {
         }
 
         // Update payment status label visibility/text per mode
-        paymentStatus?.isHidden = (mode == .myRentals)
-        if mode == .history {
-            updatePaymentStatusLabel()
+        if mode == .myRentals {
+            paymentStatus?.isHidden = (status != .cancelled && status != .rejected && status != .completed)
+        } else {
+            paymentStatus?.isHidden = false
         }
+        updatePaymentStatusLabel()
 
         // Update extend/return button titles based on current request status
         updateReturnButtonForRequestStatus()
@@ -1085,6 +1370,12 @@ class BookingApprovalViewController: UIViewController {
         let s = req.status.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if s == "accepted" || s == "approved" {
             setStatus(.approved)
+        } else if s == "cancelled" {
+            setStatus(.cancelled)
+        } else if s == "rejected" {
+            setStatus(.rejected)
+        } else if s == "completed" {
+            setStatus(.completed)
         } else {
             setStatus(.pending)
         }
@@ -1118,7 +1409,7 @@ class BookingApprovalViewController: UIViewController {
         self.pickupTime = pTime
         updateDatesUI()
 
-        // Title/image
+        // Title/image — lightweight, fine to do synchronously
         nameofitemLabel?.text = req.items?.title ?? req.item_id
         if let path = req.items?.images.first,
            let url = StorageURLBuilder.publicFileURL(for: path) {
@@ -1142,45 +1433,8 @@ class BookingApprovalViewController: UIViewController {
             categoryitemLabel?.text = ""
         }
 
-        // Name/avatar:
-        // - My Rentals: show the owner (item owner)
-        // - History: show the borrower (person who wants the item)
-        Task { [weak self] in
-            guard let self = self else { return }
-            let userIdToShowName = (self.mode == .history) ? req.borrower_id : req.owner_id
-            await self.fetchAndDisplayOwnerUnified(for: userIdToShowName)
-        }
-
-        // Address:
-        // - My Rentals: show owner address
-        // - History: show borrower address (person who wants the item)
-        Task { [weak self] in
-            guard let self = self else { return }
-            let userIdForAddress = (self.mode == .history) ? req.borrower_id : req.owner_id
-            await self.fetchAndDisplayAddress(for: userIdForAddress)
-        }
-
-        // Update amount labels for the current request
-        Task { [weak self] in
-            guard let self = self, let req = self.request else { return }
-            let amounts = await self.computeAmounts(for: req)
-            await MainActor.run {
-                self.updateAmountLabels(rental: amounts.rentalFee, deposit: amounts.deposit, total: amounts.rentalFee + amounts.deposit)
-            }
-        }
-
-        // Refresh payment data for both modes
-        // In myRentals: full payment refresh with code
-        // In history: fetch payment to show code and status label
-        if mode == .myRentals {
-            Task { await self.refreshPaymentFromDB() }
-        } else {
-            // In history mode, also fetch the payment to display the code
-            Task { 
-                await self.refreshPaymentFromDBForHistory()
-                await self.refreshPaymentStatusForHistory() 
-            }
-        }
+        // Network-dependent data (owner info, address, amounts, payment) is loaded
+        // in viewDidAppear so it doesn't block/slow the push animation.
     }
 
     private func selectClause() -> String {
@@ -1471,13 +1725,13 @@ class BookingApprovalViewController: UIViewController {
                     self.paymentStatus?.text = "No Payment"
                     self.paymentStatus?.textColor = .secondaryLabel
                 }
-                self.paymentStatus?.isHidden = (self.mode == .myRentals)
+                self.paymentStatus?.isHidden = (self.mode == .myRentals && self.status != .cancelled && self.status != .rejected && self.status != .completed)
             }
         } catch {
             await MainActor.run {
                 self.paymentStatus?.text = "No Payment"
                 self.paymentStatus?.textColor = .secondaryLabel
-                self.paymentStatus?.isHidden = (self.mode == .myRentals)
+                self.paymentStatus?.isHidden = (self.mode == .myRentals && self.status != .cancelled && self.status != .rejected && self.status != .completed)
             }
         }
     }
@@ -1764,7 +2018,7 @@ class BookingApprovalViewController: UIViewController {
     // MARK: - Payment status label helper
 
     private func updatePaymentStatusLabel() {
-        guard mode == .history else {
+        guard mode == .history || status == .cancelled || status == .rejected || status == .completed else {
             paymentStatus?.isHidden = true
             return
         }

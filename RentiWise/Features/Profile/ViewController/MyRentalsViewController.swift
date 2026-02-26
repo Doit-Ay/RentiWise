@@ -9,6 +9,13 @@ import Supabase
 
 final class MyRentalsViewController: UIViewController {
 
+    // Cache NIB availability once at class load — avoids a disk read on every cell tap
+    private static let bookingApprovalNibName: String = {
+        let name = "BookingApprovalViewController"
+        return (Bundle.main.path(forResource: name, ofType: "nib") != nil ||
+                Bundle.main.path(forResource: name, ofType: "xib") != nil) ? name : ""
+    }()
+
     // MARK: - UI
     private let tableView = UITableView(frame: .zero, style: .plain)
     private let refresh = UIRefreshControl()
@@ -59,6 +66,17 @@ final class MyRentalsViewController: UIViewController {
 
     // MARK: - Tab bar visibility management (for UI-hosted path)
     private var didHideTabBarManually = false
+
+    // Prevents double-push; cleared in viewDidAppear after the push completes.
+    private var isNavigating = false
+
+    // Loading state — shows skeleton placeholders while fetching
+    private var isLoading = false {
+        didSet {
+            tableView.reloadData()
+            if isLoading { tableView.backgroundView = nil }
+        }
+    }
 
     // MARK: - Cancel request observer
     private var cancelObserver: NSObjectProtocol?
@@ -130,6 +148,12 @@ final class MyRentalsViewController: UIViewController {
         ensureTabBarHiddenIfNeeded()
     }
 
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        // Allow tapping another item now that the push/pop transition is done.
+        isNavigating = false
+    }
+
     deinit {
         if let token = cancelObserver {
             NotificationCenter.default.removeObserver(token)
@@ -140,14 +164,20 @@ final class MyRentalsViewController: UIViewController {
     private func handleRequestCancelled(_ notification: Notification) {
         guard let requestId = notification.userInfo?["requestId"] as? String else { return }
 
-        // Remove from data sources
-        allRequests.removeAll { $0.id == requestId }
+        // Update in allRequests
+        if let index = allRequests.firstIndex(where: { $0.id == requestId }) {
+            var updatedRequest = allRequests[index]
+            updatedRequest.status = "cancelled"
+            allRequests[index] = updatedRequest
+        }
 
-        // Find the section index in visibleRequests before removing
+        // Update in visibleRequests and reload section
         if let sectionIndex = visibleRequests.firstIndex(where: { $0.id == requestId }) {
-            visibleRequests.remove(at: sectionIndex)
-            tableView.deleteSections(IndexSet(integer: sectionIndex), with: .fade)
-            updateEmptyStateIfNeeded()
+            var updatedVisibleRequest = visibleRequests[sectionIndex]
+            updatedVisibleRequest.status = "cancelled"
+            visibleRequests[sectionIndex] = updatedVisibleRequest
+            
+            tableView.reloadSections(IndexSet(integer: sectionIndex), with: .automatic)
         }
     }
 
@@ -242,6 +272,7 @@ final class MyRentalsViewController: UIViewController {
         tableView.estimatedSectionFooterHeight = 0
 
         tableView.register(UINib(nibName: "BorrowerTableViewCell", bundle: nil), forCellReuseIdentifier: "Borrower")
+        tableView.register(SkeletonTableViewCell.self, forCellReuseIdentifier: SkeletonTableViewCell.reuseID)
 
         tableView.dataSource = self
         tableView.delegate = self
@@ -376,11 +407,15 @@ final class MyRentalsViewController: UIViewController {
     private func orderClauseAscending() -> Bool { false }
 
     private func loadData(showSpinner: Bool) async {
-        if showSpinner { showLoadingInNav(true) }
+        if showSpinner {
+            showLoadingInNav(true)
+            isLoading = true
+        }
         defer {
             Task { @MainActor in
                 self.showLoadingInNav(false)
                 self.refresh.endRefreshing()
+                self.isLoading = false
             }
         }
 
@@ -398,7 +433,6 @@ final class MyRentalsViewController: UIViewController {
                 .from("requests")
                 .select(selectClause())
                 .eq("borrower_id", value: userId)
-                .neq("status", value: "cancelled")
                 .order("created_at", ascending: orderClauseAscending())
                 .execute()
 
@@ -458,11 +492,16 @@ final class MyRentalsViewController: UIViewController {
 
 // MARK: - UITableViewDataSource
 extension MyRentalsViewController: UITableViewDataSource {
-    func numberOfSections(in tableView: UITableView) -> Int { visibleRequests.count }
+    func numberOfSections(in tableView: UITableView) -> Int {
+        isLoading ? 4 : visibleRequests.count
+    }
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { 1 }
 
     func tableView(_ tableView: UITableView,
                    cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        if isLoading {
+            return tableView.dequeueReusableCell(withIdentifier: SkeletonTableViewCell.reuseID, for: indexPath) as! SkeletonTableViewCell
+        }
         let req = visibleRequests[indexPath.section]
         let cell = tableView.dequeueReusableCell(withIdentifier: "Borrower", for: indexPath) as! BorrowerTableViewCell
         cell.configure(with: req, currencyFormatter: currencyFormatter)
@@ -483,30 +522,23 @@ extension MyRentalsViewController: UITableViewDelegate {
     }
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        guard !isNavigating, !isLoading else { return }
+
+        isNavigating = true
         tableView.deselectRow(at: indexPath, animated: true)
 
-        let nibName = "BookingApprovalViewController"
-        let bookingVC: BookingApprovalViewController
-        if Bundle.main.path(forResource: nibName, ofType: "nib") != nil ||
-            Bundle.main.path(forResource: "BookingApprovalViewController", ofType: "xib") != nil {
-            bookingVC = BookingApprovalViewController(nibName: nibName, bundle: nil)
-        } else {
-            bookingVC = BookingApprovalViewController()
-        }
+        // Instantiate using cached NIB name (no disk read on every tap)
+        let nibName = Self.bookingApprovalNibName
+        let bookingVC: BookingApprovalViewController = nibName.isEmpty
+            ? BookingApprovalViewController()
+            : BookingApprovalViewController(nibName: nibName, bundle: nil)
 
         bookingVC.title = "Booking Approval"
         bookingVC.hidesBottomBarWhenPushed = true
 
-        // Inject the selected request so the VC can map status/dates
         let selected = visibleRequests[indexPath.section]
         bookingVC.request = selected
 
-        // Force-hide the tab bar right before pushing, to cover all hosting cases
-        if let tab = self.tabBarController ?? self.findTabBarController() {
-            tab.tabBar.isHidden = true
-        }
-
-        navigationController?.setNavigationBarHidden(false, animated: true)
         navigationController?.pushViewController(bookingVC, animated: true)
     }
 }

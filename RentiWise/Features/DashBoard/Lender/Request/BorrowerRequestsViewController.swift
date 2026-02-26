@@ -29,6 +29,14 @@ final class BorrowerRequestsViewController: UIViewController {
         didSet { applyFilters() }
     }
 
+    // Loading state — shows skeleton placeholders while fetching
+    private var isLoading = false {
+        didSet {
+            tableView.reloadData()
+            if isLoading { tableView.backgroundView = nil }
+        }
+    }
+
     private let currencyFormatter: NumberFormatter = {
         let f = NumberFormatter()
         f.numberStyle = .currency
@@ -125,6 +133,7 @@ final class BorrowerRequestsViewController: UIViewController {
 
         // Reuse existing nib/cell
         tableView.register(UINib(nibName: "LenderRequestTableViewCell", bundle: nil), forCellReuseIdentifier: "Request")
+        tableView.register(SkeletonTableViewCell.self, forCellReuseIdentifier: SkeletonTableViewCell.reuseID)
 
         view.addSubview(tableView)
         NSLayoutConstraint.activate([
@@ -154,11 +163,12 @@ final class BorrowerRequestsViewController: UIViewController {
     }
 
     private func loadRequests() async {
+        isLoading = true
         guard let userId = await SupabaseManager.shared.currentUserId() else {
             await MainActor.run {
+                self.isLoading = false
                 self.rows = []
                 self.filteredRows = []
-                self.tableView.reloadData()
                 self.showEmptyStateIfNeeded()
                 self.presentLoginAlert()
             }
@@ -181,14 +191,15 @@ final class BorrowerRequestsViewController: UIViewController {
 
             let rows = try JSONDecoder().decode([RequestWithItem].self, from: response.data)
             await MainActor.run {
+                self.isLoading = false
                 self.rows = rows
                 self.applyFilters()
             }
         } catch {
             await MainActor.run {
+                self.isLoading = false
                 self.rows = []
                 self.filteredRows = []
-                self.tableView.reloadData()
                 self.showEmptyStateIfNeeded()
             }
         }
@@ -251,11 +262,18 @@ extension BorrowerRequestsViewController: UISearchBarDelegate {
 
 // MARK: - UITableViewDataSource
 extension BorrowerRequestsViewController: UITableViewDataSource {
-    func numberOfSections(in tableView: UITableView) -> Int { filteredRows.count }
+    private static let skeletonCount = 4
+
+    func numberOfSections(in tableView: UITableView) -> Int {
+        isLoading ? Self.skeletonCount : filteredRows.count
+    }
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { 1 }
 
     func tableView(_ tableView: UITableView,
                    cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        if isLoading {
+            return tableView.dequeueReusableCell(withIdentifier: SkeletonTableViewCell.reuseID, for: indexPath) as! SkeletonTableViewCell
+        }
         guard let cell = tableView.dequeueReusableCell(withIdentifier: "Request", for: indexPath) as? LenderRequestTableViewCell else {
             return UITableViewCell()
         }
@@ -320,6 +338,7 @@ extension BorrowerRequestsViewController: UITableViewDelegate {
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
+        guard !isLoading else { return }
 
         let detail = DashboardLenderRequestViewController(nibName: "DashboardLenderRequestViewController", bundle: nil)
         detail.title = "Details"
