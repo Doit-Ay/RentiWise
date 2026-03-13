@@ -432,13 +432,8 @@ class DashboardLenderRequestViewController: UIViewController {
 
     private func resolveOwnerName(for ownerId: String) {
         Task {
-            // Try users table first
+            // Try users table
             if let name = try? await fetchName(from: "users", ownerId: ownerId), !name.isEmpty {
-                await MainActor.run { self.ownNameLabel?.text = capitalizingFirstLetter(name) }
-                return
-            }
-            // Fallback to profiles
-            if let name = try? await fetchName(from: "profiles", ownerId: ownerId), !name.isEmpty {
                 await MainActor.run { self.ownNameLabel?.text = capitalizingFirstLetter(name) }
                 return
             }

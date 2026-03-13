@@ -176,28 +176,7 @@ final class DistanceService {
             // table/view may not exist — fall through
         }
 
-        // Second attempt: try profiles table for city/state
-        do {
-            struct ProfileCityRow: Decodable { let city: String?; let state: String? }
-            let response = try await client
-                .from("profiles")
-                .select("city,state")
-                .eq("id", value: ownerId)
-                .limit(1)
-                .execute()
-            let rows = try JSONDecoder().decode([ProfileCityRow].self, from: response.data)
-            if let row = rows.first {
-                let parts = [row.city, row.state]
-                    .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
-                    .filter { !$0.isEmpty }
-                    .joined(separator: ", ")
-                if !parts.isEmpty, let geocoded = await geocodeAddressString(parts) {
-                    return geocoded
-                }
-            }
-        } catch { }
-
-        // Third attempt: users table
+        // Fallback: try users table for city/state
         do {
             struct UsersCityRow: Decodable { let city: String?; let state: String? }
             let response = try await client

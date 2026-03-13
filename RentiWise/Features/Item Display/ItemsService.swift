@@ -19,10 +19,18 @@ final class ItemsService: ItemsServicing {
     }
 
     func fetchItems(category: String) async throws -> [Item] {
-        // Fetch items from database
-        let response = try await client
+        // Build query with server-side filtering
+        var query = client
             .from("items")
             .select() // all columns
+            .eq("is_active", value: true)
+
+        let cat = category.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !cat.isEmpty {
+            query = query.ilike("category", pattern: cat)
+        }
+
+        let response = try await query
             .order("created_at", ascending: false)
             .execute()
 
@@ -42,18 +50,14 @@ final class ItemsService: ItemsServicing {
             let deposit_amount: Double
             let images: [String]
             let is_active: Bool
+            let latitude: Double?
+            let longitude: Double?
+            let location_address: String?
             let created_at: Date?
             let updated_at: Date?
         }
 
-        var itemDTOs = try decoder.decode([ItemDTO].self, from: data)
-
-        // Filter active items and category
-        itemDTOs = itemDTOs.filter { $0.is_active }
-        let cat = category.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !cat.isEmpty {
-            itemDTOs = itemDTOs.filter { ($0.category ?? "").caseInsensitiveCompare(cat) == .orderedSame }
-        }
+        let itemDTOs = try decoder.decode([ItemDTO].self, from: data)
 
         // Fetch rating stats concurrently for all items
         let statsMap = await fetchRatingStats(for: itemDTOs.map { $0.id })
@@ -72,6 +76,9 @@ final class ItemsService: ItemsServicing {
                 deposit_amount: dto.deposit_amount,
                 images: dto.images,
                 is_active: dto.is_active,
+                latitude: dto.latitude,
+                longitude: dto.longitude,
+                location_address: dto.location_address,
                 created_at: dto.created_at,
                 updated_at: dto.updated_at,
                 average_rating: stats?.average_rating,

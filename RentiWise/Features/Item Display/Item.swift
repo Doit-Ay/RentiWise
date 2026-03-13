@@ -14,6 +14,9 @@ struct Item: Decodable {
     let deposit_amount: Double
     let images: [String]
     let is_active: Bool
+    let latitude: Double?
+    let longitude: Double?
+    let location_address: String?
     let created_at: Date?
     let updated_at: Date?
     
@@ -24,7 +27,8 @@ struct Item: Decodable {
     // Memberwise initializer for creating items with stats
     init(id: String, owner_id: String, title: String, description: String?, category: String?, 
          condition: String?, price_per_day: Double, deposit_amount: Double, images: [String],
-         is_active: Bool, created_at: Date?, updated_at: Date?,
+         is_active: Bool, latitude: Double? = nil, longitude: Double? = nil,
+         location_address: String? = nil, created_at: Date?, updated_at: Date?,
          average_rating: Double? = nil, review_count: Int? = nil) {
         self.id = id
         self.owner_id = owner_id
@@ -36,6 +40,9 @@ struct Item: Decodable {
         self.deposit_amount = deposit_amount
         self.images = images
         self.is_active = is_active
+        self.latitude = latitude
+        self.longitude = longitude
+        self.location_address = location_address
         self.created_at = created_at
         self.updated_at = updated_at
         self.average_rating = average_rating
@@ -53,6 +60,9 @@ struct Item: Decodable {
         case deposit_amount
         case images
         case is_active
+        case latitude
+        case longitude
+        case location_address
         case created_at
         case updated_at
         case average_rating

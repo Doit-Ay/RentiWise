@@ -49,6 +49,7 @@ final class PreloadManager {
             let response = try await SupabaseManager.shared.client
                 .from("items")
                 .select()
+                .eq("is_active", value: true)
                 .order("created_at", ascending: false)
                 .limit(6)
                 .execute()
@@ -65,7 +66,7 @@ final class PreloadManager {
         let select =
         """
         id,item_id,owner_id,borrower_id,start_date,end_date,pickup_time,status,created_at,
-        items(id,title,images,price_per_day)
+        items(id,title,images,price_per_day,category)
         """
         do {
             let response = try await SupabaseManager.shared.client
