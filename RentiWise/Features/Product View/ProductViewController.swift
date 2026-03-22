@@ -332,10 +332,10 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         descriptionBodyLabel?.preferredMaxLayoutWidth = descriptionBodyLabel?.bounds.width ?? 0
 
         // Deposit card text
-        depositTitleLabel?.text = "Refundable Deposit"
         let depositNumber = NSNumber(value: item.deposit_amount)
         let depositText = currencyFormatter.string(from: depositNumber) ?? String(format: "₹%.2f", item.deposit_amount)
-        depositBodyLabel?.text = "A \(depositText) deposit is required and will be fully refunded when the item is returned in the same condition."
+        depositTitleLabel?.text = "Deposit: \(depositText) — paid directly to lender via UPI"
+        depositBodyLabel?.text = "Payments are made directly between users via UPI. RentiWise does not process payments. The deposit is settled directly with the lender at pickup."
 
         // Owner defaults
         ownerNameLabel?.text = nil
@@ -369,6 +369,8 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
                 }
                 // Check if borrower already has an active request for this item
                 await self.checkExistingRequestForItem(itemId: item.id, borrowerId: me)
+                // Gate review button behind completed rental
+                await self.checkReviewEligibility(itemId: item.id, borrowerId: me)
             }
         }
 
@@ -457,7 +459,8 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         // Hide views
         ownerCard?.isHidden = isOwn
         depositCard?.isHidden = isOwn
-        writeAReview?.isHidden = isOwn
+        // Write-a-review: hidden by default for non-owners; will be shown after checkReviewEligibility
+        writeAReview?.isHidden = true
         rentNowoutlet?.isHidden = isOwn
         actionButtonsContainer?.isHidden = isOwn || ((writeAReview == nil || writeAReview?.isHidden == true) && (rentNowoutlet == nil || rentNowoutlet?.isHidden == true))
         
@@ -731,7 +734,7 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
     private func renderOwner(fullName: String?, avatarURLString: String?) {
         let name = (fullName?.isEmpty == false) ? fullName! : "Owner"
         ownerNameLabel?.text = name
-        ownerRating?.text = "★ 4.5"
+        // Rating is set from item.average_rating in applyItemToUI(); do NOT overwrite with a hardcoded value here
 
         if let avatar = avatarURLString, !avatar.isEmpty {
             if let url = URL(string: avatar), avatar.lowercased().hasPrefix("http") {
@@ -1522,6 +1525,50 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         // Prevent if already requested
         guard sender.isEnabled else { return }
 
+        sender.isEnabled = false
+        Task {
+            let userId = await SupabaseManager.shared.currentUserId() ?? ""
+
+            // Gate 1: Phone verification (hard gate — must be fullscreen modal)
+            let isPhoneVerified = await PhoneVerificationService.shared.isPhoneVerified(userId: userId)
+            if !isPhoneVerified {
+                await MainActor.run {
+                    sender.isEnabled = true
+                    let phoneVC = PhoneVerificationViewController()
+                    phoneVC.onVerificationComplete = { [weak self] in
+                        self?.dismiss(animated: true) {
+                            guard let self, let item = self.selectedItem else { return }
+                            // After phone verified, check college
+                            self.didTapRentNow(sender)
+                        }
+                    }
+                    let nav = UINavigationController(rootViewController: phoneVC)
+                    nav.modalPresentationStyle = .fullScreen
+                    self.present(nav, animated: true)
+                }
+                return
+            }
+
+            // Gate 2: College verification (soft gate — pushed on nav stack)
+            let isCollegeVerified = await CollegeVerificationService.shared.isUserVerified(userId: userId)
+            await MainActor.run {
+                sender.isEnabled = true
+                if isCollegeVerified {
+                    self.pushRequestViewController(for: item)
+                } else {
+                    let verifyVC = CollegeVerificationViewController()
+                    verifyVC.onVerificationComplete = { [weak self] in
+                        guard let self, let item = self.selectedItem else { return }
+                        self.pushRequestViewController(for: item)
+                    }
+                    verifyVC.hidesBottomBarWhenPushed = true
+                    self.navigationController?.pushViewController(verifyVC, animated: true)
+                }
+            }
+        }
+    }
+
+    private func pushRequestViewController(for item: Item) {
         let nibName = "RequestViewController"
         let requestVC: RequestViewController
         if Bundle.main.path(forResource: nibName, ofType: "nib") != nil ||
@@ -1549,34 +1596,103 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
 
     private func checkExistingRequestForItem(itemId: String, borrowerId: String) async {
         do {
-            struct RequestCount: Decodable {
+            struct RequestStatusRow: Decodable {
                 let id: String
+                let status: String
             }
             let response = try await SupabaseManager.shared.client
                 .from("requests")
-                .select("id")
+                .select("id, status")
                 .eq("item_id", value: itemId)
                 .eq("borrower_id", value: borrowerId)
-                .in("status", values: ["pending", "accepted"])
+                .in("status", values: ["pending", "approved", "active"])
                 .limit(1)
                 .execute()
 
-            let rows = try JSONDecoder().decode([RequestCount].self, from: response.data)
+            let rows = try JSONDecoder().decode([RequestStatusRow].self, from: response.data)
 
-            if !rows.isEmpty {
+            if let existingRequest = rows.first {
+                let buttonTitle: String
+                switch existingRequest.status {
+                case "pending":
+                    buttonTitle = "Request Pending"
+                case "approved":
+                    buttonTitle = "Approved — Confirm Payment"
+                case "active":
+                    buttonTitle = "Currently Renting"
+                default:
+                    buttonTitle = "Already Requested"
+                }
                 await MainActor.run { [weak self] in
                     guard let self = self else { return }
                     self.bottomRentButton?.isEnabled = false
-                    self.bottomRentButton?.setTitle("Already Requested", for: .normal)
+                    self.bottomRentButton?.setTitle(buttonTitle, for: .normal)
                     self.bottomRentButton?.backgroundColor = .systemGray4
                     self.bottomRentButton?.setTitleColor(.secondaryLabel, for: .normal)
                     // Also disable the XIB outlet if it exists
                     self.rentNowoutlet?.isEnabled = false
-                    self.rentNowoutlet?.setTitle("Already Requested", for: .normal)
+                    self.rentNowoutlet?.setTitle(buttonTitle, for: .normal)
                 }
             }
         } catch {
             print("[ProductVC] Error checking existing request: \(error)")
+        }
+    }
+
+    // MARK: - Review Eligibility Check (Fix 6)
+
+    /// Only allow reviews if the current user has a completed rental for this item.
+    /// If a review already exists, show "Edit Review" instead.
+    private func checkReviewEligibility(itemId: String, borrowerId: String) async {
+        do {
+            // 1. Check if borrower has any completed rental for this item
+            struct CompletedRow: Decodable { let id: String }
+            let rentalResp = try await SupabaseManager.shared.client
+                .from("requests")
+                .select("id")
+                .eq("item_id", value: itemId)
+                .eq("borrower_id", value: borrowerId)
+                .eq("status", value: "completed")
+                .limit(1)
+                .execute()
+
+            let completedRentals = try JSONDecoder().decode([CompletedRow].self, from: rentalResp.data)
+
+            guard !completedRentals.isEmpty else {
+                // No completed rental — hide write review button
+                await MainActor.run { [weak self] in
+                    self?.writeAReview?.isHidden = true
+                }
+                return
+            }
+
+            // 2. Check if a review already exists for this (item, user) pair
+            struct ReviewRow: Decodable { let id: String }
+            let reviewResp = try await SupabaseManager.shared.client
+                .from("reviews")
+                .select("id")
+                .eq("item_id", value: itemId)
+                .eq("reviewer_id", value: borrowerId)
+                .limit(1)
+                .execute()
+
+            let existingReviews = try JSONDecoder().decode([ReviewRow].self, from: reviewResp.data)
+
+            await MainActor.run { [weak self] in
+                guard let self = self else { return }
+                self.writeAReview?.isHidden = false
+                if !existingReviews.isEmpty {
+                    self.writeAReview?.setTitle("Edit Review", for: .normal)
+                } else {
+                    self.writeAReview?.setTitle("Write a Review", for: .normal)
+                }
+            }
+        } catch {
+            print("[ProductVC] Error checking review eligibility: \(error)")
+            // On error, hide by default for safety
+            await MainActor.run { [weak self] in
+                self?.writeAReview?.isHidden = true
+            }
         }
     }
     

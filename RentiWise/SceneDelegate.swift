@@ -17,6 +17,32 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
                options connectionOptions: UIScene.ConnectionOptions) {
         configureTabBarAppearance()
         startNetworkMonitoring()
+
+        // Check phone verification for existing users after a short delay
+        // so root VC has time to load
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            self?.checkPhoneVerificationForExistingUser()
+        }
+    }
+
+    // MARK: - Existing User Phone Verification Gate
+    private func checkPhoneVerificationForExistingUser() {
+        Task { @MainActor in
+            guard let userId = await SupabaseManager.shared.currentUserId() else { return }
+            let isVerified = await PhoneVerificationService.shared.isPhoneVerified(userId: userId)
+            if !isVerified {
+                let phoneVC = PhoneVerificationViewController()
+                phoneVC.modalPresentationStyle = .fullScreen
+                phoneVC.onVerificationComplete = { [weak phoneVC] in
+                    phoneVC?.dismiss(animated: true)
+                }
+                // Present on top of whatever is showing
+                guard let root = self.window?.rootViewController else { return }
+                var presenter: UIViewController = root
+                while let next = presenter.presentedViewController { presenter = next }
+                presenter.present(UINavigationController(rootViewController: phoneVC), animated: true)
+            }
+        }
     }
 
     // MARK: - Network Monitoring

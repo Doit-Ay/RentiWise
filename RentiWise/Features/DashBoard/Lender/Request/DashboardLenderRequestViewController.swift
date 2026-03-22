@@ -60,6 +60,13 @@ class DashboardLenderRequestViewController: UIViewController {
     private var statusBackgroundView: UIView?
     private var statusBackgroundBottomConstraint: NSLayoutConstraint?
 
+    // OTP Pickup Confirmation
+    private var confirmPickupButton: UIButton?
+    private var pickupConfirmedLabel: UILabel?
+    private var paymentPollingTimer: Timer?
+    private var hasPaymentSucceeded: Bool = false
+    private var isPickupConfirmed: Bool = false
+
     /// Timestamp when the most recent accept/deny decision was made.
     /// Used to enforce the 24-hour change window on the client side.
     private var decisionTimestamp: Date?
@@ -123,7 +130,24 @@ class DashboardLenderRequestViewController: UIViewController {
         // Prepare status row (hidden by default) and its background
         ensureStatusRow()
 
+        // Build the Confirm Pickup button (hidden until payment succeeds)
+        setupConfirmPickupButton()
+
         applyRequestToUI()
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        // Start polling for payment after view appears if request is accepted
+        if let status = request?.status.lowercased(), status == "accepted" {
+            startPaymentPolling()
+        }
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        paymentPollingTimer?.invalidate()
+        paymentPollingTimer = nil
     }
 
     override func viewDidLayoutSubviews() {
@@ -328,7 +352,7 @@ class DashboardLenderRequestViewController: UIViewController {
         }
 
         // Owner placeholders (ratings/distance can be refined later)
-        if ownRatingLabel?.text?.isEmpty ?? true { ownRatingLabel?.text = "★ 4.7" }
+        if ownRatingLabel?.text?.isEmpty ?? true { ownRatingLabel?.text = "No rating" }
 
         // Distance: compute via DistanceService using a lightweight Item built from the request
         ownDistLabel?.text = "..."
@@ -571,7 +595,11 @@ class DashboardLenderRequestViewController: UIViewController {
     // MARK: - Actions: Accept / Deny
 
     @IBAction func acceptbuttontapped(_ sender: UIButton) {
-        Task { await updateStatus(to: "accepted") }
+        Task {
+            await updateStatus(to: "accepted")
+            // Start polling for payment after accepting
+            await MainActor.run { self.startPaymentPolling() }
+        }
         // Notify BookingApprovalViewController that this request was accepted
         NotificationCenter.default.post(name: BookingApprovalViewController.requestApprovedNotification, object: nil)
     }
@@ -651,6 +679,14 @@ class DashboardLenderRequestViewController: UIViewController {
                 self.updateButtonsAndStatusUI(status: current.status)
             }
 
+            // Send in-app notification to the borrower
+            let itemTitle = current.items?.title ?? "your item"
+            if newStatus == "accepted" {
+                NotificationService.sendRequestAccepted(requestId: current.id, borrowerId: current.borrower_id, itemTitle: itemTitle)
+            } else if newStatus == "denied" {
+                NotificationService.sendRequestRejected(requestId: current.id, borrowerId: current.borrower_id, itemTitle: itemTitle)
+            }
+
             // Tell LenderView to refresh Requests
             NotificationCenter.default.post(name: Notification.Name("requestsShouldRefresh"), object: nil)
         } catch {
@@ -661,5 +697,257 @@ class DashboardLenderRequestViewController: UIViewController {
             }
         }
         await MainActor.run { self.setButtonsEnabled(true) }
+    }
+
+    // MARK: - OTP Pickup Confirmation System
+
+    private func setupConfirmPickupButton() {
+        // Create the "Confirm Pickup" button programmatically
+        let btn = UIButton(type: .system)
+        btn.setTitle("📱 Confirm Pickup with OTP", for: .normal)
+        btn.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
+        btn.setTitleColor(.white, for: .normal)
+        btn.backgroundColor = UIColor(red: 0x34/255.0, green: 0xAA/255.0, blue: 0x69/255.0, alpha: 1.0)
+        btn.layer.cornerRadius = 14
+        btn.layer.masksToBounds = true
+        btn.translatesAutoresizingMaskIntoConstraints = false
+        btn.addTarget(self, action: #selector(didTapConfirmPickup), for: .touchUpInside)
+        btn.isHidden = true
+
+        // Create the "Pickup Confirmed ✓" label
+        let label = UILabel()
+        label.text = "✅ Pickup Confirmed"
+        label.font = .systemFont(ofSize: 16, weight: .semibold)
+        label.textColor = .systemGreen
+        label.textAlignment = .center
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.isHidden = true
+
+        view.addSubview(btn)
+        view.addSubview(label)
+
+        // Position below the price card (or above the status bar)
+        if let priceCard = priceCard {
+            NSLayoutConstraint.activate([
+                btn.topAnchor.constraint(equalTo: priceCard.bottomAnchor, constant: 16),
+                btn.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+                btn.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+                btn.heightAnchor.constraint(equalToConstant: 50),
+
+                label.topAnchor.constraint(equalTo: priceCard.bottomAnchor, constant: 16),
+                label.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+                label.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+                label.heightAnchor.constraint(equalToConstant: 50)
+            ])
+        }
+
+        confirmPickupButton = btn
+        pickupConfirmedLabel = label
+    }
+
+    @objc private func didTapConfirmPickup() {
+        let alert = UIAlertController(
+            title: "Confirm Pickup",
+            message: "Enter the 6-digit OTP shown on the borrower's screen to confirm the item pickup.",
+            preferredStyle: .alert
+        )
+        alert.addTextField { textField in
+            textField.placeholder = "Enter 6-digit OTP"
+            textField.keyboardType = .numberPad
+            textField.textAlignment = .center
+            textField.font = .systemFont(ofSize: 24, weight: .bold)
+        }
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Verify", style: .default) { [weak self] _ in
+            guard let self = self,
+                  let enteredCode = alert.textFields?.first?.text?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !enteredCode.isEmpty else {
+                return
+            }
+            Task { await self.verifyOTPCode(enteredCode) }
+        })
+        present(alert, animated: true)
+    }
+
+    private func verifyOTPCode(_ enteredCode: String) async {
+        guard let reqId = request?.id else { return }
+
+        await MainActor.run {
+            confirmPickupButton?.isEnabled = false
+            confirmPickupButton?.alpha = 0.6
+            confirmPickupButton?.setTitle("Verifying...", for: .normal)
+        }
+
+        do {
+            // Fetch the pickup_code from the payments table
+            struct PickupCodeRow: Decodable {
+                let pickup_code: String?
+                let id: String
+            }
+
+            let response = try await SupabaseManager.shared.client
+                .from("payments")
+                .select("id, pickup_code")
+                .eq("request_id", value: reqId)
+                .eq("status", value: "succeeded")
+                .order("created_at", ascending: false)
+                .limit(1)
+                .execute()
+
+            let rows = try JSONDecoder().decode([PickupCodeRow].self, from: response.data)
+
+            guard let payment = rows.first, let dbCode = payment.pickup_code, !dbCode.isEmpty else {
+                await MainActor.run {
+                    self.showPickupError("No pickup code found. The borrower may not have completed payment yet.")
+                    self.resetConfirmButton()
+                }
+                return
+            }
+
+            // Compare the entered code with the stored code
+            if enteredCode == dbCode {
+                // ✅ Match! Mark pickup as confirmed in DB
+                struct ConfirmUpdate: Encodable {
+                    let pickup_confirmed: Bool
+                }
+                _ = try await SupabaseManager.shared.client
+                    .from("payments")
+                    .update(ConfirmUpdate(pickup_confirmed: true))
+                    .eq("id", value: payment.id)
+                    .execute()
+
+                await MainActor.run {
+                    self.isPickupConfirmed = true
+                    self.confirmPickupButton?.isHidden = true
+                    self.pickupConfirmedLabel?.isHidden = false
+
+                    // Haptic feedback
+                    let generator = UINotificationFeedbackGenerator()
+                    generator.notificationOccurred(.success)
+
+                    // Show success alert
+                    let successAlert = UIAlertController(
+                        title: "Pickup Confirmed! ✅",
+                        message: "The OTP has been verified successfully. The item pickup is now confirmed.",
+                        preferredStyle: .alert
+                    )
+                    successAlert.addAction(UIAlertAction(title: "Great!", style: .default))
+                    self.present(successAlert, animated: true)
+                }
+
+                // Send in-app notifications to both parties
+                if let req = self.request {
+                    let itemTitle = req.items?.title ?? "your item"
+                    NotificationService.sendPickupConfirmed(
+                        requestId: req.id,
+                        borrowerId: req.borrower_id,
+                        ownerId: req.owner_id,
+                        itemTitle: itemTitle
+                    )
+                }
+
+                // Notify other views to refresh
+                NotificationCenter.default.post(name: Notification.Name("requestsShouldRefresh"), object: nil)
+            } else {
+                // ❌ Code mismatch
+                await MainActor.run {
+                    let generator = UINotificationFeedbackGenerator()
+                    generator.notificationOccurred(.error)
+
+                    self.showPickupError("Incorrect OTP. Please ask the borrower to show you the correct 6-digit code from their screen.")
+                    self.resetConfirmButton()
+                }
+            }
+        } catch {
+            print("[DashboardLenderRequest] OTP verification error: \(error)")
+            await MainActor.run {
+                self.showPickupError("Failed to verify OTP: \(error.localizedDescription)")
+                self.resetConfirmButton()
+            }
+        }
+    }
+
+    private func resetConfirmButton() {
+        confirmPickupButton?.isEnabled = true
+        confirmPickupButton?.alpha = 1.0
+        confirmPickupButton?.setTitle("📱 Confirm Pickup with OTP", for: .normal)
+    }
+
+    private func showPickupError(_ message: String) {
+        let alert = UIAlertController(title: "Verification Failed", message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
+    }
+
+    // MARK: - Payment Polling (detects when borrower has paid)
+
+    private func startPaymentPolling() {
+        paymentPollingTimer?.invalidate()
+        // Check immediately, then every 8 seconds
+        checkPaymentStatus()
+        paymentPollingTimer = Timer.scheduledTimer(withTimeInterval: 8, repeats: true) { [weak self] _ in
+            self?.checkPaymentStatus()
+        }
+    }
+
+    private func checkPaymentStatus() {
+        guard let reqId = request?.id else { return }
+        Task { [weak self] in
+            guard let self = self else { return }
+            do {
+                struct PaymentStatusRow: Decodable {
+                    let status: String
+                    let pickup_confirmed: Bool?
+                }
+                let response = try await SupabaseManager.shared.client
+                    .from("payments")
+                    .select("status, pickup_confirmed")
+                    .eq("request_id", value: reqId)
+                    .order("created_at", ascending: false)
+                    .limit(1)
+                    .execute()
+
+                let rows = try JSONDecoder().decode([PaymentStatusRow].self, from: response.data)
+                if let payment = rows.first {
+                    let succeeded = payment.status.lowercased() == "succeeded"
+                    let confirmed = payment.pickup_confirmed ?? false
+
+                    await MainActor.run {
+                        self.hasPaymentSucceeded = succeeded
+                        self.isPickupConfirmed = confirmed
+                        self.updateConfirmPickupVisibility()
+
+                        // Stop polling once pickup is confirmed
+                        if confirmed {
+                            self.paymentPollingTimer?.invalidate()
+                            self.paymentPollingTimer = nil
+                        }
+                    }
+                }
+            } catch {
+                // Silently continue polling
+                print("[DashboardLenderRequest] Payment poll error: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func updateConfirmPickupVisibility() {
+        let isAccepted = request?.status.lowercased() == "accepted"
+
+        if isPickupConfirmed {
+            confirmPickupButton?.isHidden = true
+            pickupConfirmedLabel?.isHidden = false
+        } else if isAccepted && hasPaymentSucceeded {
+            confirmPickupButton?.isHidden = false
+            pickupConfirmedLabel?.isHidden = true
+        } else {
+            confirmPickupButton?.isHidden = true
+            pickupConfirmedLabel?.isHidden = true
+        }
+    }
+
+    deinit {
+        paymentPollingTimer?.invalidate()
+        paymentPollingTimer = nil
     }
 }

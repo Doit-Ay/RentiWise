@@ -7,6 +7,7 @@
 
 import UIKit
 import Supabase
+import CoreLocation
 
 @MainActor
 class RequestViewController: UIViewController {
@@ -298,11 +299,7 @@ class RequestViewController: UIViewController {
     private func renderOwner(fullName: String?, avatarURLString: String?) {
         let name = (fullName?.isEmpty == false) ? fullName! : "Owner"
         ownerName?.text = name
-        // If rating not set yet, keep a neutral placeholder; product rating will be set from item stats
-        if ownerRating?.text?.isEmpty ?? true {
-            ownerRating?.text = "★ 4.5"
-        }
-        // Distance will be updated via DistanceService; keep placeholder if empty
+        // Rating is set from item's average_rating (see applyItemToUI); do not overwrite with hardcoded value
         if ownerDist?.text?.isEmpty ?? true {
             ownerDist?.text = "..."
         }
@@ -647,9 +644,17 @@ class RequestViewController: UIViewController {
             let pickup_time: String?
             let status: String
             let message: String?
+            let borrower_lat: Double?
+            let borrower_lng: Double?
+            let borrower_location_captured_at: String?
         }
         
         guard let itemObj = self.item else { return }
+
+        // Capture GPS silently — non-blocking, non-required
+        let coordinates = await AppLocationManager.shared.currentCoordinates()
+        let locationTimestamp: String? = coordinates != nil ? ISO8601DateFormatter().string(from: Date()) : nil
+
         let row = NewRequestRow(
             item_id: itemObj.id,
             owner_id: itemObj.owner_id,
@@ -658,7 +663,10 @@ class RequestViewController: UIViewController {
             end_date: sqlDateFormatter.string(from: endDate),
             pickup_time: sqlTimeFormatter.string(from: pickupTime),
             status: "pending",
-            message: nil
+            message: nil,
+            borrower_lat: coordinates?.latitude,
+            borrower_lng: coordinates?.longitude,
+            borrower_location_captured_at: locationTimestamp
         )
         
         do {

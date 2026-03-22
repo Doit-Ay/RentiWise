@@ -8,6 +8,7 @@
 import UIKit
 import PhotosUI
 import AVFoundation
+import Supabase
 
 private let reuseImageCell = "PhotoCell"
 private let reuseAddCell   = "AddCell"
@@ -91,6 +92,89 @@ class AddItemFirstViewController: UIViewController,
         prefillIfEditing()
         updateContinueState()
         continueButton.addTarget(self, action: #selector(continueTapped(_:)), for: .touchUpInside)
+
+        // Check if user has a UPI ID set; if not, show a warning banner
+        Task { await checkUpiIdAndShowBanner() }
+    }
+
+    // MARK: - UPI Warning Banner
+
+    private func checkUpiIdAndShowBanner() async {
+        guard let userId = await SupabaseManager.shared.currentUserId() else { return }
+        do {
+            struct UpiRow: Decodable { let upi_id: String? }
+            let resp = try await SupabaseManager.shared.client
+                .from("users")
+                .select("upi_id")
+                .eq("id", value: userId)
+                .single()
+                .execute()
+            let row = try JSONDecoder().decode(UpiRow.self, from: resp.data)
+            if let upi = row.upi_id, !upi.isEmpty { return } // UPI ID is set, do nothing
+        } catch {
+            // If fetch fails, still show the banner to be safe
+        }
+        await MainActor.run { showUpiWarningBanner() }
+    }
+
+    private func showUpiWarningBanner() {
+        let brandTeal = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0)
+
+        let banner = UIView()
+        banner.backgroundColor = brandTeal.withAlphaComponent(0.1)
+        banner.layer.borderColor = brandTeal.cgColor
+        banner.layer.borderWidth = 1
+        banner.layer.cornerRadius = 12
+        banner.translatesAutoresizingMaskIntoConstraints = false
+
+        let label = UILabel()
+        label.text = "Add your UPI ID in Profile so borrowers can pay you."
+        label.font = .systemFont(ofSize: 14, weight: .medium)
+        label.textColor = .label
+        label.numberOfLines = 0
+        label.translatesAutoresizingMaskIntoConstraints = false
+
+        let goButton = UIButton(type: .system)
+        goButton.setTitle("Go to Profile", for: .normal)
+        goButton.titleLabel?.font = .systemFont(ofSize: 14, weight: .semibold)
+        goButton.tintColor = brandTeal
+        goButton.addTarget(self, action: #selector(goToProfileTapped), for: .touchUpInside)
+        goButton.translatesAutoresizingMaskIntoConstraints = false
+
+        banner.addSubview(label)
+        banner.addSubview(goButton)
+        view.addSubview(banner)
+
+        NSLayoutConstraint.activate([
+            banner.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
+            banner.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
+            banner.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+
+            label.topAnchor.constraint(equalTo: banner.topAnchor, constant: 12),
+            label.leadingAnchor.constraint(equalTo: banner.leadingAnchor, constant: 12),
+            label.trailingAnchor.constraint(equalTo: banner.trailingAnchor, constant: -12),
+
+            goButton.topAnchor.constraint(equalTo: label.bottomAnchor, constant: 8),
+            goButton.leadingAnchor.constraint(equalTo: banner.leadingAnchor, constant: 12),
+            goButton.bottomAnchor.constraint(equalTo: banner.bottomAnchor, constant: -12),
+        ])
+    }
+
+    @objc private func goToProfileTapped() {
+        // Switch to Profile tab
+        if let tab = tabBarController ?? (view.window?.rootViewController as? UITabBarController) {
+            // Find Profile tab index (usually last tab)
+            if let vcs = tab.viewControllers {
+                for (i, vc) in vcs.enumerated() {
+                    let root = (vc as? UINavigationController)?.viewControllers.first ?? vc
+                    if root is ProfileViewController {
+                        navigationController?.popToRootViewController(animated: false)
+                        tab.selectedIndex = i
+                        return
+                    }
+                }
+            }
+        }
     }
 
     private func prefillIfEditing() {

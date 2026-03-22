@@ -23,6 +23,10 @@ final class ProfileViewController: UITableViewController {
     private var displayName: String = "Guest User"
     private var userEmail: String = ""
     private var userPhone: String = ""
+    private var userUpiId: String = ""
+    private var userBadgeTier: String = "newcomer"
+    private var userTrustScore: Int = 0
+    private var isCollegeVerified: Bool = false
     private var notificationsEnabled: Bool {
         get { UserDefaults.standard.bool(forKey: "notificationsEnabled") }
         set { UserDefaults.standard.set(newValue, forKey: "notificationsEnabled") }
@@ -109,11 +113,13 @@ final class ProfileViewController: UITableViewController {
         let editVC = EditProfileViewController(
             fullName: displayName == "Guest User" ? "" : displayName,
             email: userEmail,
-            phone: userPhone
+            phone: userPhone,
+            upiId: userUpiId
         )
-        editVC.onSaved = { [weak self] newName, newPhone in
+        editVC.onSaved = { [weak self] newName, newPhone, newUpiId in
             self?.displayName = newName.isEmpty ? "User" : newName
             self?.userPhone = newPhone
+            self?.userUpiId = newUpiId
             self?.tableView.reloadData()
         }
         let nav = UINavigationController(rootViewController: editVC)
@@ -152,7 +158,7 @@ final class ProfileViewController: UITableViewController {
         case .account:
             return isLoggedIn ? 1 : 2 // header + sign up button if not logged in
         case .more:
-            return 4 // My Rentals, Wishlist, Privacy & Security, Contact Us
+            return 5 // My Rentals, Wishlist, Privacy & Security, Contact Us, Trust Score
         case .settings:
             return 1 // Notifications toggle
         case .signOut:
@@ -189,8 +195,29 @@ final class ProfileViewController: UITableViewController {
                 displayName: displayName,
                 email: userEmail,
                 phone: userPhone,
-                isLoggedIn: isLoggedIn
+                isLoggedIn: isLoggedIn,
+                badgeTier: userBadgeTier,
+                trustScore: userTrustScore,
+                isCollegeVerified: isCollegeVerified
             )
+            headerCell.onVerifyTapped = { [weak self] in
+                guard let self else { return }
+                if self.isCollegeVerified {
+                    // Show detail screen
+                    let detailVC = CollegeVerifiedDetailViewController()
+                    detailVC.hidesBottomBarWhenPushed = true
+                    self.navigationController?.pushViewController(detailVC, animated: true)
+                } else {
+                    // Show verification flow
+                    let vc = CollegeVerificationViewController()
+                    vc.onVerificationComplete = { [weak self] in
+                        self?.isCollegeVerified = true
+                        self?.tableView.reloadData()
+                    }
+                    vc.hidesBottomBarWhenPushed = true
+                    self.navigationController?.pushViewController(vc, animated: true)
+                }
+            }
             return headerCell
         default:
             cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
@@ -232,6 +259,10 @@ final class ProfileViewController: UITableViewController {
             case 3:
                 cell.textLabel?.text = "Contact Us"
                 cell.imageView?.image = UIImage(systemName: "message")
+                cell.imageView?.tintColor = brandTeal
+            case 4:
+                cell.textLabel?.text = "Trust Score"
+                cell.imageView?.image = UIImage(systemName: "shield.checkered")
                 cell.imageView?.tintColor = brandTeal
             default:
                 break
@@ -301,6 +332,10 @@ final class ProfileViewController: UITableViewController {
             case 3:
                 let vc = SupportChatViewController()
                 vc.title = "Support"
+                vc.hidesBottomBarWhenPushed = true
+                navigationController?.pushViewController(vc, animated: true)
+            case 4:
+                let vc = TrustScoreBreakdownViewController()
                 vc.hidesBottomBarWhenPushed = true
                 navigationController?.pushViewController(vc, animated: true)
             default:
@@ -375,16 +410,40 @@ final class ProfileViewController: UITableViewController {
         let service = ProfileService()
         do {
             let profile = try await service.fetchCurrentUserProfile()
+            // Also fetch trust score/badge
+            struct TrustRow: Decodable { let trust_score: Int?; let badge_tier: String?; let is_college_verified: Bool? }
+            var trustScore = 0
+            var badgeTier = "newcomer"
+            var collegeVerified = false
+            do {
+                let userId = profile.id
+                let resp = try await SupabaseManager.shared.client
+                    .from("users")
+                    .select("trust_score, badge_tier, is_college_verified")
+                    .eq("id", value: userId)
+                    .single()
+                    .execute()
+                let row = try JSONDecoder().decode(TrustRow.self, from: resp.data)
+                trustScore = row.trust_score ?? 0
+                badgeTier = row.badge_tier ?? "newcomer"
+                collegeVerified = row.is_college_verified ?? false
+            } catch { /* trust score fetch is non-critical */ }
+
             await MainActor.run {
                 self.displayName = profile.fullName.isEmpty ? "User" : profile.fullName
                 self.userEmail = profile.email
                 self.userPhone = profile.phone
+                self.userUpiId = profile.upiId
+                self.userTrustScore = trustScore
+                self.userBadgeTier = badgeTier
+                self.isCollegeVerified = collegeVerified
             }
         } catch {
             await MainActor.run {
                 self.displayName = "User"
                 self.userEmail = ""
                 self.userPhone = ""
+                self.userUpiId = ""
             }
         }
     }
@@ -425,9 +484,13 @@ private class AccountHeaderCell: UITableViewCell {
     
     private let iconView = UIImageView()
     private let nameLabel = UILabel()
+    private let verifiedPill = UIButton(type: .system)
     private let emailLabel = UILabel()
     private let phoneLabel = UILabel()
     private let messageLabel = UILabel()
+    private let trustBadge = TrustBadgeView()
+    
+    var onVerifyTapped: (() -> Void)?
     
     // App brand color
     private let brandTeal = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0)
@@ -451,10 +514,28 @@ private class AccountHeaderCell: UITableViewCell {
         iconView.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(iconView)
         
+        // Name row (name + verified pill)
+        verifiedPill.titleLabel?.font = .systemFont(ofSize: 10, weight: .semibold)
+        verifiedPill.contentEdgeInsets = UIEdgeInsets(top: 3, left: 8, bottom: 3, right: 8)
+        verifiedPill.layer.cornerRadius = 8
+        verifiedPill.clipsToBounds = true
+        verifiedPill.addTarget(self, action: #selector(verifyPillTapped), for: .touchUpInside)
+        verifiedPill.translatesAutoresizingMaskIntoConstraints = false
+        
+        let nameRow = UIStackView(arrangedSubviews: [nameLabel, verifiedPill, UIView()])
+        nameRow.axis = .horizontal
+        nameRow.spacing = 8
+        nameRow.alignment = .center
+        
+        // Trust badge
+        trustBadge.translatesAutoresizingMaskIntoConstraints = false
+        trustBadge.isHidden = true
+        
         // Labels stack
-        let stack = UIStackView(arrangedSubviews: [nameLabel, emailLabel, phoneLabel, messageLabel])
+        let stack = UIStackView(arrangedSubviews: [nameRow, emailLabel, phoneLabel, trustBadge, messageLabel])
         stack.axis = .vertical
         stack.spacing = 6
+        stack.alignment = .leading
         stack.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(stack)
         
@@ -479,7 +560,11 @@ private class AccountHeaderCell: UITableViewCell {
         ])
     }
     
-    func configure(displayName: String, email: String, phone: String, isLoggedIn: Bool) {
+    @objc private func verifyPillTapped() {
+        onVerifyTapped?()
+    }
+    
+    func configure(displayName: String, email: String, phone: String, isLoggedIn: Bool, badgeTier: String = "newcomer", trustScore: Int = 0, isCollegeVerified: Bool = false) {
         nameLabel.text = displayName.isEmpty ? "Guest User" : displayName
         
         if isLoggedIn {
@@ -488,9 +573,28 @@ private class AccountHeaderCell: UITableViewCell {
             phoneLabel.text = phone.isEmpty ? nil : phone
             phoneLabel.isHidden = phone.isEmpty
             messageLabel.isHidden = true
+            // Show trust badge
+            trustBadge.badgeTier = badgeTier
+            trustBadge.trustScore = trustScore
+            trustBadge.isHidden = false
+            // Verified pill
+            verifiedPill.isHidden = false
+            if isCollegeVerified {
+                verifiedPill.setTitle("🎓 Verified", for: .normal)
+                verifiedPill.setTitleColor(.white, for: .normal)
+                verifiedPill.backgroundColor = brandTeal
+                verifiedPill.isUserInteractionEnabled = false
+            } else {
+                verifiedPill.setTitle("Unverified", for: .normal)
+                verifiedPill.setTitleColor(.secondaryLabel, for: .normal)
+                verifiedPill.backgroundColor = UIColor.systemGray5
+                verifiedPill.isUserInteractionEnabled = true
+            }
         } else {
             emailLabel.isHidden = true
             phoneLabel.isHidden = true
+            trustBadge.isHidden = true
+            verifiedPill.isHidden = true
             messageLabel.text = "Create an account to sync and manage bookings"
             messageLabel.isHidden = false
         }

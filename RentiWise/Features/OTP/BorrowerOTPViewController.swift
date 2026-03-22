@@ -1,0 +1,151 @@
+//
+//  BorrowerOTPViewController.swift
+//  RentiWise
+//
+//  Shown to the borrower after request is approved + UPI payment confirmed.
+//  Calls the `generate-otp` Edge Function and displays a 4-digit OTP for the borrower
+//  to show the lender at pickup.
+//
+
+import UIKit
+import Supabase
+
+final class BorrowerOTPViewController: UIViewController {
+
+    // MARK: - Inputs (set before push)
+    var requestId: String = ""
+    var lenderName: String = ""
+
+    // MARK: - UI
+    private let otpLabel = UILabel()
+    private let instructionLabel = UILabel()
+    private let regenerateButton = UIButton(type: .system)
+    private let spinner = UIActivityIndicatorView(style: .large)
+    private let statusLabel = UILabel()
+    private let brandTeal = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1.0)
+
+    private var cooldownTimer: Timer?
+    private var cooldownSeconds = 0
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = "Pickup Code"
+        view.backgroundColor = .systemBackground
+        setupUI()
+        generateOTP()
+    }
+
+    deinit {
+        cooldownTimer?.invalidate()
+    }
+
+    // MARK: - UI Setup
+    private func setupUI() {
+        // Instruction
+        instructionLabel.text = "Show this code to \(lenderName) when you meet for pickup"
+        instructionLabel.font = .systemFont(ofSize: 16, weight: .medium)
+        instructionLabel.textColor = .secondaryLabel
+        instructionLabel.textAlignment = .center
+        instructionLabel.numberOfLines = 0
+        instructionLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        // OTP
+        otpLabel.font = .monospacedDigitSystemFont(ofSize: 56, weight: .bold)
+        otpLabel.textAlignment = .center
+        otpLabel.textColor = brandTeal
+        otpLabel.text = "----"
+        otpLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        // Regenerate button
+        regenerateButton.setTitle("Regenerate Code", for: .normal)
+        regenerateButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
+        regenerateButton.tintColor = brandTeal
+        regenerateButton.addTarget(self, action: #selector(regenerateTapped), for: .touchUpInside)
+        regenerateButton.translatesAutoresizingMaskIntoConstraints = false
+
+        // Status label (for cooldown)
+        statusLabel.font = .systemFont(ofSize: 14)
+        statusLabel.textColor = .secondaryLabel
+        statusLabel.textAlignment = .center
+        statusLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        // Spinner
+        spinner.hidesWhenStopped = true
+        spinner.color = brandTeal
+        spinner.translatesAutoresizingMaskIntoConstraints = false
+
+        let stack = UIStackView(arrangedSubviews: [instructionLabel, otpLabel, spinner, regenerateButton, statusLabel])
+        stack.axis = .vertical
+        stack.spacing = 24
+        stack.alignment = .center
+        stack.translatesAutoresizingMaskIntoConstraints = false
+
+        view.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            stack.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: -40),
+            stack.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 32),
+            stack.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -32),
+        ])
+    }
+
+    // MARK: - Generate OTP via Edge Function
+    private func generateOTP() {
+        spinner.startAnimating()
+        otpLabel.text = "----"
+        regenerateButton.isEnabled = false
+
+        Task {
+            do {
+                let result: GenerateOTPResponse = try await SupabaseManager.shared.client.functions
+                    .invoke("generate-otp", options: .init(body: GenerateOTPRequest(request_id: requestId, type: "pickup")))
+
+                await MainActor.run {
+                    self.spinner.stopAnimating()
+                    self.otpLabel.text = result.otp
+                    self.startCooldown()
+                }
+            } catch {
+                await MainActor.run {
+                    self.spinner.stopAnimating()
+                    self.otpLabel.text = "Error"
+                    self.statusLabel.text = error.localizedDescription
+                    self.regenerateButton.isEnabled = true
+                }
+            }
+        }
+    }
+
+    @objc private func regenerateTapped() {
+        generateOTP()
+    }
+
+    // MARK: - Cooldown
+    private func startCooldown() {
+        cooldownSeconds = 30
+        regenerateButton.isEnabled = false
+        statusLabel.text = "Regenerate available in \(cooldownSeconds)s"
+        cooldownTimer?.invalidate()
+        cooldownTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] timer in
+            guard let self = self else { timer.invalidate(); return }
+            self.cooldownSeconds -= 1
+            if self.cooldownSeconds <= 0 {
+                timer.invalidate()
+                self.regenerateButton.isEnabled = true
+                self.statusLabel.text = ""
+            } else {
+                self.statusLabel.text = "Regenerate available in \(self.cooldownSeconds)s"
+            }
+        }
+    }
+}
+
+// MARK: - Models
+private struct GenerateOTPRequest: Encodable {
+    let request_id: String
+    let type: String // "pickup" or "return"
+}
+
+private struct GenerateOTPResponse: Decodable {
+    let otp: String
+}

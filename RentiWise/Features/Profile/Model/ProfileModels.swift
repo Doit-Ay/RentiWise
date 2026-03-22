@@ -13,6 +13,7 @@ struct UserProfile {
     let fullName: String
     let email: String
     let phone: String
+    let upiId: String
 }
 
 // Raw DB row from Supabase "users" table
@@ -22,5 +23,6 @@ struct DBUserRow: Decodable {
     let full_name: String?
     let phone: String?
     let profile_photo_url: String?
+    let upi_id: String?
 }
 

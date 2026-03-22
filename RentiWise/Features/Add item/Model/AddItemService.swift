@@ -39,6 +39,17 @@ final class AddItemService: AddItemServicing {
 
     // MARK: - Public entry
     func insertItem(draft: AddItemDraft, status: ((String) -> Void)? = nil) async throws -> ItemRow {
+        // 0) Validate inputs (defence-in-depth: UI should also guard these)
+        let trimmedTitle = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedTitle.isEmpty else {
+            throw NSError(domain: "AddItemService", code: 400,
+                          userInfo: [NSLocalizedDescriptionKey: "Item title cannot be blank. Please enter a title."])
+        }
+        guard draft.pricePerDay > 0 else {
+            throw NSError(domain: "AddItemService", code: 400,
+                          userInfo: [NSLocalizedDescriptionKey: "Price per day must be greater than ₹0."])
+        }
+
         // 1) Ensure user is logged in
         status?("Checking session…")
         let session: Session

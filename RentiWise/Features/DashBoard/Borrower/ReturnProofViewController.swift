@@ -69,14 +69,31 @@ class ReturnProofViewController: UIViewController {
         // Set item name
         itemNameLabel.text = req.items?.title ?? "Item"
         
-        // Set rental period
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateStyle = .medium
-        dateFormatter.timeStyle = .none
+        // Set rental period using ACTUAL start_date and end_date from the request
+        let dbFormatter = DateFormatter()
+        dbFormatter.dateFormat = "yyyy-MM-dd"
+        dbFormatter.timeZone = TimeZone(secondsFromGMT: 0)
         
-        let startDate = dateFormatter.string(from: Date()) // Placeholder
-        let endDate = dateFormatter.string(from: Date()) // Placeholder
-        rentalPeriodLabel.text = "\(startDate) - \(endDate)"
+        let displayFormatter = DateFormatter()
+        displayFormatter.dateStyle = .medium
+        displayFormatter.timeStyle = .none
+        
+        let startStr: String
+        let endStr: String
+        
+        if let startDate = dbFormatter.date(from: req.start_date) {
+            startStr = displayFormatter.string(from: startDate)
+        } else {
+            startStr = req.start_date
+        }
+        
+        if let endDate = dbFormatter.date(from: req.end_date) {
+            endStr = displayFormatter.string(from: endDate)
+        } else {
+            endStr = req.end_date
+        }
+        
+        rentalPeriodLabel.text = "\(startStr) – \(endStr)"
     }
     
     private func setupCollectionView() {
@@ -139,18 +156,23 @@ class ReturnProofViewController: UIViewController {
     // MARK: - API Calls
     
     private func uploadMediaToSupabase(_ mediaURL: URL) async throws -> String {
-        // For now, we'll skip the actual upload and just return a placeholder path
-        // This requires proper Supabase Storage setup and import
-        let fileName = "return_proof_\(UUID().uuidString)_\(mediaURL.lastPathComponent)"
+        let fileExtension = mediaURL.pathExtension.isEmpty ? "jpg" : mediaURL.pathExtension
+        let fileName = "return_proof_\(UUID().uuidString).\(fileExtension)"
+        let storagePath = "return-proofs/\(fileName)"
         
-        // TODO: Implement actual Supabase Storage upload
-        // This would require:
-        // 1. Import Storage module
-        // 2. Create a storage bucket for return proofs
-        // 3. Upload the file data
+        guard let data = try? Data(contentsOf: mediaURL) else {
+            throw NSError(domain: "ReturnProof", code: -1,
+                          userInfo: [NSLocalizedDescriptionKey: "Failed to read media file."])
+        }
         
-        print("[ReturnProof] Would upload file: \(fileName)")
-        return fileName
+        let mimeType = fileExtension.lowercased() == "mp4" ? "video/mp4" : "image/jpeg"
+        
+        try await SupabaseManager.shared.client.storage
+            .from("return-proofs")
+            .upload(storagePath, data: data, options: FileOptions(contentType: mimeType, upsert: false))
+        
+        print("[ReturnProof] Uploaded to Supabase Storage: \(storagePath)")
+        return storagePath
     }
     
     private func submitReturnRequest(for request: RequestWithItem) async {

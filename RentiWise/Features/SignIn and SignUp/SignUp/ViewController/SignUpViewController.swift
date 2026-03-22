@@ -134,7 +134,19 @@ final class SignUpViewController: UIViewController {
                 // Sanity-check the session is live
                 _ = try await SupabaseManager.shared.client.auth.session
 
-                routeToProfileTab()
+                // Mandatory phone verification before entering the app
+                let phoneVC = PhoneVerificationViewController()
+                phoneVC.onVerificationComplete = { [weak self] in
+                    self?.routeToProfileTab()
+                }
+                phoneVC.hidesBottomBarWhenPushed = true
+                if let nav = self.navigationController {
+                    nav.pushViewController(phoneVC, animated: true)
+                } else {
+                    let nav = UINavigationController(rootViewController: phoneVC)
+                    nav.modalPresentationStyle = .fullScreen
+                    self.present(nav, animated: true)
+                }
             } else {
                 presentAlert(
                     title: "Confirm your email",
@@ -176,7 +188,24 @@ final class SignUpViewController: UIViewController {
                 // Sanity-check the session is live
                 _ = try await SupabaseManager.shared.client.auth.session
 
-                routeToProfileTab()
+                // Check phone verification before entering app
+                let isPhoneVerified = await PhoneVerificationService.shared.isPhoneVerified(userId: session.user.id.uuidString)
+                if !isPhoneVerified {
+                    let phoneVC = PhoneVerificationViewController()
+                    phoneVC.onVerificationComplete = { [weak self] in
+                        self?.routeToProfileTab()
+                    }
+                    phoneVC.hidesBottomBarWhenPushed = true
+                    if let nav = self.navigationController {
+                        nav.pushViewController(phoneVC, animated: true)
+                    } else {
+                        let nav = UINavigationController(rootViewController: phoneVC)
+                        nav.modalPresentationStyle = .fullScreen
+                        self.present(nav, animated: true)
+                    }
+                } else {
+                    routeToProfileTab()
+                }
             } catch {
                 presentAlert(title: "Google Sign In Failed", message: error.localizedDescription)
             }

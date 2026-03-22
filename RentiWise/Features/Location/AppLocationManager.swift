@@ -32,6 +32,24 @@ final class AppLocationManager: NSObject {
         case failed
         case reverseGeocodeFailed
     }
+
+    /// Returns the device's current coordinates, or nil if unavailable.
+    /// Does NOT prompt for permission — returns nil if not authorized.
+    func currentCoordinates() async -> CLLocationCoordinate2D? {
+        let status = manager.authorizationStatus
+        guard status == .authorizedWhenInUse || status == .authorizedAlways else {
+            return nil
+        }
+        do {
+            let loc = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<CLLocation, Error>) in
+                self.locationContinuation = continuation
+                self.manager.requestLocation()
+            }
+            return loc.coordinate
+        } catch {
+            return nil
+        }
+    }
 }
 
 extension AppLocationManager.LocationError: LocalizedError {

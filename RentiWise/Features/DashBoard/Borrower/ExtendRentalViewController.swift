@@ -49,7 +49,12 @@ class ExtendRentalViewController: UIViewController {
         
         // Configure date picker
         newEndDatePicker.datePickerMode = .date
-        newEndDatePicker.minimumDate = originalEndDate ?? Date()
+        // Minimum selectable date is the day AFTER the original end date (at least 1 additional day)
+        if let originalEnd = originalEndDate {
+            newEndDatePicker.minimumDate = Calendar.current.date(byAdding: .day, value: 1, to: originalEnd) ?? originalEnd
+        } else {
+            newEndDatePicker.minimumDate = Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date()
+        }
         newEndDatePicker.addTarget(self, action: #selector(datePickerChanged), for: .valueChanged)
     }
     

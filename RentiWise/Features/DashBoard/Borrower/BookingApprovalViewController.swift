@@ -60,6 +60,12 @@ class BookingApprovalViewController: UIViewController {
     // Derived exclusively from DB: whether there is a succeeded payment for this request
     private var hasCompletedPayment: Bool = false
 
+    // Derived from DB: whether the lender has confirmed pickup via OTP
+    private var isPickupConfirmed: Bool = false
+
+    // Cached current user ID — set once, used to determine lender vs borrower in updateStatusUI
+    private var cachedCurrentUserId: String?
+
     // The active/latest payment row (if any) loaded from DB
     private var currentPayment: PaymentRow?
 
@@ -385,6 +391,18 @@ class BookingApprovalViewController: UIViewController {
         // Everything requiring a network call is deferred to here.
         Task { [weak self] in
             guard let self, let req = self.request else { return }
+
+            // Cache the current user ID FIRST — everything else depends on this
+            if self.cachedCurrentUserId == nil {
+                self.cachedCurrentUserId = await SupabaseManager.shared.currentUserId()
+                print("[BookingApproval] Cached currentUserId: \(self.cachedCurrentUserId ?? "nil"), owner_id: \(req.owner_id), borrower_id: \(req.borrower_id)")
+                
+                // Auto-derive mode from cached user ID
+                let isOwner = (self.cachedCurrentUserId?.lowercased() == req.owner_id.lowercased())
+                if isOwner && self.mode != .history {
+                    await MainActor.run { self.mode = .history }
+                }
+            }
 
             // Refresh the request row itself first
             await refreshRequestFromDBIfPossible()
@@ -861,23 +879,47 @@ class BookingApprovalViewController: UIViewController {
         guard mode == .myRentals else { return } // no payment in history
         guard let req = request else { return }
 
-        let actionSheet = UIAlertController(title: "Choose Payment Method", message: nil, preferredStyle: .actionSheet)
+        // Navigate to UPI Confirmation screen instead of old payment action sheet
+        sender.isEnabled = false
+        Task {
+            // Fetch lender's UPI ID
+            var lenderUpiId = ""
+            var lenderName = self.ownNameLabel?.text ?? "Lender"
+            do {
+                struct UpiRow: Decodable { let upi_id: String?; let full_name: String? }
+                let resp = try await SupabaseManager.shared.client
+                    .from("users")
+                    .select("upi_id, full_name")
+                    .eq("id", value: req.owner_id)
+                    .single()
+                    .execute()
+                let row = try JSONDecoder().decode(UpiRow.self, from: resp.data)
+                lenderUpiId = row.upi_id ?? ""
+                if let name = row.full_name, !name.isEmpty { lenderName = name }
+            } catch {
+                print("[BookingApproval] Error fetching lender UPI: \(error)")
+            }
 
-        let handlePaymentSelection: (String) -> Void = { method in
-            Task { await self.performDBBackedPayment(for: req, provider: method, button: sender) }
+            // Compute amounts
+            let amounts = await self.computeAmounts(for: req)
+
+            await MainActor.run {
+                sender.isEnabled = true
+
+                let upiVC = UPIConfirmationViewController()
+                upiVC.requestId = req.id
+                upiVC.itemName = req.items?.title ?? "Item"
+                upiVC.totalAmount = amounts.rentalFee
+                upiVC.depositAmount = amounts.deposit
+                upiVC.lenderUpiId = lenderUpiId
+                upiVC.lenderName = lenderName
+                upiVC.onPaymentConfirmed = { [weak self] in
+                    self?.hasCompletedPayment = true
+                    self?.updateStatusUI()
+                }
+                self.navigationController?.pushViewController(upiVC, animated: true)
+            }
         }
-
-        actionSheet.addAction(UIAlertAction(title: "Apple Pay", style: .default) { _ in handlePaymentSelection("apple_pay") })
-        actionSheet.addAction(UIAlertAction(title: "Credit/Debit Card", style: .default) { _ in handlePaymentSelection("card") })
-        actionSheet.addAction(UIAlertAction(title: "Cash on Delivery", style: .default) { _ in handlePaymentSelection("cod") })
-        actionSheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-
-        if let popover = actionSheet.popoverPresentationController {
-            popover.sourceView = sender
-            popover.sourceRect = sender.bounds
-        }
-
-        present(actionSheet, animated: true)
     }
     
     
@@ -927,21 +969,155 @@ class BookingApprovalViewController: UIViewController {
         // Show a brief confirmation with haptic feedback
         let generator = UINotificationFeedbackGenerator()
         generator.notificationOccurred(.success)
-        
-        // Visual feedback: briefly change button appearance
-        let originalAlpha = sender.alpha
-        UIView.animate(withDuration: 0.15, animations: {
-            sender.alpha = 0.5
-        }) { _ in
-            UIView.animate(withDuration: 0.15) {
-                sender.alpha = originalAlpha
-            }
-        }
-        
-        // Show bottom toast notification
         showToast(message: "Address copied", fromBottom: true)
     }
-    
+        
+    @IBAction func copybuttontapped(_ sender: UIButton) {
+        // Determine if current user is the owner (lender) using cached ID
+        let isOwner = (cachedCurrentUserId?.lowercased() == request?.owner_id.lowercased())
+        
+        if isOwner {
+            // LENDER: handle OTP verification
+            if isPickupConfirmed { return }
+            promptForOTP()
+        } else {
+            // BORROWER: toggle code visibility
+            toggleCodeVisibility()
+        }
+    }
+
+    private func toggleCodeVisibility() {
+        let isExpanded = (viewCodeHeight?.constant == expandedViewCodeHeight)
+        if isExpanded {
+            // Collapse
+            viewCodeHeight?.constant = collapsedViewCodeHeight
+            UIView.animate(withDuration: 0.3) {
+                self.codestack.isHidden = true
+                self.codeStackCollapseConstraint?.isActive = true
+                self.view.layoutIfNeeded()
+            }
+            copybutton?.setTitle("View Code", for: .normal)
+        } else {
+            // Expand
+            viewCodeHeight?.constant = expandedViewCodeHeight
+            UIView.animate(withDuration: 0.3) {
+                self.codeStackCollapseConstraint?.isActive = false
+                self.codestack.isHidden = false
+                self.view.layoutIfNeeded()
+            }
+            copybutton?.setTitle("Hide Code", for: .normal)
+        }
+    }
+
+    private func promptForOTP() {
+        let alert = UIAlertController(
+            title: "Confirm Pickup",
+            message: "Enter the 6-digit code shown on the borrower's screen to confirm the pickup.",
+            preferredStyle: .alert
+        )
+        
+        alert.addTextField { textField in
+            textField.placeholder = "123456"
+            textField.keyboardType = .numberPad
+            textField.textContentType = .oneTimeCode
+        }
+        
+        let verifyAction = UIAlertAction(title: "Verify", style: .default) { [weak self, weak alert] _ in
+            guard let self = self, let code = alert?.textFields?.first?.text, !code.isEmpty else { return }
+            self.verifyOTPCode(code)
+        }
+        verifyAction.setValue(UIColor.systemBlue, forKey: "titleTextColor")
+        
+        let cancelAction = UIAlertAction(title: "Cancel", style: .cancel)
+        
+        alert.addAction(verifyAction)
+        alert.addAction(cancelAction)
+        self.present(alert, animated: true)
+    }
+
+    private func verifyOTPCode(_ enteredCode: String) {
+        guard let req = request else { return }
+        
+        Task {
+            do {
+                // Fetch the actual payment record to check the code
+                struct PaymentCodeRow: Decodable { let pickup_code: String? }
+                let response = try await SupabaseManager.shared.client
+                    .from("payments")
+                    .select("pickup_code")
+                    .eq("request_id", value: req.id)
+                    .eq("status", value: "succeeded")
+                    .order("created_at", ascending: false)
+                    .limit(1)
+                    .execute()
+                
+                let rows = try JSONDecoder().decode([PaymentCodeRow].self, from: response.data)
+                guard let actualCode = rows.first?.pickup_code else {
+                    throw NSError(domain: "OTP", code: 404, userInfo: [NSLocalizedDescriptionKey: "Payment record or code not found."])
+                }
+                
+                if enteredCode == actualCode {
+                    // Match! Update DB
+                    _ = try await SupabaseManager.shared.client
+                        .from("payments")
+                        .update(["pickup_confirmed": true])
+                        .eq("request_id", value: req.id)
+                        .eq("status", value: "succeeded")
+                        .execute()
+                    
+                    await MainActor.run {
+                        self.isPickupConfirmed = true
+                        self.updateStatusUI()
+                        self.updateReturnButtonForRequestStatus()
+                        
+                        let generator = UINotificationFeedbackGenerator()
+                        generator.notificationOccurred(.success)
+                        
+                        let successAlert = UIAlertController(
+                            title: "Pickup Confirmed! ✅",
+                            message: "The OTP has been verified successfully. The item pickup is now confirmed.",
+                            preferredStyle: .alert
+                        )
+                        successAlert.addAction(UIAlertAction(title: "Great!", style: .default))
+                        self.present(successAlert, animated: true)
+                    }
+                    
+                    // Fire Notification
+                    let itemTitle = req.items?.title ?? "your item"
+                    NotificationService.sendPickupConfirmed(
+                        requestId: req.id,
+                        borrowerId: req.borrower_id,
+                        ownerId: req.owner_id,
+                        itemTitle: itemTitle
+                    )
+                    
+                    NotificationCenter.default.post(name: Notification.Name("requestsShouldRefresh"), object: nil)
+                    
+                } else {
+                    // Mismatch
+                    await MainActor.run {
+                        let generator = UINotificationFeedbackGenerator()
+                        generator.notificationOccurred(.error)
+                        
+                        let errorAlert = UIAlertController(
+                            title: "Incorrect Code",
+                            message: "The code you entered does not match. Please try again.",
+                            preferredStyle: .alert
+                        )
+                        errorAlert.addAction(UIAlertAction(title: "OK", style: .default))
+                        self.present(errorAlert, animated: true)
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    let alert = UIAlertController(title: "Error", message: error.localizedDescription, preferredStyle: .alert)
+                    alert.addAction(UIAlertAction(title: "OK", style: .default))
+                    self.present(alert, animated: true)
+                }
+            }
+        }
+    }
+
     @IBAction func extendRentalButtonTapped(_ sender: UIButton) {
         // If button is in "Cancel Extend" mode (pending state)
         if currentExtensionRequestStatus == "pending" {
@@ -1139,6 +1315,16 @@ class BookingApprovalViewController: UIViewController {
             extendReturnButtonsStack?.isHidden = true
             return
         }
+
+        // Return/Extend only available after pickup is confirmed (rental is active)
+        if !isPickupConfirmed && status == .approved && hasCompletedPayment {
+            // Payment done but pickup not yet confirmed — hide Return/Extend
+            extendReturnButtonsStack?.isHidden = true
+            return
+        }
+        if !hasCompletedPayment {
+            // No payment yet — keep Cancel Request visible but not Extend
+        }
         
         let isPrePaymentPending = (status == .pending)
         let returnTitle = isPrePaymentPending ? "Cancel Request" : "Return Item"
@@ -1254,6 +1440,7 @@ class BookingApprovalViewController: UIViewController {
     }
 
     private func updateStatusUI() {
+        print("[BookingApproval] updateStatusUI — mode=\(mode), hasCompletedPayment=\(hasCompletedPayment), isPickupConfirmed=\(isPickupConfirmed), status=\(status)")
         let tealColor = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1)
 
         // circ2 is the teal circle behind the icon — always teal
@@ -1322,13 +1509,62 @@ class BookingApprovalViewController: UIViewController {
         tickimage.contentMode = .scaleAspectFit
 
         // Show/hide View Code container depending on DB payment status
-        // Show in BOTH myRentals and history modes when payment is completed
-        // (Borrower needs code to show owner, Owner needs code to verify)
+        // Show for BOTH borrower and lender if payment is completed
         let shouldShowCode = hasCompletedPayment && (status != .cancelled && status != .rejected && status != .completed)
         viewCodeUIView.isHidden = !shouldShowCode
+        
+        // Determine lender vs borrower DIRECTLY from user ID, not from mode property
+        let isCurrentUserOwner: Bool = {
+            guard let userId = cachedCurrentUserId, let req = request else { return mode == .history }
+            return userId.lowercased() == req.owner_id.lowercased()
+        }()
+        
+        // ALWAYS reset copybutton appearance to defaults
+        copybutton?.backgroundColor = .clear
+        copybutton?.setTitleColor(.label, for: .normal)
+        
+        print("[BookingApproval] updateStatusUI code section — shouldShowCode=\(shouldShowCode), isCurrentUserOwner=\(isCurrentUserOwner), cachedUserId=\(cachedCurrentUserId ?? "nil")")
+        
         if shouldShowCode {
             viewCodeHeight?.constant = collapsedViewCodeHeight
             statusToViewCodeTop?.constant = 0
+            
+            if isCurrentUserOwner {
+                // ═══════════ LENDER: "Confirm Pickup" or "✅ Confirmed" ═══════════
+                codestack.isHidden = true  // NEVER show digits to lender
+                
+                if isPickupConfirmed {
+                    copybutton?.setTitle("✅ Pickup Confirmed", for: .normal)
+                    copybutton?.setTitleColor(.systemGreen, for: .normal)
+                    copybutton?.isEnabled = false
+                    print("[BookingApproval] >>> LENDER UI: ✅ Pickup Confirmed")
+                } else {
+                    copybutton?.setTitle("📱 Confirm Pickup with OTP", for: .normal)
+                    copybutton?.setTitleColor(.white, for: .normal)
+                    copybutton?.backgroundColor = UIColor(red: 0x34/255.0, green: 0xAA/255.0, blue: 0x69/255.0, alpha: 1.0)
+                    copybutton?.layer.cornerRadius = 8
+                    copybutton?.layer.masksToBounds = true
+                    copybutton?.isEnabled = true
+                    print("[BookingApproval] >>> LENDER UI: 📱 Confirm Pickup with OTP")
+                }
+            } else {
+                // ═══════════ BORROWER: "View Code" / "Hide Code" toggle ═══════════
+                if isPickupConfirmed {
+                    codestack.isHidden = true
+                    copybutton?.setTitle("✅ Pickup Confirmed", for: .normal)
+                    copybutton?.setTitleColor(.systemGreen, for: .normal)
+                    copybutton?.isEnabled = false
+                    print("[BookingApproval] >>> BORROWER UI: ✅ Pickup Confirmed")
+                } else {
+                    let isExpanded = (viewCodeHeight?.constant == expandedViewCodeHeight)
+                    viewCodeHeight?.constant = isExpanded ? expandedViewCodeHeight : collapsedViewCodeHeight
+                    codestack.isHidden = !isExpanded
+                    copybutton?.setTitle(isExpanded ? "Hide Code" : "View Code", for: .normal)
+                    copybutton?.setTitleColor(.label, for: .normal)
+                    copybutton?.isEnabled = true
+                    print("[BookingApproval] >>> BORROWER UI: \(isExpanded ? "Hide Code" : "View Code")")
+                }
+            }
         } else {
             viewCodeHeight?.constant = 0
             statusToViewCodeTop?.constant = 0
@@ -1375,6 +1611,12 @@ class BookingApprovalViewController: UIViewController {
         } else if s == "rejected" {
             setStatus(.rejected)
         } else if s == "completed" {
+            // Clean up ALL stale extensionAlertShown_* and RW_DecisionTimestamp_* keys for this request when it completes
+            let defaults = UserDefaults.standard
+            let allKeys = defaults.dictionaryRepresentation().keys
+            let staleExtensionKeys = allKeys.filter { $0.hasPrefix("extensionAlertShown_") && $0.contains(req.id) }
+            let staleDecisionKeys = allKeys.filter { $0.hasPrefix("RW_DecisionTimestamp_") && $0.contains(req.id) }
+            (staleExtensionKeys + staleDecisionKeys).forEach { defaults.removeObject(forKey: $0) }
             setStatus(.completed)
         } else {
             setStatus(.pending)
@@ -1382,20 +1624,18 @@ class BookingApprovalViewController: UIViewController {
 
         // Defensive: Auto-derive mode based on current user if not explicitly set
         // This acts as a fallback to prevent edge cases
+        // NOTE: Do NOT trigger duplicate payment refresh here — viewDidAppear already does it.
+        // Only set the mode property so subsequent updateStatusUI() calls use the right branch.
         Task { [weak self] in
             guard let self = self else { return }
             guard let currentUserId = await SupabaseManager.shared.currentUserId() else { return }
             
+            let derivedMode: PresentationMode = (currentUserId == req.owner_id) ? .history : .myRentals
+            
             await MainActor.run {
-                // If current user is the owner, we're in history mode (owner viewing borrower's request)
-                // Otherwise, we're in myRentals mode (borrower viewing their own request)
-                let derivedMode: PresentationMode = (currentUserId == req.owner_id) ? .history : .myRentals
-                
-                // Only auto-set if mode is still at default (.myRentals) and we detect we should be in .history
-                // This is a defensive measure; normally mode should be set by the caller
-                if self.mode == .myRentals && derivedMode == .history {
-                    print("[BookingApproval] Auto-derived mode: .history (currentUser is owner)")
-                    self.mode = .history
+                if derivedMode != self.mode {
+                    print("[BookingApproval] Auto-derived mode: \(derivedMode) (was \(self.mode))")
+                    self.mode = derivedMode  // didSet will call applyModeUI() which calls updateStatusUI()
                 }
             }
         }
@@ -1630,10 +1870,12 @@ class BookingApprovalViewController: UIViewController {
                 self.currentPayment = latest
                 if let p = latest, p.status.lowercased() == "succeeded", let code = p.pickup_code, !code.isEmpty {
                     self.hasCompletedPayment = true
+                    self.isPickupConfirmed = p.pickup_confirmed ?? false
                     self.setCodeDigits(from: code)
                     self.updateAmountLabels(rental: p.rental_fee, deposit: p.deposit_amount, total: p.total_amount)
                 } else {
                     self.hasCompletedPayment = false
+                    self.isPickupConfirmed = false
                     self.setCodeDigits(from: "000000")
                     Task { [weak self] in
                         guard let self = self, let req = self.request else { return }
@@ -1680,10 +1922,12 @@ class BookingApprovalViewController: UIViewController {
                 self.currentPayment = latest
                 if let p = latest, p.status.lowercased() == "succeeded", let code = p.pickup_code, !code.isEmpty {
                     self.hasCompletedPayment = true
-                    self.setCodeDigits(from: code)
+                    self.isPickupConfirmed = p.pickup_confirmed ?? false
+                    self.setCodeDigits(from: code) // Will be hidden in UI anyway
                     self.updateAmountLabels(rental: p.rental_fee, deposit: p.deposit_amount, total: p.total_amount)
                 } else {
                     self.hasCompletedPayment = false
+                    self.isPickupConfirmed = false
                     self.setCodeDigits(from: "000000")
                 }
                 self.updateStatusUI()
@@ -1815,6 +2059,10 @@ class BookingApprovalViewController: UIViewController {
         }
 
         await refreshPaymentFromDB()
+
+        // Notify the lender that payment has been received
+        let itemTitle = req.items?.title ?? "your item"
+        NotificationService.sendPaymentReceived(requestId: req.id, ownerId: req.owner_id, itemTitle: itemTitle)
     }
 
     private func computeAmounts(for req: RequestWithItem) async -> (rentalFee: Double, deposit: Double) {

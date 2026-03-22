@@ -13,20 +13,23 @@ class EditProfileViewController: UITableViewController {
     private let fullNameField = UITextField()
     private let emailField = UITextField()
     private let phoneField = UITextField()
+    private let upiIdField = UITextField()
     
     private var fullName: String
     private let email: String
     private var phone: String
+    private var upiId: String
     
-    var onSaved: ((_ newName: String, _ newPhone: String) -> Void)?
+    var onSaved: ((_ newName: String, _ newPhone: String, _ newUpiId: String) -> Void)?
     
     private var isSaving = false
     private var errorMessage: String?
     
-    init(fullName: String, email: String, phone: String) {
+    init(fullName: String, email: String, phone: String, upiId: String = "") {
         self.fullName = fullName
         self.email = email
         self.phone = phone
+        self.upiId = upiId
         super.init(style: .insetGrouped)
     }
     
@@ -63,6 +66,12 @@ class EditProfileViewController: UITableViewController {
         
         phoneField.text = phone
         phoneField.keyboardType = .phonePad
+        
+        upiIdField.text = upiId
+        upiIdField.placeholder = "name@upi or 9876543210@paytm"
+        upiIdField.keyboardType = .emailAddress
+        upiIdField.autocapitalizationType = .none
+        upiIdField.autocorrectionType = .no
     }
     
     @objc private func textFieldChanged() {
@@ -79,6 +88,13 @@ class EditProfileViewController: UITableViewController {
     }
     
     @objc private func saveTapped() {
+        // Validate UPI ID format if provided
+        let trimmedUPI = upiIdField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !trimmedUPI.isEmpty && !trimmedUPI.contains("@") {
+            errorMessage = "UPI ID must contain '@' (e.g., name@upi)"
+            tableView.reloadData()
+            return
+        }
         Task { await save() }
     }
     
@@ -97,6 +113,7 @@ class EditProfileViewController: UITableViewController {
         
         let trimmedName = fullNameField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let trimmedPhone = phoneField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let trimmedUPI = upiIdField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         
         do {
             guard let userId = await SupabaseManager.shared.currentUserId() else {
@@ -106,16 +123,17 @@ class EditProfileViewController: UITableViewController {
             struct UpdateRow: Encodable {
                 let full_name: String
                 let phone: String
+                let upi_id: String?
             }
             
             _ = try await SupabaseManager.shared.client
                 .from("users")
-                .update(UpdateRow(full_name: trimmedName, phone: trimmedPhone))
+                .update(UpdateRow(full_name: trimmedName, phone: trimmedPhone, upi_id: trimmedUPI.isEmpty ? nil : trimmedUPI))
                 .eq("id", value: userId)
                 .execute()
             
             await MainActor.run {
-                onSaved?(trimmedName, trimmedPhone)
+                onSaved?(trimmedName, trimmedPhone, trimmedUPI)
                 dismiss(animated: true)
             }
         } catch {
@@ -129,16 +147,33 @@ class EditProfileViewController: UITableViewController {
     // MARK: - TableView DataSource
     
     override func numberOfSections(in tableView: UITableView) -> Int {
-        return errorMessage != nil ? 3 : 2
+        // Sections: 0=Name, 1=Contact, 2=UPI, 3=Error (if any)
+        return errorMessage != nil ? 4 : 3
     }
     
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return section == 2 ? 1 : section == 0 ? 1 : 2
+        switch section {
+        case 0: return 1       // Full name
+        case 1: return 2       // Email + Phone
+        case 2: return 1       // UPI ID
+        case 3: return 1       // Error message
+        default: return 0
+        }
     }
     
     override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
-        if section == 0 { return "Name" }
-        if section == 1 { return "Contact" }
+        switch section {
+        case 0: return "Name"
+        case 1: return "Contact"
+        case 2: return "UPI"
+        default: return nil
+        }
+    }
+    
+    override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
+        if section == 2 {
+            return "Your UPI ID is shown to borrowers so they can pay you directly."
+        }
         return nil
     }
     
@@ -149,7 +184,7 @@ class EditProfileViewController: UITableViewController {
         // Clear previous content
         cell.contentView.subviews.forEach { $0.removeFromSuperview() }
         
-        if indexPath.section == 2 {
+        if indexPath.section == 3 {
             // Error message
             cell.textLabel?.text = errorMessage
             cell.textLabel?.textColor = .systemRed
@@ -158,42 +193,35 @@ class EditProfileViewController: UITableViewController {
             return cell
         }
         
-        if indexPath.section == 0 {
-            // Full name
-            fullNameField.translatesAutoresizingMaskIntoConstraints = false
-            fullNameField.placeholder = "Full Name"
-            cell.contentView.addSubview(fullNameField)
-            NSLayoutConstraint.activate([
-                fullNameField.leadingAnchor.constraint(equalTo: cell.contentView.leadingAnchor, constant: 16),
-                fullNameField.trailingAnchor.constraint(equalTo: cell.contentView.trailingAnchor, constant: -16),
-                fullNameField.topAnchor.constraint(equalTo: cell.contentView.topAnchor, constant: 12),
-                fullNameField.bottomAnchor.constraint(equalTo: cell.contentView.bottomAnchor, constant: -12)
-            ])
-        } else if indexPath.section == 1 {
-            if indexPath.row == 0 {
-                // Email
-                emailField.translatesAutoresizingMaskIntoConstraints = false
-                emailField.placeholder = "Email"
-                cell.contentView.addSubview(emailField)
-                NSLayoutConstraint.activate([
-                    emailField.leadingAnchor.constraint(equalTo: cell.contentView.leadingAnchor, constant: 16),
-                    emailField.trailingAnchor.constraint(equalTo: cell.contentView.trailingAnchor, constant: -16),
-                    emailField.topAnchor.constraint(equalTo: cell.contentView.topAnchor, constant: 12),
-                    emailField.bottomAnchor.constraint(equalTo: cell.contentView.bottomAnchor, constant: -12)
-                ])
-            } else {
-                // Phone
-                phoneField.translatesAutoresizingMaskIntoConstraints = false
-                phoneField.placeholder = "Phone"
-                cell.contentView.addSubview(phoneField)
-                NSLayoutConstraint.activate([
-                    phoneField.leadingAnchor.constraint(equalTo: cell.contentView.leadingAnchor, constant: 16),
-                    phoneField.trailingAnchor.constraint(equalTo: cell.contentView.trailingAnchor, constant: -16),
-                    phoneField.topAnchor.constraint(equalTo: cell.contentView.topAnchor, constant: 12),
-                    phoneField.bottomAnchor.constraint(equalTo: cell.contentView.bottomAnchor, constant: -12)
-                ])
-            }
+        let field: UITextField
+        let placeholder: String
+        
+        switch (indexPath.section, indexPath.row) {
+        case (0, 0):
+            field = fullNameField
+            placeholder = "Full Name"
+        case (1, 0):
+            field = emailField
+            placeholder = "Email"
+        case (1, 1):
+            field = phoneField
+            placeholder = "Phone"
+        case (2, 0):
+            field = upiIdField
+            placeholder = "UPI ID (e.g., name@upi)"
+        default:
+            return cell
         }
+        
+        field.translatesAutoresizingMaskIntoConstraints = false
+        field.placeholder = placeholder
+        cell.contentView.addSubview(field)
+        NSLayoutConstraint.activate([
+            field.leadingAnchor.constraint(equalTo: cell.contentView.leadingAnchor, constant: 16),
+            field.trailingAnchor.constraint(equalTo: cell.contentView.trailingAnchor, constant: -16),
+            field.topAnchor.constraint(equalTo: cell.contentView.topAnchor, constant: 12),
+            field.bottomAnchor.constraint(equalTo: cell.contentView.bottomAnchor, constant: -12)
+        ])
         
         return cell
     }

@@ -209,10 +209,10 @@ class RequestSentPageViewController: UIViewController {
 
         // Owner secondary labels default fallbacks if still empty
         if ownerstarRating?.text?.isEmpty ?? true {
-            ownerstarRating?.text = "★ 4.5"
+            ownerstarRating?.text = "No rating"
         }
         if ownerDistanceLabel?.text?.isEmpty ?? true {
-            ownerDistanceLabel?.text = "2.3 km"
+            ownerDistanceLabel?.text = "— km"
         }
     }
     
@@ -473,12 +473,12 @@ private extension RequestSentPageViewController {
         if let r = rating {
             ownerstarRating?.text = String(format: "★ %.1f", r)
         } else if ownerstarRating?.text?.isEmpty ?? true {
-            ownerstarRating?.text = "★ 4.5"
+            ownerstarRating?.text = "No rating"
         }
         if let d = distanceKm {
             ownerDistanceLabel?.text = String(format: "%.1f km", d)
         } else if ownerDistanceLabel?.text?.isEmpty ?? true {
-            ownerDistanceLabel?.text = "2.3 km"
+            ownerDistanceLabel?.text = "— km"
         }
         
         if let avatar = avatarURLString, !avatar.isEmpty, let url = urlForAvatarPath(avatar) {
