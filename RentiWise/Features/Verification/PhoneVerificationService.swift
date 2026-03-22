@@ -40,9 +40,17 @@ final class PhoneVerificationService {
         let responseData: Data = try await SupabaseManager.shared.client.functions
             .invoke("send-phone-otp", options: .init(body: payload))
             
-        let edgeResp = try JSONDecoder().decode(EdgeResponse.self, from: responseData)
-        if let errString = edgeResp.error {
-            throw VerificationError.serverError(errString)
+        if let rawString = String(data: responseData, encoding: .utf8) {
+            print("[PhoneOTP] Raw response: \(rawString)")
+            do {
+                let edgeResp = try JSONDecoder().decode(EdgeResponse.self, from: responseData)
+                if let errString = edgeResp.error {
+                    throw VerificationError.serverError(errString)
+                }
+            } catch {
+                // If JSON fails to decode, just throw the raw string so user can read it!
+                throw VerificationError.serverError(rawString.isEmpty ? "Empty response" : rawString)
+            }
         }
 
         print("[PhoneOTP] SMS sent to \(e164)")
