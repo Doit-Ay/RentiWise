@@ -29,8 +29,21 @@ final class PhoneVerificationService {
 
         // Call edge function — it generates OTP, stores hash, sends SMS
         let payload: [String: String] = ["phone": e164, "user_id": userId]
-        try await SupabaseManager.shared.client.functions
+        
+        struct EdgeResponse: Decodable {
+            let success: Bool?
+            let error: String?
+            let message: String?
+        }
+        
+        // Use Data.self to receive the raw JSON response
+        let responseData: Data = try await SupabaseManager.shared.client.functions
             .invoke("send-phone-otp", options: .init(body: payload))
+            
+        let edgeResp = try JSONDecoder().decode(EdgeResponse.self, from: responseData)
+        if let errString = edgeResp.error {
+            throw VerificationError.serverError(errString)
+        }
 
         print("[PhoneOTP] SMS sent to \(e164)")
     }
