@@ -145,18 +145,33 @@ class AddItemFirstViewController: UIViewController,
         banner.addSubview(goButton)
         view.addSubview(banner)
 
+        // Find StepHeader dynamically (it's the first UIStackView in the main view)
+        guard let stepHeader = view.subviews.first(where: { $0 is UIStackView }),
+              let grid = gridContainer else { return }
+              
+        // Find and deactivate the existing constraint linking gridContainer.top to stepHeader.bottom
+        if let existingConstraint = view.constraints.first(where: { 
+            ($0.firstItem as? UIView) == grid && ($0.secondItem as? UIView) == stepHeader && $0.firstAttribute == .top
+        }) {
+            existingConstraint.isActive = false
+        }
+        
         NSLayoutConstraint.activate([
-            banner.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
+            // Pin banner below stepHeader
+            banner.topAnchor.constraint(equalTo: stepHeader.bottomAnchor, constant: 16),
             banner.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
             banner.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
-
+            
             label.topAnchor.constraint(equalTo: banner.topAnchor, constant: 12),
             label.leadingAnchor.constraint(equalTo: banner.leadingAnchor, constant: 12),
             label.trailingAnchor.constraint(equalTo: banner.trailingAnchor, constant: -12),
-
+            
             goButton.topAnchor.constraint(equalTo: label.bottomAnchor, constant: 8),
             goButton.leadingAnchor.constraint(equalTo: banner.leadingAnchor, constant: 12),
             goButton.bottomAnchor.constraint(equalTo: banner.bottomAnchor, constant: -12),
+            
+            // Pin gridContainer below banner
+            grid.topAnchor.constraint(equalTo: banner.bottomAnchor, constant: 16)
         ])
     }
 
