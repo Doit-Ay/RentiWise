@@ -2,10 +2,13 @@
 //  PhoneVerificationService.swift
 //  RentiWise
 //
-//  Service for mandatory phone OTP verification using Supabase Auth.
+//  Self-managed phone OTP — no Twilio needed.
+//  Generates 6-digit code, stores SHA-256 hash in users table.
+//  OTP is shown on-screen for testing. For production: add SMS API.
 //
 
 import Foundation
+import CryptoKit
 import Supabase
 
 @MainActor
@@ -16,36 +19,93 @@ final class PhoneVerificationService {
 
     private var cachedVerificationStatus: [String: Bool] = [:]
 
+    /// Last generated OTP — shown on screen during dev/testing
+    private(set) var lastGeneratedOTP: String?
+
     // MARK: - Send OTP
 
-    /// Send OTP to phone number. Input: 10-digit number (auto-prepends +91).
-    func sendOTP(phone: String) async throws {
+    /// Generate a 6-digit OTP for the phone number.
+    /// Stores hashed OTP in users table. Returns the OTP for display.
+    @discardableResult
+    func sendOTP(phone: String) async throws -> String {
         let e164 = phone.hasPrefix("+91") ? phone : "+91\(phone)"
-        try await SupabaseManager.shared.client.auth.signInWithOTP(phone: e164)
-        print("[PhoneVerification] OTP sent to \(e164)")
+        let otp = String(format: "%06d", Int.random(in: 0...999999))
+
+        guard let userId = await SupabaseManager.shared.currentUserId() else {
+            throw VerificationError.notLoggedIn
+        }
+
+        struct OTPStore: Encodable {
+            let phone: String
+            let phone_otp_hash: String
+            let phone_otp_expires_at: String
+        }
+
+        let expiresAt = Date().addingTimeInterval(300) // 5 min
+        let update = OTPStore(
+            phone: e164,
+            phone_otp_hash: otp.sha256Hex(),
+            phone_otp_expires_at: ISO8601DateFormatter().string(from: expiresAt)
+        )
+
+        try await SupabaseManager.shared.client
+            .from("users")
+            .update(update)
+            .eq("id", value: userId)
+            .execute()
+
+        lastGeneratedOTP = otp
+        print("[PhoneOTP] Generated for \(e164): \(otp)")
+        return otp
     }
 
     // MARK: - Verify OTP
 
-    /// Verify the OTP. Returns true on success.
     func verifyOTP(phone: String, otp: String) async throws -> Bool {
-        let e164 = phone.hasPrefix("+91") ? phone : "+91\(phone)"
+        guard let userId = await SupabaseManager.shared.currentUserId() else { return false }
+
+        struct OTPRow: Decodable {
+            let phone_otp_hash: String?
+            let phone_otp_expires_at: String?
+        }
+
         do {
-            try await SupabaseManager.shared.client.auth.verifyOTP(
-                phone: e164,
-                token: otp,
-                type: .sms
-            )
+            let resp = try await SupabaseManager.shared.client
+                .from("users")
+                .select("phone_otp_hash, phone_otp_expires_at")
+                .eq("id", value: userId)
+                .single()
+                .execute()
+
+            let row = try JSONDecoder().decode(OTPRow.self, from: resp.data)
+
+            // Check expiry
+            if let exp = row.phone_otp_expires_at,
+               let date = ISO8601DateFormatter().date(from: exp),
+               Date() > date {
+                return false
+            }
+
+            // Check hash
+            guard otp.sha256Hex() == row.phone_otp_hash else { return false }
+
+            // Clear OTP after success
+            struct Clear: Encodable { let phone_otp_hash: String?; let phone_otp_expires_at: String? }
+            try? await SupabaseManager.shared.client
+                .from("users")
+                .update(Clear(phone_otp_hash: nil, phone_otp_expires_at: nil))
+                .eq("id", value: userId)
+                .execute()
+
             return true
         } catch {
-            print("[PhoneVerification] OTP verification failed: \(error)")
+            print("[PhoneOTP] Verify error: \(error)")
             return false
         }
     }
 
     // MARK: - Mark Phone Verified
 
-    /// After OTP verified: store phone + mark verified in users table.
     func markPhoneVerified(userId: String, phone: String) async throws {
         let e164 = phone.hasPrefix("+91") ? phone : "+91\(phone)"
 
@@ -56,19 +116,14 @@ final class PhoneVerificationService {
             let verification_level: Int
         }
 
-        // Fetch current verification_level to use GREATEST logic
         var currentLevel = 0
         do {
             struct LevelRow: Decodable { let verification_level: Int? }
             let resp = try await SupabaseManager.shared.client
-                .from("users")
-                .select("verification_level")
-                .eq("id", value: userId)
-                .single()
-                .execute()
-            let row = try JSONDecoder().decode(LevelRow.self, from: resp.data)
-            currentLevel = row.verification_level ?? 0
-        } catch { /* use default 0 */ }
+                .from("users").select("verification_level")
+                .eq("id", value: userId).single().execute()
+            currentLevel = (try? JSONDecoder().decode(LevelRow.self, from: resp.data))?.verification_level ?? 0
+        } catch {}
 
         let update = PhoneUpdate(
             phone: e164,
@@ -78,45 +133,30 @@ final class PhoneVerificationService {
         )
 
         try await SupabaseManager.shared.client
-            .from("users")
-            .update(update)
-            .eq("id", value: userId)
-            .execute()
+            .from("users").update(update).eq("id", value: userId).execute()
 
         cachedVerificationStatus[userId] = true
-
-        // Recalculate trust score
         try? await SupabaseManager.shared.client.functions
             .invoke("recalculate-trust-score", options: .init(body: ["user_id": userId]))
-
-        print("[PhoneVerification] User \(userId) marked phone verified")
     }
 
-    // MARK: - Check Verification
+    // MARK: - Check
 
     func isPhoneVerified(userId: String) async -> Bool {
         if let cached = cachedVerificationStatus[userId] { return cached }
-
         do {
-            struct VerRow: Decodable { let is_phone_verified: Bool? }
+            struct Row: Decodable { let is_phone_verified: Bool? }
             let resp = try await SupabaseManager.shared.client
-                .from("users")
-                .select("is_phone_verified")
-                .eq("id", value: userId)
-                .single()
-                .execute()
-            let row = try JSONDecoder().decode(VerRow.self, from: resp.data)
-            let verified = row.is_phone_verified ?? false
-            cachedVerificationStatus[userId] = verified
-            return verified
-        } catch {
-            print("[PhoneVerification] Error checking status: \(error)")
-            return false
-        }
+                .from("users").select("is_phone_verified")
+                .eq("id", value: userId).single().execute()
+            let v = (try? JSONDecoder().decode(Row.self, from: resp.data))?.is_phone_verified ?? false
+            cachedVerificationStatus[userId] = v
+            return v
+        } catch { return false }
     }
 
-    /// Clear cache (e.g. on logout)
     func clearCache() {
         cachedVerificationStatus.removeAll()
+        lastGeneratedOTP = nil
     }
 }
