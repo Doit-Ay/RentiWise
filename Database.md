@@ -981,3 +981,10 @@ CREATE TABLE return_requests (
     status TEXT DEFAULT 'pending',
     created_at TEXT NOT NULL
 );
+
+
+-- =====================================
+-- PHONE VERIFICATION
+-- =====================================
+-- Column `is_phone_verified` already exists in public.users (default: false)
+-- Additional columns: phone_verified_at, phone_otp_hash, phone_otp_expires_at

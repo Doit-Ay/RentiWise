@@ -163,7 +163,8 @@ final class SignViewController: UIViewController {
             // Sanity-check the session is live
             _ = try await SupabaseManager.shared.client.auth.session
 
-            routeToProfileTab()
+            // Check if phone is verified; if not, show OTP screen
+            await presentPhoneOTPIfNeeded()
         } catch {
             presentAlert(title: "Sign In Failed", message: error.localizedDescription)
         }
@@ -199,13 +200,46 @@ final class SignViewController: UIViewController {
             // Sanity-check the session is live
             _ = try await SupabaseManager.shared.client.auth.session
 
-            routeToProfileTab()
+            // Check if phone is verified; if not, show OTP screen
+            await presentPhoneOTPIfNeeded()
         } catch {
             if (error as NSError).code == GIDSignInError.canceled.rawValue { return }
             presentAlert(title: "Google Sign In Failed", message: error.localizedDescription)
         }
     }
 #endif
+
+    // MARK: - Phone OTP
+
+    /// Checks if the user's phone is verified, and presents OTP screen if not.
+    private func presentPhoneOTPIfNeeded() async {
+        let service = ProfileService()
+        do {
+            let profile = try await service.fetchCurrentUserProfile()
+            if profile.phoneVerified {
+                routeToProfileTab()
+            } else {
+                presentPhoneOTP(prefillPhone: profile.phone)
+            }
+        } catch {
+            // If we can't determine, just go to profile
+            routeToProfileTab()
+        }
+    }
+
+    private func presentPhoneOTP(prefillPhone: String) {
+        let otpVC = PhoneOTPViewController()
+        otpVC.prefillPhone = prefillPhone
+        otpVC.onComplete = { [weak self] _ in
+            // Whether verified or skipped, go to profile
+            self?.dismiss(animated: true) {
+                self?.routeToProfileTab()
+            }
+        }
+        let nav = UINavigationController(rootViewController: otpVC)
+        nav.modalPresentationStyle = .fullScreen
+        present(nav, animated: true)
+    }
 
     // MARK: - Auto-route if already authenticated
     private func autoRouteIfAlreadySignedIn() async {

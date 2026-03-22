@@ -23,6 +23,8 @@ final class ProfileViewController: UITableViewController {
     private var displayName: String = "Guest User"
     private var userEmail: String = ""
     private var userPhone: String = ""
+    private var phoneVerified: Bool = false
+    private var kycStatus: String = "none"
     private var notificationsEnabled: Bool {
         get { UserDefaults.standard.bool(forKey: "notificationsEnabled") }
         set { UserDefaults.standard.set(newValue, forKey: "notificationsEnabled") }
@@ -150,7 +152,15 @@ final class ProfileViewController: UITableViewController {
         
         switch sectionType {
         case .account:
-            return isLoggedIn ? 1 : 2 // header + sign up button if not logged in
+            if isLoggedIn {
+                // header + (verify phone if not verified) + KYC row
+                var count = 1 // header
+                if !phoneVerified { count += 1 } // verify phone
+                count += 1 // KYC row (always shown for logged in users)
+                return count
+            } else {
+                return 2 // header + sign up button
+            }
         case .more:
             return 4 // My Rentals, Wishlist, Privacy & Security, Contact Us
         case .settings:
@@ -207,9 +217,48 @@ final class ProfileViewController: UITableViewController {
         
         switch sectionType {
         case .account:
-            // Account header cell is handled above, this must be the sign up button
-            cell.textLabel?.text = "Sign Up"
-            cell.textLabel?.textColor = brandTeal
+            // Account header cell is handled above
+            if !isLoggedIn {
+                // Sign up button
+                cell.textLabel?.text = "Sign Up"
+                cell.textLabel?.textColor = brandTeal
+            } else {
+                // Determine which row this is
+                let kycRowIndex = phoneVerified ? 1 : 2
+                if indexPath.row == kycRowIndex {
+                    // KYC / Identity Verification row
+                    cell.accessoryType = .disclosureIndicator
+                    switch kycStatus {
+                    case "approved":
+                        cell.textLabel?.text = "🪪 Identity Verified"
+                        cell.textLabel?.textColor = .systemGreen
+                        cell.imageView?.image = UIImage(systemName: "checkmark.seal.fill")
+                        cell.imageView?.tintColor = .systemGreen
+                    case "pending":
+                        cell.textLabel?.text = "🪪 Verification Pending"
+                        cell.textLabel?.textColor = .systemOrange
+                        cell.imageView?.image = UIImage(systemName: "clock.fill")
+                        cell.imageView?.tintColor = .systemOrange
+                    case "declined":
+                        cell.textLabel?.text = "🪪 Verification Declined"
+                        cell.textLabel?.textColor = .systemRed
+                        cell.imageView?.image = UIImage(systemName: "xmark.seal.fill")
+                        cell.imageView?.tintColor = .systemRed
+                    default:
+                        cell.textLabel?.text = "Verify Identity"
+                        cell.textLabel?.textColor = brandTeal
+                        cell.imageView?.image = UIImage(systemName: "person.badge.shield.checkmark")
+                        cell.imageView?.tintColor = brandTeal
+                    }
+                } else {
+                    // Verify Phone row (only shown if not verified)
+                    cell.textLabel?.text = "Verify Phone Number"
+                    cell.textLabel?.textColor = brandTeal
+                    cell.accessoryType = .disclosureIndicator
+                    cell.imageView?.image = UIImage(systemName: "checkmark.shield")
+                    cell.imageView?.tintColor = .systemOrange
+                }
+            }
             return cell
             
         case .more:
@@ -281,6 +330,15 @@ final class ProfileViewController: UITableViewController {
             if indexPath.row == 1 && !isLoggedIn {
                 // Sign up button
                 openSignUp()
+            } else if isLoggedIn {
+                let kycRowIndex = phoneVerified ? 1 : 2
+                if indexPath.row == kycRowIndex {
+                    // KYC row
+                    presentKYCVerification()
+                } else if indexPath.row == 1 && !phoneVerified {
+                    // Verify phone
+                    presentPhoneOTP()
+                }
             }
             
         case .more:
@@ -338,7 +396,37 @@ final class ProfileViewController: UITableViewController {
             present(nav, animated: true)
         }
     }
-    
+
+    // MARK: - Phone OTP Verification
+
+    private func presentPhoneOTP() {
+        let otpVC = PhoneOTPViewController()
+        otpVC.prefillPhone = userPhone
+        otpVC.onComplete = { [weak self] verified in
+            self?.dismiss(animated: true) {
+                if verified {
+                    self?.phoneVerified = true
+                    self?.tableView.reloadData()
+                }
+            }
+        }
+        let nav = UINavigationController(rootViewController: otpVC)
+        nav.modalPresentationStyle = .fullScreen
+        present(nav, animated: true)
+    }
+
+    // MARK: - KYC Verification
+
+    private func presentKYCVerification() {
+        let kycVC = KYCVerificationViewController()
+        kycVC.onComplete = { [weak self] status in
+            self?.kycStatus = status
+            self?.tableView.reloadData()
+        }
+        kycVC.hidesBottomBarWhenPushed = true
+        navigationController?.pushViewController(kycVC, animated: true)
+    }
+
     private func signOut() async {
         do {
             try await SupabaseManager.shared.signOut()
@@ -362,6 +450,8 @@ final class ProfileViewController: UITableViewController {
                 displayName = "Guest User"
                 userEmail = ""
                 userPhone = ""
+                phoneVerified = false
+                kycStatus = "none"
             }
         }
         
@@ -379,12 +469,16 @@ final class ProfileViewController: UITableViewController {
                 self.displayName = profile.fullName.isEmpty ? "User" : profile.fullName
                 self.userEmail = profile.email
                 self.userPhone = profile.phone
+                self.phoneVerified = profile.phoneVerified
+                self.kycStatus = profile.kycStatus
             }
         } catch {
             await MainActor.run {
                 self.displayName = "User"
                 self.userEmail = ""
                 self.userPhone = ""
+                self.phoneVerified = false
+                self.kycStatus = "none"
             }
         }
     }

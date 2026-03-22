@@ -40,12 +40,14 @@ final class ProfileService: ProfileServicing {
             let email = row.email ?? authUser.email ?? ""
             let fullName = row.full_name ?? ""
             let phone = row.phone ?? ""
+            let phoneVerified = row.is_phone_verified ?? false
+            let kycStatus = row.kyc_status ?? "none"
 
-            return UserProfile(id: row.id, fullName: fullName, email: email, phone: phone)
+            return UserProfile(id: row.id, fullName: fullName, email: email, phone: phone, phoneVerified: phoneVerified, kycStatus: kycStatus)
         } catch {
             // If DB row not found, at least return auth email so UI shows something
             let email = authUser.email ?? ""
-            return UserProfile(id: authUser.id.uuidString, fullName: "", email: email, phone: "")
+            return UserProfile(id: authUser.id.uuidString, fullName: "", email: email, phone: "", phoneVerified: false, kycStatus: "none")
         }
     }
 }

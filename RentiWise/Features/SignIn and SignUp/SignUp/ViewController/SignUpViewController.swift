@@ -134,11 +134,12 @@ final class SignUpViewController: UIViewController {
                 // Sanity-check the session is live
                 _ = try await SupabaseManager.shared.client.auth.session
 
-                routeToProfileTab()
+                // Present OTP verification screen with pre-filled phone
+                presentPhoneOTP(prefillPhone: phone)
             } else {
                 presentAlert(
                     title: "Confirm your email",
-                    message: "We’ve sent a confirmation link to \(email). Please confirm your email, then sign in to complete profile setup."
+                    message: "We've sent a confirmation link to \(email). Please confirm your email, then sign in to complete profile setup."
                 )
             }
         } catch {
@@ -176,7 +177,8 @@ final class SignUpViewController: UIViewController {
                 // Sanity-check the session is live
                 _ = try await SupabaseManager.shared.client.auth.session
 
-                routeToProfileTab()
+                // Present OTP verification screen
+                presentPhoneOTP(prefillPhone: "")
             } catch {
                 presentAlert(title: "Google Sign In Failed", message: error.localizedDescription)
             }
@@ -191,6 +193,21 @@ final class SignUpViewController: UIViewController {
         presentAlert(title: "Unavailable", message: "Google Sign-In is not available in this build.")
     }
 #endif
+
+    // MARK: - Phone OTP
+    private func presentPhoneOTP(prefillPhone: String) {
+        let otpVC = PhoneOTPViewController()
+        otpVC.prefillPhone = prefillPhone
+        otpVC.onComplete = { [weak self] _ in
+            // Whether verified or skipped, go to profile
+            self?.dismiss(animated: true) {
+                self?.routeToProfileTab()
+            }
+        }
+        let nav = UINavigationController(rootViewController: otpVC)
+        nav.modalPresentationStyle = .fullScreen
+        present(nav, animated: true)
+    }
 
     // MARK: - Routing to Profile tab
     private func routeToProfileTab() {
