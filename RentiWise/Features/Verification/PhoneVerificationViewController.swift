@@ -379,21 +379,13 @@ final class PhoneVerificationViewController: UIViewController, UITextFieldDelega
 
         Task {
             do {
-                let otp = try await PhoneVerificationService.shared.sendOTP(phone: digits)
+                try await PhoneVerificationService.shared.sendOTP(phone: digits)
                 await MainActor.run {
                     self.spinner.stopAnimating()
-                    // Show OTP on screen (dev/testing — replace with real SMS in production)
-                    let alert = UIAlertController(
-                        title: "Your Verification Code",
-                        message: "Your OTP is: \(otp)\n\n(In production, this will be sent via SMS)",
-                        preferredStyle: .alert
-                    )
-                    alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in
-                        UIView.transition(with: self.contentStack, duration: 0.3, options: .transitionCrossDissolve) {
-                            self.showOTPEntry()
-                        }
-                    })
-                    self.present(alert, animated: true)
+                    self.showToast("Verification code sent to +91 \(digits)")
+                    UIView.transition(with: self.contentStack, duration: 0.3, options: .transitionCrossDissolve) {
+                        self.showOTPEntry()
+                    }
                 }
             } catch {
                 await MainActor.run {

@@ -385,19 +385,10 @@ final class CollegeVerificationViewController: UIViewController, UITextFieldDele
 
         Task {
             do {
-                let otp = try await CollegeVerificationService.shared.sendVerificationOTP(email: email)
+                try await CollegeVerificationService.shared.sendVerificationOTP(email: email)
                 await MainActor.run {
                     self.spinner.stopAnimating()
-                    // Show OTP on screen (dev/testing — replace with real email in production)
-                    let alert = UIAlertController(
-                        title: "Your Verification Code",
-                        message: "Your OTP is: \(otp)\n\n(In production, this will be sent to \(email))",
-                        preferredStyle: .alert
-                    )
-                    alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in
-                        self.showOTPEntry()
-                    })
-                    self.present(alert, animated: true)
+                    self.showOTPEntry()
                 }
             } catch {
                 await MainActor.run {

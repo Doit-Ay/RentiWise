@@ -2,9 +2,8 @@
 //  CollegeVerificationService.swift
 //  RentiWise
 //
-//  Self-managed email OTP — no Supabase magic links.
-//  Generates 6-digit code, stores SHA-256 hash in users table.
-//  OTP is shown on-screen for testing. For production: add SendGrid/SMTP.
+//  Email OTP via Supabase Edge Function → Resend email API.
+//  OTP is generated server-side, sent via real email, hash stored in DB.
 //
 
 import Foundation
@@ -18,9 +17,6 @@ final class CollegeVerificationService {
     private init() {}
 
     private var cachedVerificationStatus: [String: Bool] = [:]
-
-    /// Last generated OTP — shown on screen during dev/testing
-    private(set) var lastGeneratedOTP: String?
 
     // MARK: - Check Verification
 
@@ -37,39 +33,19 @@ final class CollegeVerificationService {
         } catch { return false }
     }
 
-    // MARK: - Send OTP
+    // MARK: - Send OTP (real email via Resend)
 
-    /// Generate a 6-digit OTP for the given email. Returns OTP for display.
-    @discardableResult
-    func sendVerificationOTP(email: String) async throws -> String {
-        let otp = String(format: "%06d", Int.random(in: 0...999999))
-
+    func sendVerificationOTP(email: String) async throws {
         guard let userId = await SupabaseManager.shared.currentUserId() else {
             throw VerificationError.notLoggedIn
         }
 
-        struct OTPStore: Encodable {
-            let college_email: String
-            let email_otp_hash: String
-            let email_otp_expires_at: String
-        }
+        // Call edge function — it generates OTP, stores hash, sends email
+        let payload: [String: String] = ["email": email, "user_id": userId]
+        try await SupabaseManager.shared.client.functions
+            .invoke("send-email-otp", options: .init(body: payload))
 
-        let expiresAt = Date().addingTimeInterval(300) // 5 min
-        let update = OTPStore(
-            college_email: email,
-            email_otp_hash: otp.sha256Hex(),
-            email_otp_expires_at: ISO8601DateFormatter().string(from: expiresAt)
-        )
-
-        try await SupabaseManager.shared.client
-            .from("users")
-            .update(update)
-            .eq("id", value: userId)
-            .execute()
-
-        lastGeneratedOTP = otp
-        print("[EmailOTP] Generated for \(email): \(otp)")
-        return otp
+        print("[EmailOTP] Email sent to \(email)")
     }
 
     // MARK: - Verify OTP
@@ -153,15 +129,20 @@ final class CollegeVerificationService {
 
     func clearCache() {
         cachedVerificationStatus.removeAll()
-        lastGeneratedOTP = nil
     }
 }
 
-// MARK: - Shared Error + SHA-256
+// MARK: - Shared
 
 enum VerificationError: LocalizedError {
     case notLoggedIn
-    var errorDescription: String? { "You must be logged in to verify." }
+    case serverError(String)
+    var errorDescription: String? {
+        switch self {
+        case .notLoggedIn: return "You must be logged in to verify."
+        case .serverError(let msg): return msg
+        }
+    }
 }
 
 extension String {

@@ -2,9 +2,8 @@
 //  PhoneVerificationService.swift
 //  RentiWise
 //
-//  Self-managed phone OTP — no Twilio needed.
-//  Generates 6-digit code, stores SHA-256 hash in users table.
-//  OTP is shown on-screen for testing. For production: add SMS API.
+//  Phone OTP via Supabase Edge Function → Twilio SMS.
+//  OTP is generated server-side, sent via real SMS, hash stored in DB.
 //
 
 import Foundation
@@ -19,44 +18,21 @@ final class PhoneVerificationService {
 
     private var cachedVerificationStatus: [String: Bool] = [:]
 
-    /// Last generated OTP — shown on screen during dev/testing
-    private(set) var lastGeneratedOTP: String?
+    // MARK: - Send OTP (real SMS via Twilio)
 
-    // MARK: - Send OTP
-
-    /// Generate a 6-digit OTP for the phone number.
-    /// Stores hashed OTP in users table. Returns the OTP for display.
-    @discardableResult
-    func sendOTP(phone: String) async throws -> String {
+    func sendOTP(phone: String) async throws {
         let e164 = phone.hasPrefix("+91") ? phone : "+91\(phone)"
-        let otp = String(format: "%06d", Int.random(in: 0...999999))
 
         guard let userId = await SupabaseManager.shared.currentUserId() else {
             throw VerificationError.notLoggedIn
         }
 
-        struct OTPStore: Encodable {
-            let phone: String
-            let phone_otp_hash: String
-            let phone_otp_expires_at: String
-        }
+        // Call edge function — it generates OTP, stores hash, sends SMS
+        let payload: [String: String] = ["phone": e164, "user_id": userId]
+        try await SupabaseManager.shared.client.functions
+            .invoke("send-phone-otp", options: .init(body: payload))
 
-        let expiresAt = Date().addingTimeInterval(300) // 5 min
-        let update = OTPStore(
-            phone: e164,
-            phone_otp_hash: otp.sha256Hex(),
-            phone_otp_expires_at: ISO8601DateFormatter().string(from: expiresAt)
-        )
-
-        try await SupabaseManager.shared.client
-            .from("users")
-            .update(update)
-            .eq("id", value: userId)
-            .execute()
-
-        lastGeneratedOTP = otp
-        print("[PhoneOTP] Generated for \(e164): \(otp)")
-        return otp
+        print("[PhoneOTP] SMS sent to \(e164)")
     }
 
     // MARK: - Verify OTP
@@ -89,7 +65,7 @@ final class PhoneVerificationService {
             // Check hash
             guard otp.sha256Hex() == row.phone_otp_hash else { return false }
 
-            // Clear OTP after success
+            // Clear OTP
             struct Clear: Encodable { let phone_otp_hash: String?; let phone_otp_expires_at: String? }
             try? await SupabaseManager.shared.client
                 .from("users")
@@ -157,6 +133,5 @@ final class PhoneVerificationService {
 
     func clearCache() {
         cachedVerificationStatus.removeAll()
-        lastGeneratedOTP = nil
     }
 }
