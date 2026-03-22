@@ -30,7 +30,7 @@ final class RentalAgreementViewController: UIViewController {
     private var agreementId: String?
 
     // MARK: - Colors
-    private let brandTeal = UIColor(red: 0x0A/255.0, green: 0x7B/255.0, blue: 0x6C/255.0, alpha: 1.0)
+    private let brandTeal = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0)
     private let bgColor = UIColor(red: 0xF8/255.0, green: 0xF8/255.0, blue: 0xF6/255.0, alpha: 1.0)
     private let bodyColor = UIColor(red: 0x1A/255.0, green: 0x1A/255.0, blue: 0x1A/255.0, alpha: 1.0)
     private let captionColor = UIColor(red: 0x6B/255.0, green: 0x6B/255.0, blue: 0x6B/255.0, alpha: 1.0)

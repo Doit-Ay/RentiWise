@@ -13,7 +13,7 @@ final class VerificationBadgeStripView: UIView {
 
     private let stackView = UIStackView()
 
-    private let brandTeal = UIColor(red: 0x0A/255.0, green: 0x7B/255.0, blue: 0x6C/255.0, alpha: 1.0)
+    private let brandTeal = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0)
 
     override init(frame: CGRect) {
         super.init(frame: frame)
