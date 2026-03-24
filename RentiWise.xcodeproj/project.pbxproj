@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		1518AE152F2E3B480032BD24 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 1518AE142F2E3B480032BD24 /* GoogleSignIn */; };
 		1518AE172F2E3B480032BD24 /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 1518AE162F2E3B480032BD24 /* GoogleSignInSwift */; };
+		3F6EA11B2F7301A7004461E7 /* DiditSDK in Frameworks */ = {isa = PBXBuildFile; productRef = 3F6EA11A2F7301A7004461E7 /* DiditSDK */; };
 		3FC24E382ECA663900D45808 /* Auth in Frameworks */ = {isa = PBXBuildFile; productRef = 3FC24E372ECA663900D45808 /* Auth */; };
 		3FC24E3A2ECA663900D45808 /* Functions in Frameworks */ = {isa = PBXBuildFile; productRef = 3FC24E392ECA663900D45808 /* Functions */; };
 		3FC24E3C2ECA663900D45808 /* PostgREST in Frameworks */ = {isa = PBXBuildFile; productRef = 3FC24E3B2ECA663900D45808 /* PostgREST */; };
@@ -77,6 +78,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				3FC24E3C2ECA663900D45808 /* PostgREST in Frameworks */,
+				3F6EA11B2F7301A7004461E7 /* DiditSDK in Frameworks */,
 				3FC24E3A2ECA663900D45808 /* Functions in Frameworks */,
 				3FC24E422ECA663900D45808 /* Supabase in Frameworks */,
 				1518AE172F2E3B480032BD24 /* GoogleSignInSwift in Frameworks */,
@@ -160,6 +162,7 @@
 				3FC24E412ECA663900D45808 /* Supabase */,
 				1518AE142F2E3B480032BD24 /* GoogleSignIn */,
 				1518AE162F2E3B480032BD24 /* GoogleSignInSwift */,
+				3F6EA11A2F7301A7004461E7 /* DiditSDK */,
 			);
 			productName = RentiWise;
 			productReference = 3FE49D5F2EA2FA5C00C11A8F /* RentiWise.app */;
@@ -246,6 +249,7 @@
 			packageReferences = (
 				3FC24E362ECA663800D45808 /* XCRemoteSwiftPackageReference "supabase-swift" */,
 				1518AE122F2E3B0E0032BD24 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
+				3F6EA1192F7301A7004461E7 /* XCRemoteSwiftPackageReference "sdk-ios" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 3FE49D602EA2FA5C00C11A8F /* Products */;
@@ -644,6 +648,14 @@
 				minimumVersion = 9.1.0;
 			};
 		};
+		3F6EA1192F7301A7004461E7 /* XCRemoteSwiftPackageReference "sdk-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/didit-protocol/sdk-ios.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 3.2.3;
+			};
+		};
 		3FC24E362ECA663800D45808 /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/supabase-community/supabase-swift";
@@ -664,6 +676,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 1518AE122F2E3B0E0032BD24 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
 			productName = GoogleSignInSwift;
+		};
+		3F6EA11A2F7301A7004461E7 /* DiditSDK */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 3F6EA1192F7301A7004461E7 /* XCRemoteSwiftPackageReference "sdk-ios" */;
+			productName = DiditSDK;
 		};
 		3FC24E372ECA663900D45808 /* Auth */ = {
 			isa = XCSwiftPackageProductDependency;

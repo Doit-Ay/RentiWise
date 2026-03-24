@@ -1,5 +1,5 @@
 {
-  "originHash" : "04674cc8e7545ec60e78f82f02b077e59853f701e6056e514b20d343a5f6f23d",
+  "originHash" : "b4a7bf185c4ef1906ad71bacfcbfcebb4bd439c223a9895ad7cbae438f45333a",
   "pins" : [
     {
       "identity" : "app-check",
@@ -62,6 +62,15 @@
       "state" : {
         "revision" : "540318ecedd63d883069ae7f1ed811a2df00b6ac",
         "version" : "2.4.0"
+      }
+    },
+    {
+      "identity" : "sdk-ios",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/didit-protocol/sdk-ios.git",
+      "state" : {
+        "revision" : "32f6e40b2c69575bef9206193c6e8e2eadb92353",
+        "version" : "3.2.3"
       }
     },
     {
