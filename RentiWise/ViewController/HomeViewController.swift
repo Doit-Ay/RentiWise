@@ -205,6 +205,7 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
 
     // MARK: - Search helper
     var homeSearch: HomeSearchController?
+    private let safetyService = CommunitySafetyService.shared
 
     // MARK: - Services
     let itemsService = ItemsService()
@@ -287,6 +288,13 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
         
         // Initially hide the listing section until data loads to prevent flicker
         listingUIView?.alpha = 0
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleBlockedUsersChanged),
+            name: CommunitySafetyService.blockedUsersDidChangeNotification,
+            object: nil
+        )
     }
 
     @objc private func dismissKeyboardTap() {
@@ -340,12 +348,19 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
         Task { await updateNotificationBadge() }
     }
 
+    @objc private func handleBlockedUsersChanged() {
+        Task { await loadFeaturedItems() }
+    }
+
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         stopHomeImageRotation()
     }
 
-    deinit { stopHomeImageRotation() }
+    deinit {
+        stopHomeImageRotation()
+        NotificationCenter.default.removeObserver(self)
+    }
 
     override func viewSafeAreaInsetsDidChange() {
         super.viewSafeAreaInsetsDidChange()
@@ -479,6 +494,7 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
     private func openFeatured(at index: Int) {
         guard index < featuredItems.count else { return }
         let item = featuredItems[index]
+        guard ensureItemVisible(item) else { return }
         // Instantiate ProductViewController
         let nibName = "ProductViewController"
         let productVC: ProductViewController
@@ -501,6 +517,7 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
 
     // Helper used by trending list to open an item detail
     private func openItem(_ item: Item) {
+        guard ensureItemVisible(item) else { return }
         let nibName = "ProductViewController"
         let productVC: ProductViewController
         if Bundle.main.path(forResource: nibName, ofType: "nib") != nil || Bundle.main.path(forResource: nibName, ofType: "xib") != nil {
@@ -523,6 +540,7 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
     
     // Helper to open RequestViewController directly from rent button
     func openRequestView(for item: Item) {
+        guard ensureItemVisible(item) else { return }
         let nibName = "RequestViewController"
         let requestVC: RequestViewController
         if Bundle.main.path(forResource: nibName, ofType: "nib") != nil ||
@@ -546,6 +564,9 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
     }
 
     @objc private func didTapProductView() {
+        if let first = featuredItems.first, !ensureItemVisible(first) {
+            return
+        }
         // Instantiate ProductViewController from XIB if available, else fallback to code
         let nibName = "ProductViewController"
         let productVC: ProductViewController
@@ -651,26 +672,7 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
             let item = trendingItems[indexPath.item]
             cell.configure(with: item, currencyFormatter: currencyFormatter)
             cell.onRentTapped = { [weak self] in
-                guard let self = self else { return }
-                let nibName = "RequestViewController"
-                let requestVC: RequestViewController
-                if Bundle.main.path(forResource: nibName, ofType: "nib") != nil ||
-                   Bundle.main.path(forResource: nibName, ofType: "xib") != nil {
-                    requestVC = RequestViewController(nibName: nibName, bundle: nil)
-                } else {
-                    requestVC = RequestViewController()
-                }
-                requestVC.configure(with: item)
-                requestVC.title = "Request"
-                requestVC.hidesBottomBarWhenPushed = true
-                if let nav = self.navigationController {
-                    nav.setNavigationBarHidden(false, animated: true)
-                    nav.pushViewController(requestVC, animated: true)
-                } else {
-                    let nav = UINavigationController(rootViewController: requestVC)
-                    nav.modalPresentationStyle = .fullScreen
-                    self.present(nav, animated: true)
-                }
+                self?.openRequestView(for: item)
             }
             // Owner name removed from trending UI; no resolution or setting here.
             return cell
@@ -722,6 +724,7 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         if collectionView === trendingCollectionView {
             let item = trendingItems[indexPath.item]
+            guard ensureItemVisible(item) else { return }
             openItem(item)
             return
         }
@@ -801,6 +804,22 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
         }
         
         greetingTop?.text = greeting
+    }
+}
+
+private extension HomeViewController {
+    func ensureItemVisible(_ item: Item) -> Bool {
+        guard !safetyService.isBlocked(item.owner_id) else {
+            let alert = UIAlertController(
+                title: "User Blocked",
+                message: "You blocked the owner of this item. Unblock them in Privacy & Security to view their listing again.",
+                preferredStyle: .alert
+            )
+            alert.addAction(UIAlertAction(title: "OK", style: .default))
+            present(alert, animated: true)
+            return false
+        }
+        return true
     }
 }
 

@@ -40,7 +40,7 @@ final class SupportChatViewController: UIViewController {
     private let ticketStatusLabel: UILabel = {
         let label = UILabel()
         label.translatesAutoresizingMaskIntoConstraints = false
-        label.text = "Ticket Status"
+        label.text = "Support Contact"
         label.font = .systemFont(ofSize: 14, weight: .medium)
         label.textColor = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0)
         return label
@@ -49,9 +49,10 @@ final class SupportChatViewController: UIViewController {
     private let ticketIdLabel: UILabel = {
         let label = UILabel()
         label.translatesAutoresizingMaskIntoConstraints = false
-        label.text = "Open"
+        label.text = "Use in-app support or email support@rentiwise.com"
         label.font = .systemFont(ofSize: 12)
         label.textColor = .secondaryLabel
+        label.numberOfLines = 0
         return label
     }()
     
@@ -140,6 +141,7 @@ final class SupportChatViewController: UIViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        title = "Support"
         view.backgroundColor = UIColor(red: 0.96, green: 0.97, blue: 0.98, alpha: 1.0)
         
         setupUI()
@@ -171,7 +173,7 @@ final class SupportChatViewController: UIViewController {
         let totalHeight = 70 + safeBottom
         inputContainerHeightConstraint = inputContainerView.heightAnchor.constraint(equalToConstant: totalHeight)
         
-        ticketStatusHeightConstraint = ticketStatusCard.heightAnchor.constraint(equalToConstant: 50)
+        ticketStatusHeightConstraint = ticketStatusCard.heightAnchor.constraint(equalToConstant: 72)
         
         // Build constraints
         // When no card is visible, pin table to the very top of the view (not the safe area)
@@ -229,13 +231,11 @@ final class SupportChatViewController: UIViewController {
             loadingIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor)
         ])
         
-        // Start collapsed: hidden and height constraint deactivated so no gap
-        ticketStatusCard.isHidden = true
-        ticketStatusHeightConstraint.isActive = false
+        ticketStatusCard.isHidden = false
+        ticketStatusHeightConstraint.isActive = true
         
-        // Activate "table under top of view" initially; keep "table under card" off
-        tableTopToSafeArea.isActive = true
-        tableTopToCard.isActive = false
+        tableTopToSafeArea.isActive = false
+        tableTopToCard.isActive = true
         
         // Tap to dismiss keyboard
         let tap = UITapGestureRecognizer(target: self, action: #selector(dismissKeyboard))
@@ -308,6 +308,19 @@ final class SupportChatViewController: UIViewController {
         Task {
             currentUserId = await SupabaseManager.shared.currentUserId()
             await addWelcomeMessage()
+            await MainActor.run {
+                self.updateStatusCard()
+            }
+        }
+    }
+
+    private func updateStatusCard() {
+        if let ticket = currentTicket {
+            ticketStatusLabel.text = "Ticket Status"
+            ticketIdLabel.text = "Open • ID #\(ticket.id.prefix(8))\nReply here or email support@rentiwise.com"
+        } else {
+            ticketStatusLabel.text = "Support Contact"
+            ticketIdLabel.text = "Use in-app support or email support@rentiwise.com"
         }
     }
     
@@ -368,15 +381,7 @@ final class SupportChatViewController: UIViewController {
                     let ticket = try await chatService.createSupportTicket(subject: subjectText, message: messageText)
                     await MainActor.run {
                         currentTicket = ticket
-                        // Reveal and size the status card now
-                        ticketIdLabel.text = "Open • ID #\(ticket.id.prefix(8))"
-                        ticketStatusCard.isHidden = false
-                        ticketStatusHeightConstraint.isActive = true
-                        
-                        // Switch table top anchor to be under the card
-                        tableTopToSafeArea.isActive = false
-                        tableTopToCard.constant = 0 // adjust to 8/16 if you want a gap when visible
-                        tableTopToCard.isActive = true
+                        updateStatusCard()
                         
                         UIView.animate(withDuration: 0.25) {
                             self.view.layoutIfNeeded()
@@ -421,17 +426,17 @@ final class SupportChatViewController: UIViewController {
         let lowercased = query.lowercased()
         
         if lowercased.contains("refund") || lowercased.contains("money back") {
-            return "🔄 Refund Information\n\nRefunds are processed within 5-7 business days after the rental return is confirmed. Here's what happens next:\n\n✓ Item inspection (1-2 days)\n✓ Refund approval\n✓ Payment processing (3-5 days)\n\nIf you haven't received your refund after 7 days, please provide your booking ID and I'll escalate this to our finance team immediately."
+            return "🔄 Refund Help\n\nRentiWise does not hold payments or issue refunds directly. Payments are arranged between the lender and borrower.\n\nIf you've already paid the lender, please:\n• Check the booking chat for the payment agreement\n• Request the refund directly from the lender\n• Share your booking ID with support if there is a dispute\n\nWe can review account activity and help document the issue, but we do not reverse or settle payments in-app."
         } else if lowercased.contains("booking") || lowercased.contains("reservation") {
             return "📅 Booking Assistance\n\nI can help you with:\n• Modifying booking dates\n• Checking item availability\n• Understanding pricing\n• Cancellation policies\n\nPlease tell me your booking ID or describe the specific issue you're facing."
         } else if lowercased.contains("damage") || lowercased.contains("broken") {
             return "⚠️ Damage Report\n\nThank you for reporting this. To process your claim:\n\n1. Take clear photos of the damage\n2. Provide your booking ID\n3. Describe when/how it happened\n\nOur team will review within 24 hours and contact you. For items damaged during rental, insurance may cover the cost."
         } else if lowercased.contains("account") || lowercased.contains("profile") || lowercased.contains("password") {
             return "👤 Account Support\n\nI can help you with:\n• Password reset\n• Profile updates\n• Email/phone verification\n• Account security\n\nWhat specific account issue are you experiencing? I'll guide you through the solution."
-        } else if lowercased.contains("payment") || lowercased.contains("card") || lowercased.contains("charge") {
-            return "💳 Payment Help\n\nFor payment issues:\n• We accept all major credit/debit cards\n• Payments are processed securely\n• You'll receive a receipt via email\n\nIf you see an unexpected charge or payment failed, please provide your booking ID and I'll investigate immediately."
+        } else if lowercased.contains("payment") || lowercased.contains("card") || lowercased.contains("charge") || lowercased.contains("upi") {
+            return "💳 Payment Help\n\nRentiWise does not process card payments or store payment details.\n\nFor rentals:\n• Pay the lender directly via UPI after the request is accepted\n• Confirm the amount and UPI ID inside the booking screen\n• Use the booking chat if you need to confirm receipt or resolve an issue\n\nIf a UPI ID is missing or something looks suspicious, send your booking ID and we will help review it."
         } else if lowercased.contains("cancel") {
-            return "❌ Cancellation Policy\n\nYou can cancel your booking:\n• Free cancellation up to 48 hours before rental\n• 50% refund if cancelled 24-48 hours before\n• No refund within 24 hours of rental\n\nPlease provide your booking ID if you'd like to proceed with cancellation."
+            return "❌ Cancellation Help\n\nYou can cancel a request or rental from the booking screen.\n\nIf you've already paid the lender directly:\n• Coordinate any refund with the lender in chat\n• Keep screenshots of the agreement and payment confirmation\n• Contact support with your booking ID if the cancellation becomes a dispute\n\nRentiWise can help review account activity, but payment settlement still happens directly between users."
         } else if lowercased.contains("hi") || lowercased.contains("hello") || lowercased.contains("hey") {
             return "👋 Hello! Welcome to RentiWise Support.\n\nHow can I help you today? Common topics:\n\n📦 Bookings & Rentals\n💰 Payments & Refunds\n⚙️ Account Issues\n📞 Report a Problem\n\nFeel free to ask anything or choose a topic above!"
         } else {

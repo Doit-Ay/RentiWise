@@ -50,11 +50,14 @@ class RequestViewController: UIViewController {
     @IBOutlet weak var boookingcontainer: UIView?
     @IBOutlet weak var dateTitleLabel: UILabel!
     @IBOutlet weak var returnTimeTitleLabel: UILabel!
+    @IBOutlet weak var upiNoteLabel: UILabel!  // shows UPI note under total
     
     // MARK: - Private Properties
     
     private var item: Item?
     private var itemId: String?
+    private var hasPresentedBlockedOwnerAlert = false
+    private var isSubmittingRequest = false
 
     public func configure(with item: Item) {
         self.item = item
@@ -83,8 +86,10 @@ class RequestViewController: UIViewController {
         return f
     }()
     
-    private var securityDeposit: Double = 0
-    private let serviceFeeRate: Double = 0.10
+    private var securityDeposit: Double = 0 // No deposit in TestFlight build
+    
+    // Removed serviceFeeRate
+    // private let serviceFeeRate: Double = 0.10
     
     private let dateFormatter: DateFormatter = {
         let df = DateFormatter()
@@ -130,6 +135,15 @@ class RequestViewController: UIViewController {
         bookingsummaryCard?.backgroundColor = .white
         ownerCard?.backgroundColor = .white
         priceBreakdownCard?.backgroundColor = .white
+        
+        // Configure UPI note label
+        if let note = upiNoteLabel {
+            note.text = "Payment will be arranged directly with the lender via UPI after your request is accepted."
+            note.textColor = .secondaryLabel
+            note.font = .systemFont(ofSize: 13, weight: .regular)
+            note.numberOfLines = 0
+        }
+        
         applyGlassToCards()
         dateLabel.datePickerMode = .date
         pickuptimeLabel.datePickerMode = .time
@@ -160,7 +174,7 @@ class RequestViewController: UIViewController {
         
         #if DEBUG
         if productTitleLabel == nil || productThumbImageView == nil || productRateLabel == nil {
-            print("[RequestVC] Warning: One or more IBOutlets are not connected in Interface Builder.")
+            debugLog("[RequestVC] Warning: One or more IBOutlets are not connected in Interface Builder.")
         }
         #endif
         
@@ -229,9 +243,14 @@ class RequestViewController: UIViewController {
     
     private func populateUI() async {
         guard let item = item else { return }
+        if CommunitySafetyService.shared.isBlocked(item.owner_id) {
+            presentBlockedOwnerAlertIfNeeded()
+            return
+        }
         applyItemToUI()
         await fetchAndDisplayOwnerUnified(for: item.owner_id)
-        securityDeposit = item.deposit_amount
+        // Removed securityDeposit assignment to skip deposit
+        // securityDeposit = item.deposit_amount
         recalculatePricing()
         
         // Update distance using DistanceService (async)
@@ -411,6 +430,7 @@ class RequestViewController: UIViewController {
     
     private func selectUnit(_ unit: RentalUnit) {
         rentalUnit = unit
+        hasSelectedReturnTime = false
         updateRentalButtons()
         switch unit {
         case .hour:
@@ -572,17 +592,19 @@ class RequestViewController: UIViewController {
             return
         }
         
-        // If you do not want to include service fee in totalamount, exclude it here.
-        // Keep computing it if you’ll use it elsewhere visually.
-        let serviceFee = rentalFeeAmount * serviceFeeRate
-        let total = rentalFeeAmount /* + serviceFee */ + securityDeposit
+        // Removed service fee and deposit from total calculation
+        // let serviceFee = rentalFeeAmount * serviceFeeRate
+        let total = rentalFeeAmount
         
         // Assign amounts to the correct labels per your requirement:
         // - fee: shows the computed rental fee amount
-        // - secRate: shows the security deposit amount
-        // - rentalfee and security are static titles; do not change them here
+        // - secRate: hides security deposit (no deposit shown)
+        // - rentalfee and security are static titles; security and deposit hidden
+        
         fee.text = currencyFormatter.string(from: NSNumber(value: rentalFeeAmount))
-        secRate.text = currencyFormatter.string(from: NSNumber(value: securityDeposit))
+        secRate?.text = nil
+        security?.isHidden = true
+        secRate?.isHidden = true
         
         totalamount.text = currencyFormatter.string(from: NSNumber(value: total))
         
@@ -593,14 +615,73 @@ class RequestViewController: UIViewController {
     
     // MARK: - Networking: Send Request
     private func sendRequest() async {
+        guard !isSubmittingRequest else { return }
         guard let item = item else {
             presentMissingItemAlert()
+            return
+        }
+        if CommunitySafetyService.shared.isBlocked(item.owner_id) {
+            presentBlockedOwnerAlertIfNeeded()
             return
         }
         guard let currentUserId = await SupabaseManager.shared.currentUserId() else {
             presentAlert(title: "Error", message: "You must be logged in to send a request.")
             return
         }
+        guard item.owner_id.caseInsensitiveCompare(currentUserId) != .orderedSame else {
+            presentAlert(title: "Own Listing", message: "You can't send a rental request for your own listing.")
+            return
+        }
+        guard rentalUnit != .none else {
+            presentAlert(title: "Missing Details", message: "Please choose whether you're renting by the hour or by the day.")
+            return
+        }
+        if let selectionMessage = bookingSelectionValidationMessage() {
+            presentAlert(title: "Missing Details", message: selectionMessage)
+            return
+        }
+
+        // Validate dates are not in the past
+        let now = Date()
+        let startOfToday = Calendar.current.startOfDay(for: now)
+        let selectedDate = Calendar.current.startOfDay(for: dateLabel.date)
+        guard selectedDate >= startOfToday else {
+            presentAlert(title: "Invalid Date", message: "The pickup date cannot be in the past.")
+            return
+        }
+
+        // Validate return is after start for day rentals
+        if rentalUnit == .day {
+            let returnDate = Calendar.current.startOfDay(for: returntimeLabel.date)
+            guard returnDate >= selectedDate else {
+                presentAlert(title: "Invalid Date", message: "The return date must be on or after the pickup date.")
+                return
+            }
+        }
+
+        do {
+            let profile = try await ProfileService().fetchCurrentUserProfile()
+            if let blocker = borrowingBlockerMessage(for: profile, item: item) {
+                presentBorrowingBlockedAlert(message: blocker)
+                return
+            }
+        } catch {
+            presentBorrowingBlockedAlert(message: "Complete your profile before sending a request.")
+            return
+        }
+
+        do {
+            if try await hasExistingActiveRequest(itemId: item.id, borrowerId: currentUserId) {
+                presentAlert(title: "Request Already Sent", message: "You already have an active request for this item.")
+                return
+            }
+        } catch {
+            presentAlert(title: "Request Check Failed", message: "We couldn't confirm whether you already requested this item. Please try again.")
+            return
+        }
+
+        isSubmittingRequest = true
+        defer { isSubmittingRequest = false }
         
         let calendar = Calendar.current
         let pickupDate = dateLabel.date
@@ -694,6 +775,10 @@ class RequestViewController: UIViewController {
             }
             
             NotificationCenter.default.post(name: Notification.Name("rentalRequestCreated"), object: nil, userInfo: ["item_id": itemObj.id])
+
+            // Track analytics event
+            let rentalDays = max(1, Int(ceil(endDate.timeIntervalSince(startOfPickup) / 86400.0)))
+            AnalyticsService.shared.trackRentalRequestSent(itemId: itemObj.id, days: rentalDays)
             
             let sentVC = RequestSentPageViewController(nibName: "RequestSentPageViewController", bundle: .main)
             sentVC.configure(with: itemObj)
@@ -726,9 +811,98 @@ class RequestViewController: UIViewController {
         }))
         present(alert, animated: true)
     }
+
+    private func bookingSelectionValidationMessage() -> String? {
+        guard hasSelectedDate else {
+            return rentalUnit == .day ? "Please choose your pickup date." : "Please choose your rental date."
+        }
+        guard hasSelectedPickupTime else {
+            return "Please choose a pickup time."
+        }
+        guard hasSelectedReturnTime else {
+            return rentalUnit == .day ? "Please choose a return date." : "Please choose a return time."
+        }
+        return nil
+    }
+
+    private func hasExistingActiveRequest(itemId: String, borrowerId: String) async throws -> Bool {
+        struct ActiveRequestRow: Decodable {
+            let id: String
+        }
+
+        let response = try await SupabaseManager.shared.client
+            .from("requests")
+            .select("id")
+            .eq("item_id", value: itemId)
+            .eq("borrower_id", value: borrowerId)
+            .in("status", values: ["pending", "accepted", "approved"])
+            .limit(1)
+            .execute()
+
+        let rows = try JSONDecoder().decode([ActiveRequestRow].self, from: response.data)
+        return !rows.isEmpty
+    }
+    
+    private func borrowingBlockerMessage(for profile: UserProfile, item: Item) -> String? {
+        if !profile.isCollegeVerified {
+            return "Add a college email in Profile to unlock borrowing in the beta."
+        }
+
+        if let freezeUntil = profile.borrowFreezeUntil, freezeUntil > Date() {
+            let formatter = DateFormatter()
+            formatter.dateStyle = .medium
+            formatter.timeStyle = .none
+            return "Your borrowing is temporarily frozen until \(formatter.string(from: freezeUntil))."
+        }
+
+        let declaredValue = item.declared_value ?? 0
+
+        if profile.totalRentalsAsBorrower == 0 && declaredValue > 1500 {
+            return "New borrowers can only request items up to 1,500 INR until they complete their first rental."
+        }
+
+        if profile.totalRentalsAsBorrower > 0,
+           profile.averageRating > 0,
+           profile.averageRating < 3.5,
+           declaredValue > 2000 {
+            return "Your rating must be 3.5 or higher to borrow items above 2,000 INR."
+        }
+
+        return nil
+    }
+
+    private func presentBorrowingBlockedAlert(message: String) {
+        let alert = UIAlertController(title: "Borrowing Unavailable", message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "Go to Profile", style: .default, handler: { [weak self] _ in
+            self?.routeToProfileTab()
+        }))
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        present(alert, animated: true)
+    }
+
+    private func routeToProfileTab() {
+        let profileTabIndex = 1
+
+        if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let window = scene.windows.first,
+           let tab = window.rootViewController as? UITabBarController,
+           profileTabIndex < (tab.viewControllers?.count ?? 0) {
+            tab.selectedIndex = profileTabIndex
+            navigationController?.popToRootViewController(animated: true)
+            return
+        }
+
+        let profileVC = ProfileViewController()
+        profileVC.hidesBottomBarWhenPushed = false
+        navigationController?.pushViewController(profileVC, animated: true)
+    }
     
     private func applyItemToUI() {
         guard isViewLoaded, let currentItem = self.item else { return }
+        if CommunitySafetyService.shared.isBlocked(currentItem.owner_id) {
+            presentBlockedOwnerAlertIfNeeded()
+            return
+        }
         productTitleLabel?.text = currentItem.title
         
         let pricePerHour = (currentItem.price_per_day / 8).rounded(toPlaces: 2)
@@ -772,7 +946,30 @@ class RequestViewController: UIViewController {
             productDistance?.text = "..."
         }
         
+        // Hide security deposit labels since no deposit is used (TestFlight)
+        security?.isHidden = true
+        secRate?.isHidden = true
+        
         if rentalUnit != .none { recalculatePricing() }
+    }
+
+    private func presentBlockedOwnerAlertIfNeeded() {
+        guard !hasPresentedBlockedOwnerAlert else { return }
+        hasPresentedBlockedOwnerAlert = true
+
+        let alert = UIAlertController(
+            title: "User Blocked",
+            message: "You blocked this lender. Unblock them in Privacy & Security to request this item again.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "OK", style: .default, handler: { [weak self] _ in
+            if let nav = self?.navigationController {
+                nav.popViewController(animated: true)
+            } else {
+                self?.dismiss(animated: true)
+            }
+        }))
+        present(alert, animated: true)
     }
     
     private func makeYellowStarRatingText(valueText: String, reviewsText: String? = nil) -> NSAttributedString {
@@ -832,4 +1029,3 @@ extension UIImageView {
         task.resume()
     }
 }
-

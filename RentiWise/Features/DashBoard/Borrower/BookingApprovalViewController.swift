@@ -47,7 +47,7 @@ class BookingApprovalViewController: UIViewController {
     // Current request status; set this from outside as needed
     var status: RequestStatus = .pending {
         didSet {
-            print("[BookingApproval] Status changed to: \(status)")
+            debugLog("[BookingApproval] Status changed to: \(status)")
             updateStatusUI()
         }
     }
@@ -57,11 +57,9 @@ class BookingApprovalViewController: UIViewController {
     private var pickupTime: Date?
     private var returnTime: Date?
 
-    // Derived exclusively from DB: whether there is a succeeded payment for this request
-    private var hasCompletedPayment: Bool = false
-
-    // The active/latest payment row (if any) loaded from DB
-    private var currentPayment: PaymentRow?
+    // Removed payment related properties:
+    // private var hasCompletedPayment: Bool = false
+    // private var currentPayment: PaymentRow?
 
     // Observer token to manage notification observer lifecycle
     private var approvalObserver: NSObjectProtocol?
@@ -235,7 +233,7 @@ class BookingApprovalViewController: UIViewController {
         // Start collapsed: show only the button, hide the stack
         codestack.isHidden = true
         codeStackCollapseConstraint?.isActive = true
-        // Hide code view until payment completes and collapse its height/spacing
+        // Hide code view initially and collapse its height/spacing
         viewCodeUIView.isHidden = true
         viewCodeHeight?.constant = 0
         viewCodeHeight?.isActive = true
@@ -333,8 +331,11 @@ class BookingApprovalViewController: UIViewController {
         if approvalObserver == nil {
             approvalObserver = NotificationCenter.default.addObserver(forName: BookingApprovalViewController.requestApprovedNotification, object: nil, queue: .main) { [weak self] _ in
                 guard let self = self else { return }
-                print("[BookingApproval] Notification received: requestApprovedNotification")
-                self.setStatus(.approved)
+                debugLog("[BookingApproval] Notification received: requestApprovedNotification")
+                Task {
+                    await self.refreshRequestFromDBIfPossible()
+                    await self.fetchRequestStatuses()
+                }
             }
         }
         if requestsRefreshObserver == nil {
@@ -354,9 +355,11 @@ class BookingApprovalViewController: UIViewController {
     }
 
     @objc private func handleRequestsShouldRefresh() {
-        print("[BookingApproval] Notification received: requestsShouldRefresh -> marking Approved")
-        setStatus(.approved)
-        Task { await refreshRequestFromDBIfPossible() }
+        debugLog("[BookingApproval] Notification received: requestsShouldRefresh -> refreshing request")
+        Task {
+            await refreshRequestFromDBIfPossible()
+            await fetchRequestStatuses()
+        }
     }
 
     override func viewDidAppear(_ animated: Bool) {
@@ -385,35 +388,31 @@ class BookingApprovalViewController: UIViewController {
         // Everything requiring a network call is deferred to here.
         Task { [weak self] in
             guard let self, let req = self.request else { return }
+            let isHistoryMode = await MainActor.run { self.mode == .history }
 
             // Refresh the request row itself first
             await refreshRequestFromDBIfPossible()
 
             // Load owner name/avatar and address in parallel
             async let ownerTask: Void = {
-                let userIdToShow = (self.mode == .history) ? req.borrower_id : req.owner_id
+                let userIdToShow = isHistoryMode ? req.borrower_id : req.owner_id
                 await self.fetchAndDisplayOwnerUnified(for: userIdToShow)
             }()
             async let addressTask: Void = {
-                let userIdForAddress = (self.mode == .history) ? req.borrower_id : req.owner_id
+                let userIdForAddress = isHistoryMode ? req.borrower_id : req.owner_id
                 await self.fetchAndDisplayAddress(for: userIdForAddress)
             }()
             async let amountsTask: Void = {
                 let amounts = await self.computeAmounts(for: req)
                 await MainActor.run {
-                    self.updateAmountLabels(rental: amounts.rentalFee, deposit: amounts.deposit, total: amounts.rentalFee + amounts.deposit)
+                    self.updateAmountLabels(rental: amounts.rentalFee, deposit: 0, total: amounts.rentalFee)
                 }
             }()
             // Await all three parallel tasks
             _ = await (ownerTask, addressTask, amountsTask)
 
-            // Then payment info and request statuses
-            if mode == .myRentals {
-                await refreshPaymentFromDB()
-            } else {
-                await refreshPaymentFromDBForHistory()
-                await refreshPaymentStatusForHistory()
-            }
+            // Removed payment refresh calls
+            
             await fetchRequestStatuses()
 
             // Start periodic refresh after initial load completes
@@ -464,12 +463,7 @@ class BookingApprovalViewController: UIViewController {
         Task { [weak self] in
             guard let self else { return }
             await self.refreshRequestFromDBIfPossible()
-            if self.mode == .myRentals {
-                await self.refreshPaymentFromDB()
-            } else {
-                await self.refreshPaymentFromDBForHistory()
-                await self.refreshPaymentStatusForHistory()
-            }
+            // Removed payment refresh calls
             await self.fetchRequestStatuses()
         }
     }
@@ -521,13 +515,13 @@ class BookingApprovalViewController: UIViewController {
             if let latestRequest = requests.first {
                 currentReturnRequestId = latestRequest.id
                 currentReturnRequestStatus = latestRequest.status
-                print("[BookingApproval] Return request status: \(latestRequest.status)")
+                debugLog("[BookingApproval] Return request status: \(latestRequest.status)")
             } else {
                 currentReturnRequestId = nil
                 currentReturnRequestStatus = nil
             }
         } catch {
-            print("[BookingApproval] Error fetching return request status: \(error)")
+            debugLog("[BookingApproval] Error fetching return request status: \(error)")
             currentReturnRequestStatus = nil
         }
     }
@@ -553,7 +547,7 @@ class BookingApprovalViewController: UIViewController {
             if let latestRequest = requests.first {
                 currentExtensionRequestId = latestRequest.id
                 currentExtensionRequestStatus = latestRequest.status
-                print("[BookingApproval] Extension request status: \(latestRequest.status)")
+                debugLog("[BookingApproval] Extension request status: \(latestRequest.status)")
                 
                 // Show notification to borrower if accepted — only once per extension request
                 let alertKey = "extensionAlertShown_\(latestRequest.id)"
@@ -572,7 +566,7 @@ class BookingApprovalViewController: UIViewController {
                 currentExtensionRequestStatus = nil
             }
         } catch {
-            print("[BookingApproval] Error fetching extension request status: \(error)")
+            debugLog("[BookingApproval] Error fetching extension request status: \(error)")
             currentExtensionRequestStatus = nil
         }
     }
@@ -726,7 +720,7 @@ class BookingApprovalViewController: UIViewController {
         
         guard let buttonStack = extendReturnButtonsStack,
               let parentView = buttonStack.superview else {
-            print("[BookingApproval] Could not find button stack or parent view")
+            debugLog("[BookingApproval] Could not find button stack or parent view")
             return
         }
         
@@ -773,11 +767,10 @@ class BookingApprovalViewController: UIViewController {
 
 
     func didSelectNewProductFromMyRentals() {
-        hasCompletedPayment = false
-        currentPayment = nil
+        // Removed payment reset logic
         viewCodeUIView.isHidden = true
         statusToViewCodeTop?.constant = 16
-        paymentButton.setTitle("Proceed to Payment", for: .normal)
+        paymentButton.setTitle("Pay via UPI", for: .normal)
         updateStatusUI()
     }
 
@@ -799,14 +792,14 @@ class BookingApprovalViewController: UIViewController {
             let isOwner = (me?.lowercased() == req.owner_id.lowercased())
             let derivedMode: PresentationMode = isOwner ? .history : .myRentals
             
-            print("[BookingApproval] openChatSafely - me=\(me ?? "nil"), itemOwnerId=\(req.owner_id), borrowerId=\(req.borrower_id)")
-            print("[BookingApproval] isOwner=\(isOwner), derivedMode=\(derivedMode)")
+            debugLog("[BookingApproval] openChatSafely - me=\(me ?? "nil"), itemOwnerId=\(req.owner_id), borrowerId=\(req.borrower_id)")
+            debugLog("[BookingApproval] isOwner=\(isOwner), derivedMode=\(derivedMode)")
 
             await MainActor.run { self.mode = derivedMode }
 
             // Borrower path: pass only itemId (helper resolves owner as other user)
             if derivedMode == .myRentals {
-                print("[BookingApproval] Chat open as borrower. itemId=\(req.item_id)")
+                debugLog("[BookingApproval] Chat open as borrower. itemId=\(req.item_id)")
                 ChatThreadViewController.open(from: self, itemId: req.item_id)
                 return
             }
@@ -814,14 +807,14 @@ class BookingApprovalViewController: UIViewController {
             // Owner path: must pass borrower_id; guard against missing/invalid
             let borrower = req.borrower_id.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !borrower.isEmpty, borrower.lowercased() != req.owner_id.lowercased() else {
-                print("[BookingApproval] ERROR: Invalid borrower! borrower=\(borrower), owner=\(req.owner_id)")
+                debugLog("[BookingApproval] ERROR: Invalid borrower! borrower=\(borrower), owner=\(req.owner_id)")
                 let ac = UIAlertController(title: "Chat", message: "Borrower not specified for this item.", preferredStyle: .alert)
                 ac.addAction(UIAlertAction(title: "OK", style: .default))
                 await MainActor.run { self.present(ac, animated: true) }
                 return
             }
 
-            print("[BookingApproval] Chat open as owner. itemId=\(req.item_id) borrowerId=\(borrower)")
+            debugLog("[BookingApproval] Chat open as owner. itemId=\(req.item_id) borrowerId=\(borrower)")
             ChatThreadViewController.open(from: self, itemId: req.item_id, otherUserId: borrower)
         }
     }
@@ -857,27 +850,34 @@ class BookingApprovalViewController: UIViewController {
         }
     }
     
+    // REPLACED paymentbuttontapped with UPI payment flow
     @IBAction func paymentbuttontapped(_ sender: UIButton) {
-        guard mode == .myRentals else { return } // no payment in history
+        guard mode == .myRentals else { return }
         guard let req = request else { return }
-
-        let actionSheet = UIAlertController(title: "Choose Payment Method", message: nil, preferredStyle: .actionSheet)
-
-        let handlePaymentSelection: (String) -> Void = { method in
-            Task { await self.performDBBackedPayment(for: req, provider: method, button: sender) }
+        Task { [weak self] in
+            guard let self else { return }
+            // Fetch lender UPI and name
+            struct Profile: Decodable { let full_name: String?; let upi_id: String? }
+            var upi: String? = nil
+            var name: String = "Lender"
+            do {
+                let resp = try await SupabaseManager.shared.client
+                    .from("user_profiles")
+                    .select("full_name, upi_id")
+                    .eq("id", value: req.owner_id)
+                    .single()
+                    .execute()
+                if let data = resp.data as? Data, let dto = try? JSONDecoder().decode(Profile.self, from: data) {
+                    upi = dto.upi_id
+                    if let n = dto.full_name, !n.isEmpty { name = n }
+                }
+            } catch { }
+            // Compute total amount (rental fee only for TestFlight)
+            let total = await self.computeAmountsForUPI(for: req)
+            await MainActor.run {
+                self.openUPILink(payee: upi, payeeName: name, amount: total)
+            }
         }
-
-        actionSheet.addAction(UIAlertAction(title: "Apple Pay", style: .default) { _ in handlePaymentSelection("apple_pay") })
-        actionSheet.addAction(UIAlertAction(title: "Credit/Debit Card", style: .default) { _ in handlePaymentSelection("card") })
-        actionSheet.addAction(UIAlertAction(title: "Cash on Delivery", style: .default) { _ in handlePaymentSelection("cod") })
-        actionSheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-
-        if let popover = actionSheet.popoverPresentationController {
-            popover.sourceView = sender
-            popover.sourceRect = sender.bounds
-        }
-
-        present(actionSheet, animated: true)
     }
     
     
@@ -1028,6 +1028,8 @@ class BookingApprovalViewController: UIViewController {
 
     private func performCancelRequest() {
         guard let reqId = request?.id else { return }
+        let previousStatus = request?.status.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
+        let itemId = request?.item_id
 
         Task { [weak self] in
             guard let self = self else { return }
@@ -1037,6 +1039,10 @@ class BookingApprovalViewController: UIViewController {
                     .update(["status": "cancelled"])
                     .eq("id", value: reqId)
                     .execute()
+
+                if (previousStatus == "accepted" || previousStatus == "approved"), let itemId {
+                    try? await self.setItemAvailability(itemId: itemId, isActive: true)
+                }
 
                 await MainActor.run {
                     // Update local request status
@@ -1051,6 +1057,17 @@ class BookingApprovalViewController: UIViewController {
                         object: nil,
                         userInfo: ["requestId": reqId]
                     )
+                    NotificationCenter.default.post(name: Notification.Name("requestsShouldRefresh"), object: nil)
+
+                    // Track analytics & local notification
+                    AnalyticsService.shared.trackRentalEnded(requestId: reqId, status: "cancelled")
+                    NotificationService.shared.notifyStatusChange(
+                        requestId: reqId,
+                        itemTitle: self.request?.items?.title ?? "Item",
+                        newStatus: .cancelled,
+                        role: "borrower"
+                    )
+                    NotificationService.shared.cancelNotifications(forRequestId: reqId)
                 }
             } catch {
                 await MainActor.run {
@@ -1060,6 +1077,16 @@ class BookingApprovalViewController: UIViewController {
                 }
             }
         }
+    }
+
+    private func setItemAvailability(itemId: String, isActive: Bool) async throws {
+        struct ItemPatch: Encodable { let is_active: Bool }
+
+        _ = try await SupabaseManager.shared.client
+            .from("items")
+            .update(ItemPatch(is_active: isActive))
+            .eq("id", value: itemId)
+            .execute()
     }
 
     // MARK: - Cancel Extension / Return Requests (while pending)
@@ -1135,15 +1162,22 @@ class BookingApprovalViewController: UIViewController {
     // MARK: - Button title based on request status
 
     private func updateReturnButtonForRequestStatus() {
+        // Hide extend/return for terminal states
         if status == .cancelled || status == .rejected || status == .completed {
             extendReturnButtonsStack?.isHidden = true
             return
         }
         
-        let isPrePaymentPending = (status == .pending)
-        let returnTitle = isPrePaymentPending ? "Cancel Request" : "Return Item"
-        let extendTitle = "Extend Rental"
-
+        // Determine the current rental phase from DB status
+        let dbStatus = request?.rentalStatus ?? .pending
+        
+        // isPending: borrower submitted request, lender hasn't decided
+        let isPending = (dbStatus == .pending)
+        // isAccepted: lender accepted, awaiting OTP pickup verification
+        let isAccepted = (dbStatus == .accepted)
+        // isActive: pickup verified, item is with borrower
+        let isActive = (dbStatus == .approved || dbStatus == .returned)
+        
         let attrs: [NSAttributedString.Key: Any] = [
             .font: UIFont.systemFont(ofSize: 18, weight: .semibold)
         ]
@@ -1156,25 +1190,35 @@ class BookingApprovalViewController: UIViewController {
             b.imageView?.image = nil
             b.titleLabel?.font = .systemFont(ofSize: 18, weight: .semibold)
         }
-
-        returnButton?.setAttributedTitle(NSAttributedString(string: returnTitle, attributes: attrs), for: .normal)
-        extendButton?.setAttributedTitle(NSAttributedString(string: extendTitle, attributes: attrs), for: .normal)
         
-        // Hide Extend Rental if we are pending (before payment)
-        if isPrePaymentPending {
+        if isPending {
+            // Borrower can cancel their pending request
+            returnButton?.setAttributedTitle(NSAttributedString(string: "Cancel Request", attributes: attrs), for: .normal)
+            returnButton?.backgroundColor = .systemRed
+            returnButton?.isHidden = false
             extendButton?.isHidden = true
-            returnButton?.backgroundColor = .systemRed // visually communicate cancellation
-        } else {
+            extendReturnButtonsStack?.isHidden = false
+        } else if isAccepted {
+            // Lender accepted but pickup OTP not verified yet
+            // Borrower can still cancel, but cannot extend/return (item not picked up yet)
+            returnButton?.setAttributedTitle(NSAttributedString(string: "Cancel Request", attributes: attrs), for: .normal)
+            returnButton?.backgroundColor = .systemRed
+            returnButton?.isHidden = false
+            extendButton?.isHidden = true
+            extendReturnButtonsStack?.isHidden = false
+        } else if isActive {
+            // Active rental — borrower can extend or return
+            returnButton?.setAttributedTitle(NSAttributedString(string: "Return Item", attributes: attrs), for: .normal)
+            returnButton?.backgroundColor = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1)
+            returnButton?.isHidden = false
+            extendButton?.setAttributedTitle(NSAttributedString(string: "Extend Rental", attributes: attrs), for: .normal)
             extendButton?.isHidden = false
-            returnButton?.backgroundColor = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1) // restore standard teal
+            extendReturnButtonsStack?.isHidden = false
+        } else {
+            // Denied or other non-actionable states
+            extendReturnButtonsStack?.isHidden = true
         }
     }
-    
-    @IBAction func debugForceApprove(_ sender: Any) {
-        print("[BookingApproval] debugForceApprove tapped")
-        setStatus(.approved)
-    }
-
     
     deinit {
         refreshTimer?.invalidate()
@@ -1191,9 +1235,9 @@ class BookingApprovalViewController: UIViewController {
         paymentButton.isHidden = hidePayment
         paymentButton.isEnabled = hidePayment ? false : paymentButton.isEnabled
 
-        // Payment status label visibility — show in history, and also for cancelled/rejected in my rentals
+        // Payment status label visibility — repurposed to show rental status
         if mode == .myRentals {
-            paymentStatus?.isHidden = (status != .cancelled && status != .rejected && status != .completed)
+            paymentStatus?.isHidden = false
         } else {
             paymentStatus?.isHidden = false
         }
@@ -1202,7 +1246,7 @@ class BookingApprovalViewController: UIViewController {
         let hideExtendReturnButtons = (mode == .history)
         extendReturnButtonsStack?.isHidden = hideExtendReturnButtons
 
-        // Update UI based on current payment and approval status
+        // Update UI based on current approval status and code availability
         updateStatusUI()
         // Note: do NOT call layoutIfNeeded() here — it forces a
         // synchronous layout pass on the main thread during the push animation.
@@ -1261,14 +1305,28 @@ class BookingApprovalViewController: UIViewController {
 
         switch status {
         case .approved:
-            approvedpending.text = "Approved"
-            approvedpending.textColor = .label
-            tickimage.image = UIImage(systemName: "checkmark.circle")
-            tickimage.tintColor = .white
-            // In history mode, keep payment disabled/hidden regardless
-            if mode == .myRentals {
-                paymentButton.isEnabled = true
-                paymentButton.alpha = 1.0
+            // Differentiate between "accepted" (awaiting OTP) and "approved" (active rental)
+            let dbStatus = request?.rentalStatus ?? .approved
+            if dbStatus == .accepted {
+                // Lender accepted, awaiting OTP pickup verification
+                approvedpending.text = "Accepted"
+                approvedpending.textColor = .label
+                tickimage.image = UIImage(systemName: "checkmark.circle")
+                tickimage.tintColor = .white
+                if mode == .myRentals {
+                    paymentButton.isEnabled = true
+                    paymentButton.alpha = 1.0
+                }
+            } else {
+                // Pickup verified — rental is active
+                approvedpending.text = "Active"
+                approvedpending.textColor = .label
+                tickimage.image = UIImage(systemName: "checkmark.seal.fill")
+                tickimage.tintColor = .white
+                if mode == .myRentals {
+                    paymentButton.isEnabled = true
+                    paymentButton.alpha = 1.0
+                }
             }
         case .pending:
             approvedpending.text = "Pending"
@@ -1287,10 +1345,6 @@ class BookingApprovalViewController: UIViewController {
             extendReturnButtonsStack?.isHidden = true
             returnStatusLabel?.isHidden = true
             extensionStatusLabel?.isHidden = true
-            // Show "No Payment" for cancelled items
-            paymentStatus?.text = "No Payment"
-            paymentStatus?.textColor = .secondaryLabel
-            paymentStatus?.isHidden = false
         case .rejected:
             approvedpending.text = "Rejected"
             approvedpending.textColor = .label
@@ -1301,10 +1355,6 @@ class BookingApprovalViewController: UIViewController {
             extendReturnButtonsStack?.isHidden = true
             returnStatusLabel?.isHidden = true
             extensionStatusLabel?.isHidden = true
-            // Show "No Payment" for rejected items
-            paymentStatus?.text = "No Payment"
-            paymentStatus?.textColor = .secondaryLabel
-            paymentStatus?.isHidden = false
         case .completed:
             approvedpending.text = "Completed"
             approvedpending.textColor = .label
@@ -1321,10 +1371,9 @@ class BookingApprovalViewController: UIViewController {
         tickimage.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 22, weight: .regular)
         tickimage.contentMode = .scaleAspectFit
 
-        // Show/hide View Code container depending on DB payment status
-        // Show in BOTH myRentals and history modes when payment is completed
-        // (Borrower needs code to show owner, Owner needs code to verify)
-        let shouldShowCode = hasCompletedPayment && (status != .cancelled && status != .rejected && status != .completed)
+        // Show/hide View Code container depending on pickup_code availability on request
+        let codeAvailable = (request?.pickup_code?.isEmpty == false)
+        let shouldShowCode = codeAvailable && (status != .cancelled && status != .rejected && status != .completed)
         viewCodeUIView.isHidden = !shouldShowCode
         if shouldShowCode {
             viewCodeHeight?.constant = collapsedViewCodeHeight
@@ -1334,29 +1383,16 @@ class BookingApprovalViewController: UIViewController {
             statusToViewCodeTop?.constant = 0
         }
 
-        // Button title from payment state (only applies in myRentals mode where button is visible)
+        // Button title from status (only applies in myRentals mode where button is visible)
         if mode == .myRentals && status != .cancelled && status != .rejected {
-            if hasCompletedPayment {
-                paymentButton.setTitle("Payment Successful", for: .normal)
-                paymentButton.setTitleColor(.black, for: .normal)
-                paymentButton.setTitleColor(.black, for: .disabled)
-                paymentButton.isEnabled = false
-                paymentButton.alpha = 0.6
-            } else {
-                paymentButton.setTitle("Proceed to Payment", for: .normal)
-                paymentButton.setTitleColor(.label, for: .normal)
-                paymentButton.setTitleColor(.secondaryLabel, for: .disabled)
-                paymentButton.isEnabled = (status == .approved)
-                paymentButton.alpha = paymentButton.isEnabled ? 1.0 : 0.5
-            }
+            paymentButton.setTitle("Pay via UPI", for: .normal)
+            paymentButton.setTitleColor(.white, for: .normal)
+            paymentButton.backgroundColor = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1)
+            paymentButton.isEnabled = (status == .approved)
+            paymentButton.alpha = paymentButton.isEnabled ? 1.0 : 0.5
         }
 
-        // Update payment status label visibility/text per mode
-        if mode == .myRentals {
-            paymentStatus?.isHidden = (status != .cancelled && status != .rejected && status != .completed)
-        } else {
-            paymentStatus?.isHidden = false
-        }
+        // Update paymentStatus label to show rental status text
         updatePaymentStatusLabel()
 
         // Update extend/return button titles based on current request status
@@ -1366,19 +1402,9 @@ class BookingApprovalViewController: UIViewController {
     private func applyRequestToUI() {
         guard let req = request else { return }
 
-        // Map status string to RequestStatus (accepted/approved -> approved)
-        let s = req.status.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        if s == "accepted" || s == "approved" {
-            setStatus(.approved)
-        } else if s == "cancelled" {
-            setStatus(.cancelled)
-        } else if s == "rejected" {
-            setStatus(.rejected)
-        } else if s == "completed" {
-            setStatus(.completed)
-        } else {
-            setStatus(.pending)
-        }
+        // Map status string to RequestStatus using the canonical RentalStatus enum
+        let rentalStatus = req.rentalStatus
+        setStatus(rentalStatus.bookingApprovalStatus)
 
         // Defensive: Auto-derive mode based on current user if not explicitly set
         // This acts as a fallback to prevent edge cases
@@ -1394,7 +1420,7 @@ class BookingApprovalViewController: UIViewController {
                 // Only auto-set if mode is still at default (.myRentals) and we detect we should be in .history
                 // This is a defensive measure; normally mode should be set by the caller
                 if self.mode == .myRentals && derivedMode == .history {
-                    print("[BookingApproval] Auto-derived mode: .history (currentUser is owner)")
+                    debugLog("[BookingApproval] Auto-derived mode: .history (currentUser is owner)")
                     self.mode = .history
                 }
             }
@@ -1433,13 +1459,20 @@ class BookingApprovalViewController: UIViewController {
             categoryitemLabel?.text = ""
         }
 
-        // Network-dependent data (owner info, address, amounts, payment) is loaded
+        // Show code digits if pickup_code exists, else zeros
+        if let code = req.pickup_code, !code.isEmpty {
+            setCodeDigits(from: code)
+        } else {
+            setCodeDigits(from: "000000")
+        }
+
+        // Network-dependent data (owner info, address, amounts) is loaded
         // in viewDidAppear so it doesn't block/slow the push animation.
     }
 
     private func selectClause() -> String {
         """
-        id,item_id,owner_id,borrower_id,start_date,end_date,pickup_time,status,created_at,
+        id,item_id,owner_id,borrower_id,start_date,end_date,pickup_time,status,created_at,pickup_code,
         items(id,title,images,price_per_day,category)
         """
     }
@@ -1609,213 +1642,9 @@ class BookingApprovalViewController: UIViewController {
         return fallbackText
     }
 
-    // MARK: - Payments (DB-driven)
+    // MARK: - Payments removed (DB-driven)
 
-    private func refreshPaymentFromDB() async {
-        guard mode == .myRentals else { return } // never do in history
-        guard let req = request else { return }
-        do {
-            let response = try await SupabaseManager.shared.client
-                .from("payments")
-                .select()
-                .eq("request_id", value: req.id)
-                .order("created_at", ascending: false)
-                .limit(1)
-                .execute()
-            let decoder = JSONDecoder()
-            let rows = try decoder.decode([PaymentRow].self, from: response.data)
-            let latest = rows.first
-
-            await MainActor.run {
-                self.currentPayment = latest
-                if let p = latest, p.status.lowercased() == "succeeded", let code = p.pickup_code, !code.isEmpty {
-                    self.hasCompletedPayment = true
-                    self.setCodeDigits(from: code)
-                    self.updateAmountLabels(rental: p.rental_fee, deposit: p.deposit_amount, total: p.total_amount)
-                } else {
-                    self.hasCompletedPayment = false
-                    self.setCodeDigits(from: "000000")
-                    Task { [weak self] in
-                        guard let self = self, let req = self.request else { return }
-                        let amounts = await self.computeAmounts(for: req)
-                        await MainActor.run {
-                            self.updateAmountLabels(rental: amounts.rentalFee, deposit: amounts.deposit, total: amounts.rentalFee + amounts.deposit)
-                        }
-                    }
-                }
-                self.updateStatusUI()
-            }
-        } catch {
-            await MainActor.run {
-                self.currentPayment = nil
-                self.hasCompletedPayment = false
-                self.setCodeDigits(from: "000000")
-                Task { [weak self] in
-                    guard let self = self, let req = self.request else { return }
-                    let amounts = await self.computeAmounts(for: req)
-                    await MainActor.run {
-                        self.updateAmountLabels(rental: amounts.rentalFee, deposit: amounts.deposit, total: amounts.rentalFee + amounts.deposit)
-                        self.updateStatusUI()
-                    }
-                }
-            }
-        }
-    }
-
-    private func refreshPaymentFromDBForHistory() async {
-        guard mode == .history, let req = request else { return }
-        do {
-            let response = try await SupabaseManager.shared.client
-                .from("payments")
-                .select()
-                .eq("request_id", value: req.id)
-                .order("created_at", ascending: false)
-                .limit(1)
-                .execute()
-            let decoder = JSONDecoder()
-            let rows = try decoder.decode([PaymentRow].self, from: response.data)
-            let latest = rows.first
-
-            await MainActor.run {
-                self.currentPayment = latest
-                if let p = latest, p.status.lowercased() == "succeeded", let code = p.pickup_code, !code.isEmpty {
-                    self.hasCompletedPayment = true
-                    self.setCodeDigits(from: code)
-                    self.updateAmountLabels(rental: p.rental_fee, deposit: p.deposit_amount, total: p.total_amount)
-                } else {
-                    self.hasCompletedPayment = false
-                    self.setCodeDigits(from: "000000")
-                }
-                self.updateStatusUI()
-            }
-        } catch {
-            await MainActor.run {
-                self.currentPayment = nil
-                self.hasCompletedPayment = false
-                self.setCodeDigits(from: "000000")
-                self.updateStatusUI()
-            }
-        }
-    }
-
-    private func refreshPaymentStatusForHistory() async {
-        guard mode == .history, let req = request else { return }
-        do {
-            let response = try await SupabaseManager.shared.client
-                .from("payments")
-                .select("status")
-                .eq("request_id", value: req.id)
-                .order("created_at", ascending: false)
-                .limit(1)
-                .execute()
-            let decoder = JSONDecoder()
-            struct StatusRow: Decodable { let status: String }
-            let rows = try decoder.decode([StatusRow].self, from: response.data)
-            let latestStatus = rows.first?.status.lowercased()
-            await MainActor.run {
-                if let latestStatus = latestStatus {
-                    if latestStatus == "succeeded" {
-                        self.paymentStatus?.text = "Payment Successful"
-                        self.paymentStatus?.textColor = .systemGreen
-                    } else {
-                        self.paymentStatus?.text = "Payment Pending"
-                        self.paymentStatus?.textColor = .secondaryLabel
-                    }
-                } else {
-                    self.paymentStatus?.text = "No Payment"
-                    self.paymentStatus?.textColor = .secondaryLabel
-                }
-                self.paymentStatus?.isHidden = (self.mode == .myRentals && self.status != .cancelled && self.status != .rejected && self.status != .completed)
-            }
-        } catch {
-            await MainActor.run {
-                self.paymentStatus?.text = "No Payment"
-                self.paymentStatus?.textColor = .secondaryLabel
-                self.paymentStatus?.isHidden = (self.mode == .myRentals && self.status != .cancelled && self.status != .rejected && self.status != .completed)
-            }
-        }
-    }
-
-    private func performDBBackedPayment(for req: RequestWithItem, provider: String, button: UIButton) async {
-        guard mode == .myRentals else { return }
-        await MainActor.run {
-            button.isEnabled = false
-            button.alpha = 0.6
-        }
-        defer {
-            Task { @MainActor in
-                button.isEnabled = true
-                button.alpha = 1.0
-            }
-        }
-
-        await refreshPaymentFromDB()
-        if let p = currentPayment, p.status.lowercased() == "succeeded" {
-            await MainActor.run {
-                self.updateStatusUI()
-            }
-            return
-        }
-
-        let amounts = await computeAmounts(for: req)
-        let rentalFee = amounts.rentalFee
-        let deposit = amounts.deposit
-        let total = rentalFee + deposit
-
-        await MainActor.run {
-            self.updateAmountLabels(rental: rentalFee, deposit: deposit, total: total)
-        }
-
-        let insert = PaymentInsert(
-            request_id: req.id,
-            item_id: req.item_id,
-            owner_id: req.owner_id,
-            borrower_id: req.borrower_id,
-            provider: provider,
-            status: "pending",
-            currency: "INR",
-            rental_fee: rentalFee,
-            deposit_amount: deposit,
-            total_amount: total
-        )
-
-        do {
-            _ = try await SupabaseManager.shared.client
-                .from("payments")
-                .insert(insert)
-                .execute()
-        } catch {
-            await MainActor.run {
-                let ac = UIAlertController(title: "Payment Failed", message: error.localizedDescription, preferredStyle: .alert)
-                ac.addAction(UIAlertAction(title: "OK", style: .default))
-                self.present(ac, animated: true)
-            }
-            return
-        }
-
-        let code = generatePickupCode()
-        let update = PaymentUpdate(status: "succeeded", pickup_code: code, provider_payment_id: nil, provider_receipt_url: nil, failure_reason: nil)
-
-        do {
-            _ = try await SupabaseManager.shared.client
-                .from("payments")
-                .update(update)
-                .eq("request_id", value: req.id)
-                .eq("status", value: "pending")
-                .order("created_at", ascending: false)
-                .limit(1)
-                .execute()
-        } catch {
-            await MainActor.run {
-                let ac = UIAlertController(title: "Finalize Failed", message: error.localizedDescription, preferredStyle: .alert)
-                ac.addAction(UIAlertAction(title: "OK", style: .default))
-                self.present(ac, animated: true)
-            }
-            return
-        }
-
-        await refreshPaymentFromDB()
-    }
+    // MARK: - Compute amounts (rental fee only)
 
     private func computeAmounts(for req: RequestWithItem) async -> (rentalFee: Double, deposit: Double) {
         var days = 1
@@ -1826,32 +1655,28 @@ class BookingApprovalViewController: UIViewController {
         let pricePerDay = req.items?.price_per_day ?? 0
         let rentalFee = Double(days) * pricePerDay
 
-        var depositAmount: Double = 0
-        do {
-            struct DepositDTO: Decodable { let deposit_amount: Double }
-            let response = try await SupabaseManager.shared.client
-                .from("items")
-                .select("deposit_amount")
-                .eq("id", value: req.item_id)
-                .single()
-                .execute()
-            if let data = response.data as? Data {
-                let dto = try JSONDecoder().decode(DepositDTO.self, from: data)
-                depositAmount = dto.deposit_amount
-            }
-        } catch {
-            depositAmount = 0
-        }
+        // Deposit always zero as per new logic
+        let depositAmount: Double = 0
+
         return (rentalFee, depositAmount)
+    }
+    
+    // New helper for UPI amount compute (only rental fee)
+    private func computeAmountsForUPI(for req: RequestWithItem) async -> Double {
+        var days = 1
+        if let s = sqlDateFormatter.date(from: req.start_date), let e = sqlDateFormatter.date(from: req.end_date) {
+            days = max(1, Int(ceil(e.timeIntervalSince(s) / 86400.0)))
+        }
+        let pricePerDay = req.items?.price_per_day ?? 0
+        return Double(days) * pricePerDay
     }
 
     private func updateAmountLabels(rental: Double, deposit: Double, total: Double) {
         let rentalText = currencyFormatter.string(from: NSNumber(value: rental)) ?? String(format: "%.2f", rental)
-        let depositText = currencyFormatter.string(from: NSNumber(value: deposit)) ?? String(format: "%.2f", deposit)
         let totalText = currencyFormatter.string(from: NSNumber(value: total)) ?? String(format: "%.2f", total)
 
         fee?.text = rentalText
-        seclabel?.text = depositText
+        seclabel?.text = "Direct via UPI"
         totamountlabel?.text = totalText
     }
 
@@ -2015,28 +1840,39 @@ class BookingApprovalViewController: UIViewController {
         return nil
     }
 
-    // MARK: - Payment status label helper
+    // MARK: - Payment status label helper (repurposed for rental status display)
 
     private func updatePaymentStatusLabel() {
-        guard mode == .history || status == .cancelled || status == .rejected || status == .completed else {
-            paymentStatus?.isHidden = true
+        let rawStatus = request?.status.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
+        if rawStatus == "accepted" {
+            paymentStatus?.text = "Awaiting Pickup Verification"
+            paymentStatus?.textColor = .systemOrange
+            paymentStatus?.isHidden = false
             return
         }
-        if let p = currentPayment {
-            if p.status.lowercased() == "succeeded" {
-                paymentStatus?.text = "Payment Successful"
-                paymentStatus?.textColor = .systemGreen
-            } else {
-                paymentStatus?.text = "Payment Pending"
-                paymentStatus?.textColor = .secondaryLabel
-            }
-        } else {
-            if paymentStatus?.text?.isEmpty ?? true {
-                paymentStatus?.text = "No Payment"
-                paymentStatus?.textColor = .secondaryLabel
-            }
+
+        switch self.status {
+        case .approved:
+            paymentStatus?.text = "Rental Confirmed"
+            paymentStatus?.textColor = .systemGreen
+            paymentStatus?.isHidden = false
+        case .pending:
+            paymentStatus?.text = "Awaiting Confirmation"
+            paymentStatus?.textColor = .systemOrange
+            paymentStatus?.isHidden = false
+        case .cancelled:
+            paymentStatus?.text = "Rental Cancelled"
+            paymentStatus?.textColor = .systemRed
+            paymentStatus?.isHidden = false
+        case .rejected:
+            paymentStatus?.text = "Request Declined"
+            paymentStatus?.textColor = .systemRed
+            paymentStatus?.isHidden = false
+        case .completed:
+            paymentStatus?.text = "Rental Completed"
+            paymentStatus?.textColor = .label
+            paymentStatus?.isHidden = false
         }
-        paymentStatus?.isHidden = false
     }
     
     // MARK: - Toast notification helper
@@ -2081,6 +1917,53 @@ class BookingApprovalViewController: UIViewController {
             }
         }
     }
+    
+    // MARK: - UPI Payment helpers
+    
+    private func openUPILink(payee: String?, payeeName: String, amount: Double) {
+        guard let upi = payee, !upi.isEmpty else {
+            let a = UIAlertController(title: "UPI ID missing", message: "The lender hasn't added a UPI ID yet. Open chat and ask them to share one before you pay.", preferredStyle: .alert)
+            a.addAction(UIAlertAction(title: "Open Chat", style: .default) { [weak self] _ in
+                self?.openChatSafely()
+            })
+            a.addAction(UIAlertAction(title: "OK", style: .cancel))
+            present(a, animated: true)
+            return
+        }
+        let formatter = NumberFormatter()
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = 2
+        formatter.decimalSeparator = "."
+        let amountString = formatter.string(from: NSNumber(value: amount)) ?? String(format: "%.2f", amount)
+        let tn = "Rentiwise Rental"
+        let query = "upi://pay?pa=\(upi)&pn=\(payeeName.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")&am=\(amountString)&cu=INR&tn=\(tn.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")"
+        if let url = URL(string: query), UIApplication.shared.canOpenURL(url) {
+            UIApplication.shared.open(url)
+        } else {
+            let a = UIAlertController(
+                title: "Complete Payment Manually",
+                message: "No supported UPI app was found on this device. You can still copy the lender's payment details and complete the transfer manually.",
+                preferredStyle: .actionSheet
+            )
+            a.addAction(UIAlertAction(title: "Copy UPI ID", style: .default) { [weak self] _ in
+                UIPasteboard.general.string = upi
+                self?.showToast(message: "UPI ID copied", fromBottom: false)
+            })
+            a.addAction(UIAlertAction(title: "Copy Amount", style: .default) { [weak self] _ in
+                UIPasteboard.general.string = amountString
+                self?.showToast(message: "Amount copied", fromBottom: false)
+            })
+            a.addAction(UIAlertAction(title: "Open Chat", style: .default) { [weak self] _ in
+                self?.openChatSafely()
+            })
+            a.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+            if let popover = a.popoverPresentationController {
+                popover.sourceView = paymentButton
+                popover.sourceRect = paymentButton?.bounds ?? view.bounds
+            }
+            present(a, animated: true)
+        }
+    }
 }
 
 // MARK: - Glass effect fallback
@@ -2091,4 +1974,3 @@ extension UIView {
         self.layer.masksToBounds = true
     }
 }
-

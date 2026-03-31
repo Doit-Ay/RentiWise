@@ -4,6 +4,11 @@
 //
 //  Created by user@48 on 25/11/25.
 //
+//  DEPRECATED: This is a legacy static XIB-based chat view from early prototyping.
+//  The production chat interface is ChatThreadViewController in Features/DashBoard/Borrower.
+//  This file is retained only for XIB compatibility — it redirects users to the real chat or
+//  displays a placeholder message. It has no functional chat capabilities.
+//
 
 import UIKit
 
@@ -15,45 +20,40 @@ class ChatViewController: UIViewController {
     @IBOutlet weak var borrower1View: UIView!
     @IBOutlet weak var borrower2View: UIView!
     @IBOutlet weak var chattextField: UITextField!
+
     override func viewDidLoad() {
         super.viewDidLoad()
         title = "Chat"
-        // Do any additional setup after loading the view.
-        
-        // Style chat UI elements
-        let cornerRadius: CGFloat = 12
-        datechatview?.layer.cornerRadius = cornerRadius
-        lender1View?.layer.cornerRadius = cornerRadius
-        lender2View?.layer.cornerRadius = cornerRadius
-        borrower1View?.layer.cornerRadius = cornerRadius
-        borrower2View?.layer.cornerRadius = cornerRadius
-        chattextField?.layer.cornerRadius = cornerRadius
-        
-        // Add border to lender views
-        let borderColor = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1.0).cgColor
-        lender1View?.layer.borderWidth = 1
-        lender1View?.layer.borderColor = borderColor
-        lender2View?.layer.borderWidth = 1
-        lender2View?.layer.borderColor = borderColor
-        
-        // Ensure sublayers are clipped to bounds for rounded corners
-        datechatview?.layer.masksToBounds = true
-        lender1View?.layer.masksToBounds = true
-        lender2View?.layer.masksToBounds = true
-        borrower1View?.layer.masksToBounds = true
-        borrower2View?.layer.masksToBounds = true
-        chattextField?.layer.masksToBounds = true
+
+        // Hide all legacy static views — this view is deprecated
+        datechatview?.isHidden = true
+        lender1View?.isHidden = true
+        lender2View?.isHidden = true
+        borrower1View?.isHidden = true
+        borrower2View?.isHidden = true
+        chattextField?.isHidden = true
+
+        // Show deprecation notice to user
+        let notice = UILabel()
+        notice.translatesAutoresizingMaskIntoConstraints = false
+        notice.text = "This chat view is no longer available.\nPlease use the Chat button on the item listing."
+        notice.textAlignment = .center
+        notice.textColor = .secondaryLabel
+        notice.font = .systemFont(ofSize: 15, weight: .regular)
+        notice.numberOfLines = 0
+        view.addSubview(notice)
+        NSLayoutConstraint.activate([
+            notice.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            notice.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            notice.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 32),
+            notice.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -32),
+        ])
+
+        // Auto-dismiss after a moment if presented modally
+        if presentingViewController != nil {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+                self?.dismiss(animated: true)
+            }
+        }
     }
-
-
-    /*
-    // MARK: - Navigation
-
-    // In a storyboard-based application, you will often want to do a little preparation before navigation
-    override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
-        // Get the new view controller using segue.destination.
-        // Pass the selected object to the new view controller.
-    }
-    */
-
 }

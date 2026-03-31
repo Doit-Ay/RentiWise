@@ -23,12 +23,13 @@ final class RentiWiseUITests: XCTestCase {
     }
 
     @MainActor
-    func testExample() throws {
-        // UI tests must launch the application that they test.
+    func testLaunchShowsPrimaryTabBar() throws {
         let app = XCUIApplication()
         app.launch()
 
-        // Use XCTAssert and related functions to verify your tests produce the correct results.
+        let exploreTab = app.tabBars.buttons["Explore"]
+        let profileTab = app.tabBars.buttons["Profile"]
+        XCTAssertTrue(exploreTab.waitForExistence(timeout: 10) || profileTab.waitForExistence(timeout: 10))
     }
 
     @MainActor

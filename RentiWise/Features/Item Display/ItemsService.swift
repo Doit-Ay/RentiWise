@@ -55,6 +55,8 @@ final class ItemsService: ItemsServicing {
             let location_address: String?
             let created_at: Date?
             let updated_at: Date?
+            let declared_value: Int?
+            let boosted_until: Date?
         }
 
         let itemDTOs = try decoder.decode([ItemDTO].self, from: data)
@@ -82,15 +84,27 @@ final class ItemsService: ItemsServicing {
                 created_at: dto.created_at,
                 updated_at: dto.updated_at,
                 average_rating: stats?.average_rating,
-                review_count: stats?.review_count
+                review_count: stats?.review_count,
+                declared_value: dto.declared_value,
+                boosted_until: dto.boosted_until
             )
         }
 
-        return items
+        return CommunitySafetyService.shared.visibleItems(from: items).sorted { lhs, rhs in
+            if lhs.hasActiveBoost != rhs.hasActiveBoost {
+                return lhs.hasActiveBoost && !rhs.hasActiveBoost
+            }
+
+            if lhs.hasActiveBoost, rhs.hasActiveBoost, lhs.boosted_until != rhs.boosted_until {
+                return (lhs.boosted_until ?? .distantPast) > (rhs.boosted_until ?? .distantPast)
+            }
+
+            return (lhs.created_at ?? .distantPast) > (rhs.created_at ?? .distantPast)
+        }
     }
     
     private func fetchRatingStats(for itemIds: [String]) async -> [String: ItemRatingStats] {
-        print("📦 ItemsService: Fetching rating stats for \(itemIds.count) items")
+        debugLog("📦 ItemsService: Fetching rating stats for \(itemIds.count) items")
         
         let result = await withTaskGroup(of: (String, ItemRatingStats?, Error?).self) { group in
             for itemId in itemIds {
@@ -99,7 +113,7 @@ final class ItemsService: ItemsServicing {
                         let stats = try await self.reviewService.fetchItemStats(itemId: itemId)
                         return (itemId, stats, nil)
                     } catch {
-                        print("❌ ItemsService: Error fetching stats for \(itemId): \(error)")
+                        debugLog("❌ ItemsService: Error fetching stats for \(itemId): \(error)")
                         return (itemId, nil, error)
                     }
                 }
@@ -108,14 +122,14 @@ final class ItemsService: ItemsServicing {
             var statsMap: [String: ItemRatingStats] = [:]
             for await (itemId, stats, error) in group {
                 if let error = error {
-                    print("❌ ItemsService: Failed to get stats for \(itemId): \(error.localizedDescription)")
+                    debugLog("❌ ItemsService: Failed to get stats for \(itemId): \(error.localizedDescription)")
                 }
                 if let stats = stats {
-                    print("✅ ItemsService: Got stats for \(itemId) - avg: \(stats.average_rating ?? 0), count: \(stats.review_count)")
+                    debugLog("✅ ItemsService: Got stats for \(itemId) - avg: \(stats.average_rating ?? 0), count: \(stats.review_count)")
                     statsMap[itemId] = stats
                 }
             }
-            print("📊 ItemsService: Total stats fetched: \(statsMap.count)/\(itemIds.count)")
+            debugLog("📊 ItemsService: Total stats fetched: \(statsMap.count)/\(itemIds.count)")
             return statsMap
         }
         

@@ -46,8 +46,19 @@ class WishlistViewController: UITableViewController {
         
         refreshControl = UIRefreshControl()
         refreshControl?.addTarget(self, action: #selector(handleRefresh), for: .valueChanged)
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleSafetyRefresh),
+            name: CommunitySafetyService.blockedUsersDidChangeNotification,
+            object: nil
+        )
         
         Task { await loadWishlist() }
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
     
     override func viewWillAppear(_ animated: Bool) {
@@ -62,6 +73,11 @@ class WishlistViewController: UITableViewController {
                 refreshControl?.endRefreshing()
             }
         }
+    }
+
+    @objc private func handleSafetyRefresh() {
+        items = CommunitySafetyService.shared.visibleItems(from: items)
+        tableView.reloadData()
     }
     
     private func loadWishlist() async {
@@ -108,7 +124,8 @@ class WishlistViewController: UITableViewController {
             let decoder = JSONDecoder()
             decoder.dateDecodingStrategy = .iso8601
             let fetched = try decoder.decode([Item].self, from: itemsResp.data)
-            await MainActor.run { self.items = fetched }
+            let visibleItems = CommunitySafetyService.shared.visibleItems(from: fetched)
+            await MainActor.run { self.items = visibleItems }
         } catch {
             await MainActor.run { errorMessage = error.localizedDescription }
         }

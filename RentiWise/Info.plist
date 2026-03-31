@@ -8,16 +8,6 @@
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>CFBundleURLName</key>
-			<string></string>
-			<key>CFBundleURLSchemes</key>
-			<array>
-				<string>com.googleusercontent.apps.1077911784517-bdqkvofusmbagv4nrdlbk8bessohh8fj</string>
-			</array>
-		</dict>
-		<dict>
-			<key>CFBundleTypeRole</key>
-			<string>Editor</string>
-			<key>CFBundleURLName</key>
 			<string>rentiwise</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
@@ -25,29 +15,9 @@
 			</array>
 		</dict>
 	</array>
-	<key>GIDClientID</key>
-	<string>1077911784517-bdqkvofusmbagv4nrdlbk8bessohh8fj.apps.googleusercontent.com</string>
-	<key>NSAppTransportSecurity</key>
-	<dict>
-		<key>NSAllowsArbitraryLoads</key>
-		<true/>
-	</dict>
-	<key>NSCameraUsageDescription</key>
-	<string>Camera access is required to scan your identity documents and take photos for verification.</string>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>RentiWise needs your location to show nearby items and calculate distances to help you find rentals close to you.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>We need access to your photo library to choose an image for your rental return.</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>Microphone access is required to record video for liveness verification.</string>
-	<key>NFCReaderUsageDescription</key>
-	<string>NFC access is required to read the chip in your identity document for verification.</string>
-	<key>com.apple.developer.nfc.readersession.iso7816.select-identifiers</key>
+	<key>LSApplicationQueriesSchemes</key>
 	<array>
-		<string>D23300000045737445494420763335</string>
-		<string>A0000002471001</string>
-		<string>A0000002472001</string>
-		<string>00000000000000</string>
+		<string>upi</string>
 	</array>
 	<key>SUPABASE_ANON_KEY</key>
 	<string>eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFzc3NobWNjZGtrdGZ4cXljdWZ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMyMjc4NDEsImV4cCI6MjA3ODgwMzg0MX0.x_WZdOdzs3F6juZBJx9tl3e7cM4ycCt__qadpqpxmaI</string>
@@ -72,7 +42,12 @@
 			</array>
 		</dict>
 	</dict>
-	<key>UIUserInterfaceStyle</key>
-	<string>Light</string>
+	<key>com.apple.developer.nfc.readersession.iso7816.select-identifiers</key>
+	<array>
+		<string>D23300000045737445494420763335</string>
+		<string>A0000002471001</string>
+		<string>A0000002472001</string>
+		<string>00000000000000</string>
+	</array>
 </dict>
 </plist>

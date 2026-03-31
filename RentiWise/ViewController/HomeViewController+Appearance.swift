@@ -267,7 +267,7 @@ extension HomeViewController {
                 self.updateBadgeVisibility()
             }
         } catch {
-            print("[Home] Error fetching unread notification count: \\(error)")
+            debugLog("[Home] Error fetching unread notification count: \(error)")
             await MainActor.run {
                 self.unreadNotificationCount = 0
                 self.updateBadgeVisibility()

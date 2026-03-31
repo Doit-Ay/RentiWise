@@ -35,8 +35,11 @@ final class MyRentalsViewController: UIViewController {
 
     private enum StatusFilter: String, CaseIterable {
         case all = "All"
-        case accepted = "Accepted"
+        case active = "Active"
         case pending = "Pending"
+        case completed = "Completed"
+        case cancelled = "Cancelled"
+        case denied = "Denied"
     }
 
     // Currency for price text (rounded ₹ like screenshot)
@@ -299,11 +302,15 @@ final class MyRentalsViewController: UIViewController {
 
     @objc private func didTapFilter() {
         let ac = UIAlertController(title: "Filter rentals", message: nil, preferredStyle: .actionSheet)
-        // Present in order: All, Accepted, Pending
-        for status in [StatusFilter.all, .accepted, .pending] {
-            ac.addAction(UIAlertAction(title: status.rawValue, style: .default, handler: { [weak self] _ in
+        for status in StatusFilter.allCases {
+            let action = UIAlertAction(title: status.rawValue, style: .default) { [weak self] _ in
                 self?.currentStatus = status
-            }))
+            }
+            // Show a checkmark next to the currently selected filter
+            if status == currentStatus {
+                action.setValue(true, forKey: "checked")
+            }
+            ac.addAction(action)
         }
         ac.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         if let pop = ac.popoverPresentationController {
@@ -321,13 +328,15 @@ final class MyRentalsViewController: UIViewController {
     private func applySearchAndFilters() {
         let statusFilter: ((RequestWithItem) -> Bool) = { [weak self] req in
             guard let self else { return true }
+            let rentalStatus = req.rentalStatus
             switch self.currentStatus {
             case .all: return true
-            case .pending: return req.status.lowercased() == "pending"
-            case .accepted:
-                // Treat either "accepted" or "approved" as Accepted
-                let s = req.status.lowercased()
-                return s == "accepted" || s == "approved"
+            case .pending: return rentalStatus == .pending
+            case .active:
+                return rentalStatus == .accepted || rentalStatus == .approved || rentalStatus == .returned
+            case .completed: return rentalStatus == .completed
+            case .cancelled: return rentalStatus == .cancelled
+            case .denied: return rentalStatus == .denied || rentalStatus == .rejected
             }
         }
 

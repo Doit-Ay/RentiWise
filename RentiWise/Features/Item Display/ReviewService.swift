@@ -22,7 +22,7 @@ final class ReviewService: ReviewServicing {
     
     /// Fetch aggregated rating stats for a specific item
     func fetchItemStats(itemId: String) async throws -> ItemRatingStats {
-        print("🔍 ReviewService: Fetching stats for item: \(itemId)")
+        debugLog("🔍 ReviewService: Fetching stats for item: \(itemId)")
         
         // Query reviews for this item and compute stats
         let response = try await client
@@ -39,7 +39,7 @@ final class ReviewService: ReviewServicing {
         }
         
         let ratings = try decoder.decode([ReviewRating].self, from: data)
-        print("📊 ReviewService: Found \(ratings.count) reviews for item \(itemId)")
+        debugLog("📊 ReviewService: Found \(ratings.count) reviews for item \(itemId)")
         
         if ratings.isEmpty {
             return ItemRatingStats(average_rating: nil, review_count: 0)
@@ -48,7 +48,7 @@ final class ReviewService: ReviewServicing {
         let sum = ratings.reduce(0) { $0 + $1.rating }
         let average = Double(sum) / Double(ratings.count)
         
-        print("⭐️ ReviewService: Average rating: \(average), Count: \(ratings.count)")
+        debugLog("⭐️ ReviewService: Average rating: \(average), Count: \(ratings.count)")
         
         return ItemRatingStats(
             average_rating: average,

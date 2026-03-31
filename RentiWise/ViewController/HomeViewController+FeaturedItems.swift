@@ -39,11 +39,11 @@ extension HomeViewController {
     }
 
     func applyFeatured(items: [Item]) {
-        let slots: [(UIImageView?, UILabel?, UILabel?, UILabel?, UILabel?)] = [
-            (item1Image, item1Name, item1Rate, item1Rating, item1Distance),
-            (item2Image, item2Name, item2Rate, item2Rating, item2Distance),
-            (item3Image, item3Name, item3Rate, item3Rating, item3Distance),
-            (item4Image, item4Name, item4Rate, item4Rating, item4Distance)
+        let slots: [(UIImageView?, UILabel?, UILabel?, UILabel?, UILabel?, UILabel?, UIView?, UIButton?)] = [
+            (item1Image, item1Name, item1Rate, item1Rating, item1Distance, item1owner, item1CardView, rentButton1),
+            (item2Image, item2Name, item2Rate, item2Rating, item2Distance, item2owner, item2CardView, rentButton2),
+            (item3Image, item3Name, item3Rate, item3Rating, item3Distance, item3owner, item3CardView, rentButton3),
+            (item4Image, item4Name, item4Rate, item4Rating, item4Distance, item4owner, item4CardView, rentButton4)
         ]
 
         for (i, slot) in slots.enumerated() {
@@ -58,8 +58,12 @@ extension HomeViewController {
         self.featuredItems = items
     }
 
-    func configureFeaturedSlot(_ slot: (UIImageView?, UILabel?, UILabel?, UILabel?, UILabel?), with item: Item) {
-        let (imageView, nameLabel, rateLabel, ratingLabel, distanceLabel) = slot
+    func configureFeaturedSlot(_ slot: (UIImageView?, UILabel?, UILabel?, UILabel?, UILabel?, UILabel?, UIView?, UIButton?), with item: Item) {
+        let (imageView, nameLabel, rateLabel, ratingLabel, distanceLabel, ownerLabel, cardView, rentButton) = slot
+
+        cardView?.isHidden = false
+        rentButton?.isEnabled = true
+        ownerLabel?.text = nil
 
         nameLabel?.text = item.title
 
@@ -92,13 +96,16 @@ extension HomeViewController {
         }
     }
 
-    func clearFeaturedSlot(_ slot: (UIImageView?, UILabel?, UILabel?, UILabel?, UILabel?)) {
-        let (imageView, nameLabel, rateLabel, ratingLabel, distanceLabel) = slot
+    func clearFeaturedSlot(_ slot: (UIImageView?, UILabel?, UILabel?, UILabel?, UILabel?, UILabel?, UIView?, UIButton?)) {
+        let (imageView, nameLabel, rateLabel, ratingLabel, distanceLabel, ownerLabel, cardView, rentButton) = slot
+        cardView?.isHidden = true
+        rentButton?.isEnabled = false
         imageView?.image = nil
         nameLabel?.text = nil
         rateLabel?.text = nil
         ratingLabel?.text = nil
         distanceLabel?.text = nil
+        ownerLabel?.text = nil
     }
 
     func setImage(into imageView: UIImageView?, from url: URL) {

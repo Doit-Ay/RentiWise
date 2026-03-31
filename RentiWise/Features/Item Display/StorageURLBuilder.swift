@@ -2,7 +2,6 @@
 import Foundation
 
 enum StorageURLBuilder {
-    // TODO: Fill in your actual values
     static let projectRef = "assshmccdkktfxqycufv"
     static let bucket = "itemimages"
 

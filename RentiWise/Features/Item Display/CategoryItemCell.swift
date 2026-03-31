@@ -23,8 +23,8 @@ final class CategoryItemCell: UITableViewCell {
     weak var delegate: CategoryItemCellDelegate?
 
     @IBAction func rentButtonTapped(_ sender: UIButton) {
-        print("🔘 CategoryItemCell: Rent button tapped!")
-        print("🔘 Delegate is: \(delegate != nil ? "SET" : "NIL")")
+        debugLog("🔘 CategoryItemCell: Rent button tapped!")
+        debugLog("🔘 Delegate is: \(delegate != nil ? "SET" : "NIL")")
         delegate?.categoryItemCellDidTapRent(self)
     }
     

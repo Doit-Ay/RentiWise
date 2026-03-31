@@ -56,6 +56,8 @@ class RequestSentPageViewController: UIViewController {
     @IBOutlet weak var perHourButton: UIButton?
     @IBOutlet weak var perDayButton: UIButton?
     
+    @IBOutlet weak var upiInfoLabel: UILabel!  // Added informational label for UPI payment note
+    
     private lazy var dateFormatter: DateFormatter = {
         let df = DateFormatter()
         df.dateFormat = "d MMM yyyy"
@@ -127,6 +129,12 @@ class RequestSentPageViewController: UIViewController {
         productThumbImageView?.layer.cornerRadius = 16
         
         updateUI()
+        
+        // Informational note about UPI payment after acceptance
+        upiInfoLabel?.text = "You will be notified when the lender responds. If accepted, you can pay the lender directly via UPI."
+        upiInfoLabel?.textColor = .secondaryLabel
+        upiInfoLabel?.font = .systemFont(ofSize: 13, weight: .regular)
+        upiInfoLabel?.numberOfLines = 0
     }
     
     override func viewDidLayoutSubviews() {
@@ -286,8 +294,8 @@ class RequestSentPageViewController: UIViewController {
             }
         }
 
-        // Totals align with RequestViewController: total = rentalFee + deposit (no service fee included)
-        let total = rentalFee + item.deposit_amount
+        // Totals align with RequestViewController: rental fee only for the TestFlight flow.
+        let total = rentalFee
 
         let rentalFeeText = formatter.string(from: NSNumber(value: rentalFee)) ?? String(format: "%.2f", rentalFee)
         let totalText = formatter.string(from: NSNumber(value: total)) ?? String(format: "%.2f", total)
@@ -295,9 +303,8 @@ class RequestSentPageViewController: UIViewController {
         rentalFeeAmountLabel?.text = rentalFeeText
         totalAmountLabel?.text = totalText
 
-        // Security deposit
-        let depositText = formatter.string(from: NSNumber(value: item.deposit_amount)) ?? String(format: "%.2f", item.deposit_amount)
-        securityDepositAmountLabel?.text = depositText
+        securityDepositLabel?.isHidden = true
+        securityDepositAmountLabel?.isHidden = true
     }
 
     private func updateToggleUI() {

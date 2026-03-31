@@ -26,6 +26,11 @@ final class SignUpService: SignUpServicing {
     }
 
     func upsertUserProfile(userId: String, email: String, profile: SignUpUserProfile) async throws {
+        struct SignUpDBUserProfileRow: Encodable {
+            let id: String
+            let full_name: String
+        }
+
         let payload = SignUpDBUserRow(
             id: userId,
             email: email,
@@ -35,6 +40,11 @@ final class SignUpService: SignUpServicing {
         _ = try await client
             .from("users")
             .upsert(payload)
+            .execute()
+
+        _ = try await client
+            .from("user_profiles")
+            .upsert(SignUpDBUserProfileRow(id: userId, full_name: profile.fullName))
             .execute()
     }
 }

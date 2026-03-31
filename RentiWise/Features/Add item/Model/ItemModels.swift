@@ -30,6 +30,7 @@ struct ItemRow: Decodable {
     let condition: String?
     let price_per_day: Double
     let deposit_amount: Double
+    let declared_value: Int?
     let images: [String]
     let is_active: Bool
     let created_at: String
@@ -45,6 +46,7 @@ struct AddItemDraft {
     var condition: String = ""
     var pricePerDay: Double = 0
     var depositAmount: Double = 0
+    var declaredValue: Int = 0
     var isActive: Bool = true
 
     // Editing support
@@ -53,4 +55,3 @@ struct AddItemDraft {
     // The image paths already stored in DB for this item
     var existingImagePaths: [String] = []
 }
-

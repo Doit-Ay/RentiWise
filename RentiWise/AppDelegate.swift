@@ -6,9 +6,6 @@
 //
 
 import UIKit
-#if canImport(GoogleSignIn)
-import GoogleSignIn
-#endif
 
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -17,6 +14,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         // Start preloading immediately (while launch screen is still showing)
         PreloadManager.shared.startPreloading()
+        // Request local notification permission for rental reminders
+        NotificationService.shared.requestPermissionIfNeeded()
         return true
     }
 

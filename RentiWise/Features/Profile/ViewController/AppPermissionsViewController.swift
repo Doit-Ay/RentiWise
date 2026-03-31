@@ -9,14 +9,13 @@ import UIKit
 import CoreLocation
 import AVFoundation
 import Photos
-import UserNotifications
 
 class AppPermissionsViewController: UITableViewController {
     
     private var locationEnabled = false
     private var cameraEnabled = false
     private var photosEnabled = false
-    private var notificationsEnabled = false
+    private let locationManager = CLLocationManager()
     
     private let brandTeal = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0)
     
@@ -60,14 +59,6 @@ class AppPermissionsViewController: UITableViewController {
         let phStatus = PHPhotoLibrary.authorizationStatus(for: .readWrite)
         photosEnabled = (phStatus == .authorized || phStatus == .limited)
         
-        // Notifications
-        UNUserNotificationCenter.current().getNotificationSettings { [weak self] settings in
-            DispatchQueue.main.async {
-                self?.notificationsEnabled = (settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional)
-                self?.tableView.reloadData()
-            }
-        }
-        
         tableView.reloadData()
     }
     
@@ -78,7 +69,7 @@ class AppPermissionsViewController: UITableViewController {
     }
     
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return 4 // Location, Camera, Photos, Notifications
+        return 3 // Location, Camera, Photos
     }
     
     override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
@@ -105,9 +96,6 @@ class AppPermissionsViewController: UITableViewController {
         case 2:
             cell.textLabel?.text = "Photos"
             toggle.isOn = photosEnabled
-        case 3:
-            cell.textLabel?.text = "Notifications"
-            toggle.isOn = notificationsEnabled
         default:
             break
         }
@@ -125,8 +113,6 @@ class AppPermissionsViewController: UITableViewController {
             handleCameraToggle(newValue)
         case 2:
             handlePhotosToggle(newValue)
-        case 3:
-            handleNotificationsToggle(newValue)
         default:
             break
         }
@@ -139,8 +125,7 @@ class AppPermissionsViewController: UITableViewController {
         if newValue {
             switch status {
             case .notDetermined:
-                let manager = CLLocationManager()
-                manager.requestWhenInUseAuthorization()
+                locationManager.requestWhenInUseAuthorization()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
                     self?.refreshStatuses()
                 }
@@ -207,41 +192,6 @@ class AppPermissionsViewController: UITableViewController {
             }
         } else {
             showSettingsAlert(message: "To turn off Photos access, please use the Settings app.")
-            refreshStatuses()
-        }
-    }
-    
-    private func handleNotificationsToggle(_ newValue: Bool) {
-        if newValue {
-            UNUserNotificationCenter.current().getNotificationSettings { [weak self] settings in
-                switch settings.authorizationStatus {
-                case .notDetermined:
-                    UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, _ in
-                        DispatchQueue.main.async {
-                            self?.notificationsEnabled = granted
-                            self?.tableView.reloadData()
-                        }
-                    }
-                case .denied:
-                    DispatchQueue.main.async {
-                        self?.showSettingsAlert(message: "Notifications are disabled. You can enable them in Settings.")
-                        self?.notificationsEnabled = false
-                        self?.tableView.reloadData()
-                    }
-                case .authorized, .provisional, .ephemeral:
-                    DispatchQueue.main.async {
-                        self?.notificationsEnabled = true
-                        self?.tableView.reloadData()
-                    }
-                @unknown default:
-                    DispatchQueue.main.async {
-                        self?.notificationsEnabled = false
-                        self?.tableView.reloadData()
-                    }
-                }
-            }
-        } else {
-            showSettingsAlert(message: "To turn off Notifications, please use the Settings app.")
             refreshStatuses()
         }
     }

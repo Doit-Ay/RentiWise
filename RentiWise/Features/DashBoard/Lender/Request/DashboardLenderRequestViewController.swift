@@ -47,18 +47,16 @@ class DashboardLenderRequestViewController: UIViewController {
     /// Legacy outlet — still wired in IB. To remove: disconnect it in IB first, then delete this line.
     @IBOutlet weak var denybutton: UIButton?
 
-    // Cache fetched deposit so we don’t refetch repeatedly
-    private var depositAmount: Double?
-
     // Programmatic status row (shown when status != pending)
     private var statusRowContainer: UIStackView?
     private var statusValueLabel: UILabel?
     private var changeStatusButton: UIButton?      // the single "Deny" or "Accept" action button
-    private var changeWindowMessageLabel: UILabel? // "You can change within 24 h or before payment"
+    private var changeWindowMessageLabel: UILabel? // "You can change within 24 h or before the rental starts"
 
     // White background bar behind the status row
     private var statusBackgroundView: UIView?
     private var statusBackgroundBottomConstraint: NSLayoutConstraint?
+    private var isEnsuringPickupCode = false
 
     /// Timestamp when the most recent accept/deny decision was made.
     /// Used to enforce the 24-hour change window on the client side.
@@ -143,7 +141,7 @@ class DashboardLenderRequestViewController: UIViewController {
         messageLabel.textColor = .secondaryLabel
         messageLabel.numberOfLines = 0
         messageLabel.textAlignment = .center
-        messageLabel.text = "You can change your decision within 24 hours or before the borrower makes the payment."
+        messageLabel.text = "You can change your decision within 24 hours or before the rental starts."
 
         // ── Status label ─────────────────────────────────────────────────
         let label = UILabel()
@@ -230,6 +228,7 @@ class DashboardLenderRequestViewController: UIViewController {
             secRateLabel?.text = ""
             totalLabel?.text = ""
             updateButtonsAndStatusUI(status: nil)
+            updateVerificationAction()
             return
         }
 
@@ -341,18 +340,18 @@ class DashboardLenderRequestViewController: UIViewController {
             }
         }
 
-        // Pricing: need deposit_amount from items; fetch if we don’t have it yet
+        // Pricing: rental fee only for the TestFlight flow
         computeAndDisplayTotals(days: days, pricePerDay: req.items?.price_per_day, itemId: req.item_id)
 
         // Buttons vs status row
         updateButtonsAndStatusUI(status: req.status)
+        updateVerificationAction()
+        ensurePickupCodeIfNeeded(for: req)
     }
 
     private func updateButtonsAndStatusUI(status: String?) {
         let current = (status ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let isPending = current.isEmpty || current == "pending"
-        let isPaid    = current == "paid"
-
         // Accept/Deny buttons visible only while pending
         acceptButton?.isHidden  = !isPending
         denyButton?.isHidden    = !isPending
@@ -365,13 +364,19 @@ class DashboardLenderRequestViewController: UIViewController {
         guard showBar else { return }
 
         // Status label
-        let display = current.capitalized.isEmpty ? "—" : current.capitalized
+        let display: String
+        switch current {
+        case "accepted":
+            display = "Accepted • Awaiting OTP"
+        case "approved":
+            display = "Pickup Verified"
+        default:
+            display = current.capitalized.isEmpty ? "—" : current.capitalized
+        }
         statusValueLabel?.text = "Status: \(display)"
 
-        // Determine if the change window is still open:
-        //   • within 24 h of the decision, AND
-        //   • request has NOT been paid
-        let windowOpen = isWithinChangeWindow() && !isPaid
+        // Determine if the change window is still open.
+        let windowOpen = isWithinChangeWindow()
 
         // Show the OPPOSITE action button only while the window is open
         changeStatusButton?.isHidden = !windowOpen
@@ -389,9 +394,57 @@ class DashboardLenderRequestViewController: UIViewController {
                 changeStatusButton?.setTitle("Accept", for: .normal)
                 changeStatusButton?.tintColor = UIColor(red: 0x34/255.0, green: 0xAA/255.0, blue: 0x69/255.0, alpha: 1.0)
                 changeStatusButton?.layer.borderColor = UIColor(red: 0x34/255.0, green: 0xAA/255.0, blue: 0x69/255.0, alpha: 1.0).cgColor
+            case "approved":
+                changeStatusButton?.isHidden = true
+                changeWindowMessageLabel?.isHidden = true
             default:
                 changeStatusButton?.isHidden = true
                 changeWindowMessageLabel?.isHidden = true
+            }
+        }
+    }
+
+    private func updateVerificationAction() {
+        guard let req = request else {
+            navigationItem.rightBarButtonItem = nil
+            return
+        }
+
+        let current = req.status.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let hasPickupCode = !(req.pickup_code?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+
+        if current == "accepted", hasPickupCode {
+            navigationItem.rightBarButtonItem = UIBarButtonItem(
+                title: "Verify OTP",
+                style: .plain,
+                target: self,
+                action: #selector(verifyPickupCodeTapped)
+            )
+        } else {
+            navigationItem.rightBarButtonItem = nil
+        }
+    }
+
+    private func ensurePickupCodeIfNeeded(for req: RequestWithItem) {
+        let current = req.status.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let hasPickupCode = !(req.pickup_code?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+        guard current == "accepted", !hasPickupCode, !isEnsuringPickupCode else { return }
+
+        isEnsuringPickupCode = true
+        Task { [weak self] in
+            guard let self else { return }
+            defer { self.isEnsuringPickupCode = false }
+            do {
+                let generatedCode = self.generatePickupCode()
+                try await self.persistRequest(status: "accepted", pickupCode: generatedCode)
+                try await self.setItemAvailability(itemId: req.item_id, isActive: false)
+                await MainActor.run {
+                    self.request?.pickup_code = generatedCode
+                    self.updateButtonsAndStatusUI(status: self.request?.status)
+                    self.updateVerificationAction()
+                }
+            } catch {
+                debugLog("[LenderRequest] Failed to backfill pickup code: \(error)")
             }
         }
     }
@@ -517,63 +570,24 @@ class DashboardLenderRequestViewController: UIViewController {
     // MARK: - Pricing
 
     private func computeAndDisplayTotals(days: Int?, pricePerDay: Double?, itemId: String) {
-        // If we already have deposit and needed inputs, compute immediately
-        if let p = pricePerDay, let d = days, let deposit = depositAmount {
-            let rentalFee = Double(d) * p
-            let total = rentalFee + deposit
-            secRateLabel?.text = currencyFormatter.string(from: NSNumber(value: deposit))
-            totalLabel?.text = currencyFormatter.string(from: NSNumber(value: total))
+        _ = itemId
+        secRateLabel?.text = "Direct via UPI"
+
+        guard let d = days, let p = pricePerDay else {
+            if totalLabel?.text?.isEmpty ?? true {
+                totalLabel?.text = nil
+            }
             return
         }
 
-        // Otherwise fetch deposit if missing, then compute
-        Task {
-            if depositAmount == nil {
-                do {
-                    struct DepositDTO: Decodable { let deposit_amount: Double }
-                    let response = try await SupabaseManager.shared.client
-                        .from("items")
-                        .select("deposit_amount")
-                        .eq("id", value: itemId)
-                        .single()
-                        .execute()
-
-                    if let data = response.data as? Data {
-                        let dto = try JSONDecoder().decode(DepositDTO.self, from: data)
-                        self.depositAmount = dto.deposit_amount
-                    }
-                } catch {
-                    // If fetch fails, assume zero deposit
-                    self.depositAmount = 0
-                }
-            }
-
-            await MainActor.run { [weak self] in
-                guard let self = self else { return }
-                let deposit = self.depositAmount ?? 0
-                if let d = days, let p = pricePerDay {
-                    let rentalFee = Double(d) * p
-                    let total = rentalFee + deposit
-                    self.secRateLabel?.text = self.currencyFormatter.string(from: NSNumber(value: deposit))
-                    self.totalLabel?.text = self.currencyFormatter.string(from: NSNumber(value: total))
-                } else {
-                    // Still show deposit if we have it
-                    self.secRateLabel?.text = self.currencyFormatter.string(from: NSNumber(value: deposit))
-                    // If we can’t compute total, leave it blank
-                    if self.totalLabel?.text?.isEmpty ?? true {
-                        self.totalLabel?.text = nil
-                    }
-                }
-            }
-        }
+        let rentalFee = Double(d) * p
+        totalLabel?.text = currencyFormatter.string(from: NSNumber(value: rentalFee))
     }
 
     // MARK: - Actions: Accept / Deny
 
     @IBAction func acceptbuttontapped(_ sender: UIButton) {
         Task { await updateStatus(to: "accepted") }
-        // Notify BookingApprovalViewController that this request was accepted
-        NotificationCenter.default.post(name: BookingApprovalViewController.requestApprovedNotification, object: nil)
     }
 
     @IBAction func denybuttontapped(_ sender: UIButton) {
@@ -585,7 +599,7 @@ class DashboardLenderRequestViewController: UIViewController {
         guard isWithinChangeWindow() else {
             let alert = UIAlertController(
                 title: "Window Closed",
-                message: "You can only change your decision within 24 hours and before the borrower makes the payment.",
+                message: "You can only change your decision within 24 hours and before the rental starts.",
                 preferredStyle: .alert
             )
             alert.addAction(UIAlertAction(title: "OK", style: .default))
@@ -604,7 +618,7 @@ class DashboardLenderRequestViewController: UIViewController {
         let humanNew = newStatus.capitalized
         let confirm = UIAlertController(
             title: "Change to \(humanNew)?",
-            message: "This will update your decision to \(humanNew). You can change it again within 24 hours or before the borrower pays.",
+            message: "This will update your decision to \(humanNew). You can change it again within 24 hours or before the rental starts.",
             preferredStyle: .alert
         )
         confirm.addAction(UIAlertAction(title: humanNew, style: .default, handler: { [weak self] _ in
@@ -621,22 +635,36 @@ class DashboardLenderRequestViewController: UIViewController {
         denyButton?.alpha = enabled ? 1.0 : 0.6
         changeStatusButton?.isEnabled = enabled
         changeStatusButton?.alpha = enabled ? 1.0 : 0.6
+        navigationItem.rightBarButtonItem?.isEnabled = enabled
     }
 
     private func updateStatus(to newStatus: String) async {
         guard var current = request else { return }
         await MainActor.run { self.setButtonsEnabled(false) }
         do {
-            // PATCH requests set status = newStatus where id = current.id
-            struct Patch: Encodable { let status: String }
-            _ = try await SupabaseManager.shared.client
-                .from("requests")
-                .update(Patch(status: newStatus))
-                .eq("id", value: current.id)
-                .execute()
+            let previousStatus = current.status.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            let nextPickupCode: String?
+            switch newStatus {
+            case "accepted":
+                try await assertNoActiveRentalConflict(for: current)
+                nextPickupCode = current.pickup_code?.isEmpty == false ? current.pickup_code : generatePickupCode()
+            case "denied":
+                nextPickupCode = nil
+            default:
+                nextPickupCode = current.pickup_code
+            }
+
+            try await persistRequest(status: newStatus, pickupCode: nextPickupCode)
+
+            if newStatus == "accepted" {
+                try await setItemAvailability(itemId: current.item_id, isActive: false)
+            } else if newStatus == "denied", previousStatus == "accepted" || previousStatus == "approved" {
+                try await setItemAvailability(itemId: current.item_id, isActive: true)
+            }
 
             // Update local model and UI
             current.status = newStatus
+            current.pickup_code = nextPickupCode
             self.request = current
 
             // Record when the decision was made and persist it across restarts
@@ -649,10 +677,31 @@ class DashboardLenderRequestViewController: UIViewController {
             await MainActor.run {
                 // Update buttons/status row visibility
                 self.updateButtonsAndStatusUI(status: current.status)
+                self.updateVerificationAction()
             }
 
             // Tell LenderView to refresh Requests
             NotificationCenter.default.post(name: Notification.Name("requestsShouldRefresh"), object: nil)
+            if newStatus == "accepted" {
+                NotificationCenter.default.post(name: BookingApprovalViewController.requestApprovedNotification, object: nil)
+                // Schedule a due-date reminder local notification for the borrower
+                NotificationService.shared.scheduleRentalDueReminder(
+                    requestId: current.id,
+                    itemTitle: current.items?.title ?? "Item",
+                    endDateString: current.end_date
+                )
+            }
+            // Send local push notification for status change
+            let statusEnum = RentalStatus(rawDBValue: newStatus)
+            NotificationService.shared.notifyStatusChange(
+                requestId: current.id,
+                itemTitle: current.items?.title ?? "Item",
+                newStatus: statusEnum,
+                role: "lender"
+            )
+
+            // Track analytics event for lender decision
+            AnalyticsService.shared.trackRequestDecision(requestId: current.id, decision: newStatus)
         } catch {
             await MainActor.run {
                 let alert = UIAlertController(title: "Update Failed", message: error.localizedDescription, preferredStyle: .alert)
@@ -661,5 +710,365 @@ class DashboardLenderRequestViewController: UIViewController {
             }
         }
         await MainActor.run { self.setButtonsEnabled(true) }
+    }
+
+    private func assertNoActiveRentalConflict(for current: RequestWithItem) async throws {
+        struct ActiveRequestRow: Decodable { let id: String }
+
+        let response = try await SupabaseManager.shared.client
+            .from("requests")
+            .select("id")
+            .eq("item_id", value: current.item_id)
+            .in("status", values: ["accepted", "approved"])
+            .neq("id", value: current.id)
+            .limit(1)
+            .execute()
+
+        let rows = try JSONDecoder().decode([ActiveRequestRow].self, from: response.data)
+        guard rows.isEmpty else {
+            throw NSError(
+                domain: "RentiWise.Requests",
+                code: 409,
+                userInfo: [NSLocalizedDescriptionKey: "This item already has an active rental. Complete or cancel the other booking before accepting another request."]
+            )
+        }
+    }
+
+    private func generatePickupCode() -> String {
+        String(format: "%06d", Int.random(in: 0...999_999))
+    }
+
+    private func persistRequest(status: String, pickupCode: String?) async throws {
+        struct Patch: Encodable {
+            let status: String
+            let pickup_code: String?
+        }
+
+        guard let requestId = request?.id else { return }
+        _ = try await SupabaseManager.shared.client
+            .from("requests")
+            .update(Patch(status: status, pickup_code: pickupCode))
+            .eq("id", value: requestId)
+            .execute()
+    }
+
+    private func setItemAvailability(itemId: String, isActive: Bool) async throws {
+        struct ItemPatch: Encodable { let is_active: Bool }
+
+        _ = try await SupabaseManager.shared.client
+            .from("items")
+            .update(ItemPatch(is_active: isActive))
+            .eq("id", value: itemId)
+            .execute()
+    }
+
+    @objc private func verifyPickupCodeTapped() {
+        guard let req = request else { return }
+        guard let expectedCode = req.pickup_code?.trimmingCharacters(in: .whitespacesAndNewlines), !expectedCode.isEmpty else {
+            let alert = UIAlertController(title: "OTP Missing", message: "A pickup OTP has not been generated for this request yet.", preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "OK", style: .default))
+            present(alert, animated: true)
+            return
+        }
+
+        let alert = UIAlertController(
+            title: "Verify Pickup OTP",
+            message: "Ask the borrower for the 6-digit pickup code to confirm the handoff.",
+            preferredStyle: .alert
+        )
+        alert.addTextField { textField in
+            textField.placeholder = "6-digit OTP"
+            textField.keyboardType = .numberPad
+            textField.textContentType = .oneTimeCode
+        }
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Verify", style: .default) { [weak self, weak alert] _ in
+            guard let self else { return }
+            let typed = alert?.textFields?.first?.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            guard typed == expectedCode else {
+                let mismatch = UIAlertController(title: "Incorrect OTP", message: "The code doesn't match the borrower's pickup code.", preferredStyle: .alert)
+                mismatch.addAction(UIAlertAction(title: "OK", style: .default))
+                self.present(mismatch, animated: true)
+                return
+            }
+
+            Task { [weak self] in
+                guard let self else { return }
+                await self.completePickupVerification()
+            }
+        })
+        present(alert, animated: true)
+    }
+
+    private func completePickupVerification() async {
+        guard var current = request else { return }
+        await MainActor.run { self.setButtonsEnabled(false) }
+        do {
+            try await persistRequest(status: "approved", pickupCode: nil)
+            current.status = "approved"
+            current.pickup_code = nil
+            request = current
+
+            // Auto-create rental history row on pickup verification
+            await createRentalHistoryIfNeeded(for: current)
+
+            await MainActor.run {
+                self.updateButtonsAndStatusUI(status: current.status)
+                self.updateVerificationAction()
+                let alert = UIAlertController(title: "Pickup Verified", message: "The OTP matched and the rental is now marked as active.", preferredStyle: .alert)
+                alert.addAction(UIAlertAction(title: "OK", style: .default))
+                self.present(alert, animated: true)
+            }
+
+            NotificationCenter.default.post(name: Notification.Name("requestsShouldRefresh"), object: nil)
+
+            // Track analytics event
+            AnalyticsService.shared.trackPickupVerified(requestId: current.id)
+        } catch {
+            await MainActor.run {
+                let alert = UIAlertController(title: "Verification Failed", message: error.localizedDescription, preferredStyle: .alert)
+                alert.addAction(UIAlertAction(title: "OK", style: .default))
+                self.present(alert, animated: true)
+            }
+        }
+        await MainActor.run { self.setButtonsEnabled(true) }
+    }
+
+    // MARK: - Rental History Auto-Creation
+
+    /// Creates a row in `rentals_history` when the pickup OTP is verified (status becomes "approved").
+    /// This ensures the lender's history tab populates automatically.
+    private func createRentalHistoryIfNeeded(for req: RequestWithItem) async {
+        struct ExistingHistoryRow: Decodable { let id: String }
+
+        // Check if a history row already exists for this request
+        do {
+            let existing = try await SupabaseManager.shared.client
+                .from("rentals_history")
+                .select("id")
+                .eq("request_id", value: req.id)
+                .limit(1)
+                .execute()
+
+            let rows = try JSONDecoder().decode([ExistingHistoryRow].self, from: existing.data)
+            if !rows.isEmpty {
+                debugLog("[LenderRequest] Rental history row already exists for request \(req.id)")
+                return
+            }
+        } catch {
+            // Table might not have request_id column yet — proceed anyway
+            debugLog("[LenderRequest] Could not check existing history: \(error)")
+        }
+
+        // Compute total amount
+        let sqlDF = DateFormatter()
+        sqlDF.calendar = Calendar(identifier: .gregorian)
+        sqlDF.timeZone = TimeZone(secondsFromGMT: 0)
+        sqlDF.dateFormat = "yyyy-MM-dd"
+        var days = 1
+        if let s = sqlDF.date(from: req.start_date), let e = sqlDF.date(from: req.end_date) {
+            days = max(1, Int(ceil(e.timeIntervalSince(s) / 86400.0)))
+        }
+        let pricePerDay = req.items?.price_per_day ?? 0
+        let totalAmount = Double(days) * pricePerDay
+
+        struct HistoryInsert: Encodable {
+            let item_id: String
+            let owner_id: String
+            let borrower_id: String
+            let start_date: String
+            let end_date: String
+            let total_amount: Double
+            let request_id: String
+        }
+
+        let row = HistoryInsert(
+            item_id: req.item_id,
+            owner_id: req.owner_id,
+            borrower_id: req.borrower_id,
+            start_date: req.start_date,
+            end_date: req.end_date,
+            total_amount: totalAmount,
+            request_id: req.id
+        )
+
+        do {
+            _ = try await SupabaseManager.shared.client
+                .from("rentals_history")
+                .insert(row)
+                .execute()
+            debugLog("[LenderRequest] Rental history row created for request \(req.id)")
+        } catch {
+            debugLog("[LenderRequest] Failed to create rental history: \(error)")
+        }
+    }
+
+    // MARK: - Pending Sub-Requests Section
+
+    /// Container for the pending sub-requests section (shown below pricing card for active rentals).
+    private var pendingSubRequestsStack: UIStackView?
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        // Load pending return/extension requests for this booking
+        if let req = request {
+            let status = req.status.lowercased()
+            if status == "accepted" || status == "approved" {
+                Task { await loadPendingSubRequests(for: req.id) }
+            }
+        }
+    }
+
+    private func loadPendingSubRequests(for requestId: String) async {
+        struct PendingSubRequest: Decodable {
+            let id: String
+            let status: String
+            let created_at: String?
+        }
+
+        var returnRequests: [PendingSubRequest] = []
+        var extensionRequests: [PendingSubRequest] = []
+
+        // Fetch pending return requests
+        do {
+            let resp = try await SupabaseManager.shared.client
+                .from("return_requests")
+                .select("id, status, created_at")
+                .eq("request_id", value: requestId)
+                .eq("status", value: "pending")
+                .order("created_at", ascending: false)
+                .execute()
+            returnRequests = try JSONDecoder().decode([PendingSubRequest].self, from: resp.data)
+        } catch {
+            debugLog("[LenderRequest] Error loading pending return requests: \(error)")
+        }
+
+        // Fetch pending extension requests
+        do {
+            let resp = try await SupabaseManager.shared.client
+                .from("extension_requests")
+                .select("id, status, created_at")
+                .eq("request_id", value: requestId)
+                .eq("status", value: "pending")
+                .order("created_at", ascending: false)
+                .execute()
+            extensionRequests = try JSONDecoder().decode([PendingSubRequest].self, from: resp.data)
+        } catch {
+            debugLog("[LenderRequest] Error loading pending extension requests: \(error)")
+        }
+
+        await MainActor.run {
+            self.displayPendingSubRequests(returnRequests: returnRequests.map { ($0.id, "return") },
+                                           extensionRequests: extensionRequests.map { ($0.id, "extension") })
+        }
+    }
+
+    private func displayPendingSubRequests(returnRequests: [(id: String, type: String)],
+                                            extensionRequests: [(id: String, type: String)]) {
+        // Remove existing section if any
+        pendingSubRequestsStack?.removeFromSuperview()
+        pendingSubRequestsStack = nil
+
+        let allPending = returnRequests + extensionRequests
+        guard !allPending.isEmpty, let priceCard = priceCard else { return }
+
+        let tealColor = UIColor(red: 93/255.0, green: 169/255.0, blue: 182/255.0, alpha: 1.0)
+
+        // Section header
+        let headerLabel = UILabel()
+        headerLabel.text = "📋 Pending Requests"
+        headerLabel.font = .systemFont(ofSize: 16, weight: .bold)
+        headerLabel.textColor = .label
+
+        let stack = UIStackView()
+        stack.axis = .vertical
+        stack.spacing = 10
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        stack.addArrangedSubview(headerLabel)
+
+        for pending in allPending {
+            let rowView = UIView()
+            rowView.backgroundColor = .secondarySystemGroupedBackground
+            rowView.layer.cornerRadius = 12
+            rowView.layer.masksToBounds = true
+            rowView.translatesAutoresizingMaskIntoConstraints = false
+            rowView.heightAnchor.constraint(equalToConstant: 52).isActive = true
+
+            let icon = UIImageView(image: UIImage(systemName: pending.type == "return" ? "arrow.uturn.backward.circle.fill" : "calendar.badge.plus"))
+            icon.tintColor = .systemOrange
+            icon.translatesAutoresizingMaskIntoConstraints = false
+            icon.widthAnchor.constraint(equalToConstant: 24).isActive = true
+            icon.heightAnchor.constraint(equalToConstant: 24).isActive = true
+
+            let label = UILabel()
+            label.text = pending.type == "return" ? "Return Request" : "Extension Request"
+            label.font = .systemFont(ofSize: 15, weight: .medium)
+            label.textColor = .label
+            label.translatesAutoresizingMaskIntoConstraints = false
+
+            let reviewButton = UIButton(type: .system)
+            reviewButton.setTitle("Review", for: .normal)
+            reviewButton.titleLabel?.font = .systemFont(ofSize: 14, weight: .semibold)
+            reviewButton.tintColor = .white
+            reviewButton.backgroundColor = tealColor
+            reviewButton.layer.cornerRadius = 8
+            reviewButton.layer.masksToBounds = true
+            reviewButton.contentEdgeInsets = UIEdgeInsets(top: 6, left: 14, bottom: 6, right: 14)
+            reviewButton.translatesAutoresizingMaskIntoConstraints = false
+            // Tag encodes the request type and ID for the action handler
+            reviewButton.accessibilityIdentifier = "\(pending.type)|\(pending.id)"
+            reviewButton.addTarget(self, action: #selector(didTapReviewSubRequest(_:)), for: .touchUpInside)
+
+            rowView.addSubview(icon)
+            rowView.addSubview(label)
+            rowView.addSubview(reviewButton)
+
+            NSLayoutConstraint.activate([
+                icon.leadingAnchor.constraint(equalTo: rowView.leadingAnchor, constant: 14),
+                icon.centerYAnchor.constraint(equalTo: rowView.centerYAnchor),
+                label.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 10),
+                label.centerYAnchor.constraint(equalTo: rowView.centerYAnchor),
+                reviewButton.trailingAnchor.constraint(equalTo: rowView.trailingAnchor, constant: -14),
+                reviewButton.centerYAnchor.constraint(equalTo: rowView.centerYAnchor),
+                label.trailingAnchor.constraint(lessThanOrEqualTo: reviewButton.leadingAnchor, constant: -8)
+            ])
+
+            stack.addArrangedSubview(rowView)
+        }
+
+        // Add section to view, below priceCard
+        guard let scrollView = priceCard.superview else { return }
+        scrollView.addSubview(stack)
+
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: priceCard.bottomAnchor, constant: 16),
+            stack.leadingAnchor.constraint(equalTo: priceCard.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: priceCard.trailingAnchor)
+        ])
+
+        pendingSubRequestsStack = stack
+    }
+
+    @objc private func didTapReviewSubRequest(_ sender: UIButton) {
+        guard let identifier = sender.accessibilityIdentifier,
+              let requestId = request?.id else { return }
+        let parts = identifier.split(separator: "|")
+        guard parts.count == 2 else { return }
+        let typeName = String(parts[0])
+        let subRequestId = String(parts[1])
+
+        let nibName = "RequestApprovalViewController"
+        let approvalVC: RequestApprovalViewController
+        if Bundle.main.path(forResource: nibName, ofType: "nib") != nil ||
+           Bundle.main.path(forResource: nibName, ofType: "xib") != nil {
+            approvalVC = RequestApprovalViewController(nibName: nibName, bundle: nil)
+        } else {
+            approvalVC = RequestApprovalViewController()
+        }
+
+        let requestType: RequestType = typeName == "return" ? .returnRequest : .extensionRequest
+        approvalVC.configure(requestType: requestType, requestId: subRequestId, bookingId: requestId)
+        approvalVC.hidesBottomBarWhenPushed = true
+        navigationController?.pushViewController(approvalVC, animated: true)
     }
 }

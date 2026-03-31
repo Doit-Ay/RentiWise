@@ -18,8 +18,10 @@ final class BorrowerRequestsViewController: UIViewController {
     private enum StatusFilter: String, CaseIterable {
         case all = "All"
         case pending = "Pending"
-        case approved = "Approved"
-        // Add more if you use them, e.g. case denied = "Denied"
+        case active = "Active"
+        case completed = "Completed"
+        case cancelled = "Cancelled"
+        case denied = "Denied"
     }
     private var currentStatusFilter: StatusFilter = .all {
         didSet { applyFilters() }
@@ -107,9 +109,14 @@ final class BorrowerRequestsViewController: UIViewController {
         let ac = UIAlertController(title: "Filter by status", message: nil, preferredStyle: .actionSheet)
 
         for option in StatusFilter.allCases {
-            ac.addAction(UIAlertAction(title: option.rawValue, style: .default, handler: { [weak self] _ in
+            let action = UIAlertAction(title: option.rawValue, style: .default, handler: { [weak self] _ in
                 self?.currentStatusFilter = option
-            }))
+            })
+            // Show checkmark for active filter
+            if option == currentStatusFilter {
+                action.setValue(true, forKey: "checked")
+            }
+            ac.addAction(action)
         }
         ac.addAction(UIAlertAction(title: "Cancel", style: .cancel))
 
@@ -216,14 +223,20 @@ final class BorrowerRequestsViewController: UIViewController {
         // Start with all rows
         var result = rows
 
-        // Status filter
+        // Status filter using canonical RentalStatus enum
         switch currentStatusFilter {
         case .all:
             break
         case .pending:
-            result = result.filter { $0.status.caseInsensitiveCompare("pending") == .orderedSame }
-        case .approved:
-            result = result.filter { $0.status.caseInsensitiveCompare("approved") == .orderedSame }
+            result = result.filter { $0.rentalStatus == .pending }
+        case .active:
+            result = result.filter { [.accepted, .approved, .returned].contains($0.rentalStatus) }
+        case .completed:
+            result = result.filter { $0.rentalStatus == .completed }
+        case .cancelled:
+            result = result.filter { $0.rentalStatus == .cancelled }
+        case .denied:
+            result = result.filter { [.denied, .rejected].contains($0.rentalStatus) }
         }
 
         // Search text filter
@@ -306,8 +319,8 @@ extension BorrowerRequestsViewController: UITableViewDataSource {
             }
         }
 
-        // Status label
-        cell.itemBorrowerRequest.text = req.status.capitalized
+        // Status label — use canonical display name for consistency
+        cell.itemBorrowerRequest.text = req.rentalStatus.displayName
 
         // Image: first item image if any
         if let path = req.items?.images.first,
@@ -340,14 +353,24 @@ extension BorrowerRequestsViewController: UITableViewDelegate {
         tableView.deselectRow(at: indexPath, animated: true)
         guard !isLoading else { return }
 
-        let detail = DashboardLenderRequestViewController(nibName: "DashboardLenderRequestViewController", bundle: nil)
-        detail.title = "Details"
-        detail.hidesBottomBarWhenPushed = true
+        let selected = filteredRows[indexPath.section]
 
-        // Inject the selected request
-        detail.request = filteredRows[indexPath.section]
+        // Borrowers see BookingApprovalViewController (their own rental view with payment, return, extend)
+        // NOT DashboardLenderRequestViewController which shows Accept/Deny buttons meant for lenders
+        let nibName = "BookingApprovalViewController"
+        let bookingVC: BookingApprovalViewController
+        if Bundle.main.path(forResource: nibName, ofType: "nib") != nil ||
+           Bundle.main.path(forResource: nibName, ofType: "xib") != nil {
+            bookingVC = BookingApprovalViewController(nibName: nibName, bundle: nil)
+        } else {
+            bookingVC = BookingApprovalViewController()
+        }
+        bookingVC.title = "Booking Details"
+        bookingVC.hidesBottomBarWhenPushed = true
+        bookingVC.mode = .myRentals
+        bookingVC.request = selected
 
         navigationController?.setNavigationBarHidden(false, animated: false)
-        navigationController?.pushViewController(detail, animated: true)
+        navigationController?.pushViewController(bookingVC, animated: true)
     }
 }

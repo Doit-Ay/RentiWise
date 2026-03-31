@@ -1,8 +1,5 @@
 import UIKit
 import Supabase
-#if canImport(GoogleSignIn)
-import GoogleSignIn
-#endif
 
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
@@ -107,13 +104,6 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // Handle exactly one URL, once.
         guard let url = URLContexts.first?.url else { return }
 
-        #if canImport(GoogleSignIn)
-        // If this URL belongs to GoogleSignIn, consume it and return immediately.
-        if GIDSignIn.sharedInstance.handle(url) {
-            return
-        }
-        #endif
-
         // Handle deep links for item sharing (rentiwise://item/{id})
         handleDeepLink(url)
     }
@@ -149,6 +139,19 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // Fetch item and push ProductViewController
         Task {
             if let item = await fetchItem(id: itemId) {
+                if CommunitySafetyService.shared.isBlocked(item.owner_id) {
+                    await MainActor.run {
+                        let alert = UIAlertController(
+                            title: "User Blocked",
+                            message: "You blocked the owner of this item. Unblock them in Privacy & Security to view this listing again.",
+                            preferredStyle: .alert
+                        )
+                        alert.addAction(UIAlertAction(title: "OK", style: .default))
+                        nav.topViewController?.present(alert, animated: true)
+                    }
+                    return
+                }
+
                 await MainActor.run {
                     let vc = ProductViewController(nibName: "ProductViewController", bundle: nil)
                     vc.configure(with: item)
@@ -182,9 +185,8 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             let rows = try JSONDecoder().decode([Item].self, from: response.data)
             return rows.first
         } catch {
-            print("❌ Deep link: Failed to fetch item: \(error)")
+            debugLog("❌ Deep link: Failed to fetch item: \(error)")
         }
         return nil
     }
 }
-

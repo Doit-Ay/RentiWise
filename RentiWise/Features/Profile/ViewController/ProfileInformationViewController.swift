@@ -14,6 +14,32 @@ class ProfileInformationViewController: UITableViewController {
     private var isLoading = false
     private var errorMessage: String?
     
+    private var profileRows: [(String, String)] {
+        guard let profile else { return [] }
+
+        var rows: [(String, String)] = [
+            ("Full Name", profile.fullName.isEmpty ? "Not set" : profile.fullName),
+            ("Email", profile.email.isEmpty ? "Not set" : profile.email),
+            ("Phone", profile.phone.isEmpty ? "Not set" : profile.phone),
+            ("UPI ID", profile.upiId.isEmpty ? "Not set" : profile.upiId),
+            ("College Email", profile.collegeEmail.isEmpty ? "Not set" : profile.collegeEmail),
+            ("College Verified", profile.isCollegeVerified ? "Yes" : "No")
+        ]
+
+        if profile.averageRating > 0 {
+            rows.append(("Borrow Rating", String(format: "%.1f", profile.averageRating)))
+        }
+
+        if let freeze = profile.borrowFreezeUntil, freeze > Date() {
+            let formatter = DateFormatter()
+            formatter.dateStyle = .medium
+            formatter.timeStyle = .none
+            rows.append(("Borrow Freeze Until", formatter.string(from: freeze)))
+        }
+
+        return rows
+    }
+    
     init() {
         super.init(style: .insetGrouped)
     }
@@ -82,11 +108,7 @@ class ProfileInformationViewController: UITableViewController {
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         if errorMessage != nil { return 1 }
         if isLoading { return 1 }
-        
-        if let profile = profile {
-            return profile.phone.isEmpty ? 2 : 3
-        }
-        return 0
+        return profileRows.count
     }
     
     override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
@@ -115,7 +137,8 @@ class ProfileInformationViewController: UITableViewController {
             return cell
         }
         
-        guard let profile = profile else { return cell }
+        guard indexPath.row < profileRows.count else { return cell }
+        let row = profileRows[indexPath.row]
         
         // Create labeled content cell
         cell.contentView.subviews.forEach { $0.removeFromSuperview() }
@@ -131,19 +154,8 @@ class ProfileInformationViewController: UITableViewController {
         valueLabel.textAlignment = .right
         valueLabel.translatesAutoresizingMaskIntoConstraints = false
         
-        switch indexPath.row {
-        case 0:
-            label.text = "Full Name"
-            valueLabel.text = profile.fullName
-        case 1:
-            label.text = "Email"
-            valueLabel.text = profile.email
-        case 2:
-            label.text = "Phone"
-            valueLabel.text = profile.phone
-        default:
-            break
-        }
+        label.text = row.0
+        valueLabel.text = row.1
         
         cell.contentView.addSubview(label)
         cell.contentView.addSubview(valueLabel)

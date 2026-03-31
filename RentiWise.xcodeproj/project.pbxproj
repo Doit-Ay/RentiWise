@@ -7,8 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		1518AE152F2E3B480032BD24 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 1518AE142F2E3B480032BD24 /* GoogleSignIn */; };
-		1518AE172F2E3B480032BD24 /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 1518AE162F2E3B480032BD24 /* GoogleSignInSwift */; };
 		3F6EA11B2F7301A7004461E7 /* DiditSDK in Frameworks */ = {isa = PBXBuildFile; productRef = 3F6EA11A2F7301A7004461E7 /* DiditSDK */; };
 		3FC24E382ECA663900D45808 /* Auth in Frameworks */ = {isa = PBXBuildFile; productRef = 3FC24E372ECA663900D45808 /* Auth */; };
 		3FC24E3A2ECA663900D45808 /* Functions in Frameworks */ = {isa = PBXBuildFile; productRef = 3FC24E392ECA663900D45808 /* Functions */; };
@@ -81,11 +79,9 @@
 				3F6EA11B2F7301A7004461E7 /* DiditSDK in Frameworks */,
 				3FC24E3A2ECA663900D45808 /* Functions in Frameworks */,
 				3FC24E422ECA663900D45808 /* Supabase in Frameworks */,
-				1518AE172F2E3B480032BD24 /* GoogleSignInSwift in Frameworks */,
 				3FC24E382ECA663900D45808 /* Auth in Frameworks */,
 				3FC24E402ECA663900D45808 /* Storage in Frameworks */,
 				3FC24E3E2ECA663900D45808 /* Realtime in Frameworks */,
-				1518AE152F2E3B480032BD24 /* GoogleSignIn in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -160,8 +156,6 @@
 				3FC24E3D2ECA663900D45808 /* Realtime */,
 				3FC24E3F2ECA663900D45808 /* Storage */,
 				3FC24E412ECA663900D45808 /* Supabase */,
-				1518AE142F2E3B480032BD24 /* GoogleSignIn */,
-				1518AE162F2E3B480032BD24 /* GoogleSignInSwift */,
 				3F6EA11A2F7301A7004461E7 /* DiditSDK */,
 			);
 			productName = RentiWise;
@@ -248,7 +242,6 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				3FC24E362ECA663800D45808 /* XCRemoteSwiftPackageReference "supabase-swift" */,
-				1518AE122F2E3B0E0032BD24 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
 				3F6EA1192F7301A7004461E7 /* XCRemoteSwiftPackageReference "sdk-ios" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -330,29 +323,35 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_ENTITLEMENTS = RentiWise/RentiWise.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = X9H58555G7;
+				DEVELOPMENT_TEAM = CFD6U2W8D6;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = RentiWise/Info.plist;
-				INFOPLIST_KEY_NSCameraUsageDescription = "";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "";
+				INFOPLIST_KEY_NFCReaderUsageDescription = "RentiWise uses NFC to read the chip in supported identity documents during KYC verification.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "RentiWise uses the camera to photograph listed items, capture return-condition evidence, and scan identity documents for KYC verification.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "RentiWise needs your location to show nearby items and calculate distances to help you find rentals close to you.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "RentiWise uses the microphone when you record a verification video during KYC checks.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "RentiWise uses your photo library so you can select listing photos and upload return or damage evidence.";
+				INFOPLIST_KEY_NSUserNotificationsUsageDescription = "RentiWise uses notifications for borrow requests, approvals, return reminders, and important support or safety updates.";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UIMainStoryboardFile = AppStarting;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UIUserInterfaceStyle = Light;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = aditya.RentiWise;
+				PRODUCT_BUNDLE_IDENTIFIER = shoryamishra.Rentiwise;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -367,29 +366,35 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_ENTITLEMENTS = RentiWise/RentiWise.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = X9H58555G7;
+				DEVELOPMENT_TEAM = CFD6U2W8D6;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = RentiWise/Info.plist;
-				INFOPLIST_KEY_NSCameraUsageDescription = "";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "";
+				INFOPLIST_KEY_NFCReaderUsageDescription = "RentiWise uses NFC to read the chip in supported identity documents during KYC verification.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "RentiWise uses the camera to photograph listed items, capture return-condition evidence, and scan identity documents for KYC verification.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "RentiWise needs your location to show nearby items and calculate distances to help you find rentals close to you.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "RentiWise uses the microphone when you record a verification video during KYC checks.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "RentiWise uses your photo library so you can select listing photos and upload return or damage evidence.";
+				INFOPLIST_KEY_NSUserNotificationsUsageDescription = "RentiWise uses notifications for borrow requests, approvals, return reminders, and important support or safety updates.";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UIMainStoryboardFile = AppStarting;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UIUserInterfaceStyle = Light;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = aditya.RentiWise;
+				PRODUCT_BUNDLE_IDENTIFIER = shoryamishra.Rentiwise;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -640,14 +645,6 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		1518AE122F2E3B0E0032BD24 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/google/GoogleSignIn-iOS";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 9.1.0;
-			};
-		};
 		3F6EA1192F7301A7004461E7 /* XCRemoteSwiftPackageReference "sdk-ios" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/didit-protocol/sdk-ios.git";
@@ -667,16 +664,6 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		1518AE142F2E3B480032BD24 /* GoogleSignIn */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 1518AE122F2E3B0E0032BD24 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
-			productName = GoogleSignIn;
-		};
-		1518AE162F2E3B480032BD24 /* GoogleSignInSwift */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 1518AE122F2E3B0E0032BD24 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
-			productName = GoogleSignInSwift;
-		};
 		3F6EA11A2F7301A7004461E7 /* DiditSDK */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 3F6EA1192F7301A7004461E7 /* XCRemoteSwiftPackageReference "sdk-ios" */;

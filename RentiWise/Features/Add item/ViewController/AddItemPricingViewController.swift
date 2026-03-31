@@ -21,9 +21,10 @@ class AddItemPricingViewController: UIViewController {
         pricePerDay?.keyboardType = .decimalPad
         refundableDeposit?.keyboardType = .decimalPad
 
-        // Ensure fields start empty (no prefill)
-        pricePerDay?.text = ""
-        refundableDeposit?.text = ""
+        // Reuse the second numeric field as declared value for the beta trust flow.
+        pricePerDay?.text = draft.pricePerDay > 0 ? String(format: "%.0f", draft.pricePerDay) : ""
+        refundableDeposit?.text = draft.declaredValue > 0 ? String(draft.declaredValue) : ""
+        refundableDeposit?.placeholder = "₹ estimated item value"
 
         // 1) Tap anywhere to dismiss keyboard
         let tap = UITapGestureRecognizer(target: self, action: #selector(dismissKeyboard))
@@ -62,12 +63,17 @@ class AddItemPricingViewController: UIViewController {
             return
         }
 
-        guard let depositText = refundableDeposit.text?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !depositText.isEmpty,
-              let deposit = Double(depositText),
-              deposit >= 0
+        guard let declaredValueText = refundableDeposit.text?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !declaredValueText.isEmpty,
+              let declaredValue = Int(declaredValueText),
+              declaredValue > 0
         else {
-            presentAlert(title: "Missing or Invalid Deposit", message: "Enter a valid refundable deposit (0 or more).")
+            presentAlert(title: "Missing or Invalid Declared Value", message: "Enter the item's declared value in INR.")
+            return
+        }
+        
+        if declaredValue > 5000 {
+            presentAlert(title: "Value Limit", message: "For the beta launch, items can be listed up to 5,000 INR in value.")
             return
         }
 
@@ -95,7 +101,8 @@ class AddItemPricingViewController: UIViewController {
 
         // Persist validated values into the draft
         draft.pricePerDay = price
-        draft.depositAmount = deposit
+        draft.depositAmount = 0
+        draft.declaredValue = declaredValue
 
         // Proceed to the Publish step (XIB-backed)
         let vc = AddItemPublishViewController(nibName: "AddItemPublishViewController", bundle: nil)

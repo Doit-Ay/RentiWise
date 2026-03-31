@@ -20,6 +20,9 @@ struct Item: Decodable {
     let created_at: Date?
     let updated_at: Date?
     
+    let declared_value: Int?
+    let boosted_until: Date?
+    
     // Rating stats (computed from reviews table)
     let average_rating: Double?
     let review_count: Int?
@@ -29,7 +32,7 @@ struct Item: Decodable {
          condition: String?, price_per_day: Double, deposit_amount: Double, images: [String],
          is_active: Bool, latitude: Double? = nil, longitude: Double? = nil,
          location_address: String? = nil, created_at: Date?, updated_at: Date?,
-         average_rating: Double? = nil, review_count: Int? = nil) {
+         average_rating: Double? = nil, review_count: Int? = nil, declared_value: Int? = nil, boosted_until: Date? = nil) {
         self.id = id
         self.owner_id = owner_id
         self.title = title
@@ -45,6 +48,8 @@ struct Item: Decodable {
         self.location_address = location_address
         self.created_at = created_at
         self.updated_at = updated_at
+        self.declared_value = declared_value
+        self.boosted_until = boosted_until
         self.average_rating = average_rating
         self.review_count = review_count
     }
@@ -67,5 +72,12 @@ struct Item: Decodable {
         case updated_at
         case average_rating
         case review_count
+        case declared_value
+        case boosted_until
+    }
+
+    var hasActiveBoost: Bool {
+        guard let boostedUntil = boosted_until else { return false }
+        return boostedUntil > Date()
     }
 }

@@ -209,9 +209,10 @@ final class HomeSearchController: NSObject {
                 let decoder = JSONDecoder()
                 decoder.dateDecodingStrategy = .iso8601
                 let rows = try decoder.decode([Item].self, from: response.data)
+                let visibleRows = CommunitySafetyService.shared.visibleItems(from: rows)
 
                 await MainActor.run {
-                    self.results = rows
+                    self.results = visibleRows
                 }
             } catch {
                 await MainActor.run {
@@ -403,4 +404,3 @@ private final class ResultCell: UITableViewCell {
         }
     }
 }
-

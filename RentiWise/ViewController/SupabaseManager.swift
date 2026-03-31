@@ -43,6 +43,10 @@ final class SupabaseManager {
 
     // MARK: - Small convenience helpers
 
+    /// Notification posted when the session has expired and cannot be refreshed.
+    /// Observers (e.g., SceneDelegate) should present the login screen.
+    static let sessionExpiredNotification = Notification.Name("SupabaseSessionExpired")
+
     /// Synchronous read — returns the cached user ID if a session is already loaded.
     /// Use this in hot paths (e.g. cell configuration) to avoid unnecessary async hops.
     /// Falls back to `nil` if no session is cached yet.
@@ -61,7 +65,42 @@ final class SupabaseManager {
         }
     }
 
+    /// Verifies the current session is valid and attempts a refresh if needed.
+    /// Returns `true` if a valid session exists (or was successfully refreshed), `false` otherwise.
+    /// On irrecoverable failure, posts `sessionExpiredNotification` so the UI can redirect to login.
+    @discardableResult
+    func ensureValidSession() async -> Bool {
+        do {
+            // Attempt to get the session — the SDK will auto-refresh if configured
+            let session = try await client.auth.session
+            // Verify we have a valid user
+            guard !session.user.id.uuidString.isEmpty else {
+                throw NSError(domain: "SupabaseManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "No valid user in session"])
+            }
+            return true
+        } catch {
+            // First failure — try an explicit refresh
+            do {
+                debugLog("[SupabaseManager] Session fetch failed, attempting explicit refresh...")
+                _ = try await client.auth.refreshSession()
+                debugLog("[SupabaseManager] Session refreshed successfully")
+                return true
+            } catch {
+                debugLog("[SupabaseManager] Session refresh failed: \(error)")
+                // Post notification so UI layer can handle (e.g. present login)
+                await MainActor.run {
+                    NotificationCenter.default.post(name: Self.sessionExpiredNotification, object: nil)
+                }
+                return false
+            }
+        }
+    }
+
     func signOut() async throws {
+        defer {
+            AuthSessionStateStore.clear()
+            CommunitySafetyService.shared.clearLocalState()
+        }
         try await client.auth.signOut()
     }
 
@@ -73,7 +112,7 @@ final class SupabaseManager {
                 .createSignedURL(path: path, expiresIn: expiresIn)
             return url
         } catch {
-            print("createSignedUrl error:", error)
+            debugLog("createSignedUrl error: \(error)")
             return nil
         }
     }

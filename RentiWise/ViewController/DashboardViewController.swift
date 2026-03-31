@@ -15,14 +15,14 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
 
     // MARK: - Actions
     @IBAction func Additem(_ sender: UIButton) {
-        print("[Dashboard] Additem tapped") // DEBUG
+        debugLog("[Dashboard] Additem tapped") // DEBUG
         Task { [weak self] in
             guard let self else { return }
             do {
                 let session = try await SupabaseManager.shared.client.auth.session
                 _ = session.user
 
-                print("[Dashboard] Logged in, pushing AddItemFirst") // DEBUG
+                debugLog("[Dashboard] Logged in, pushing AddItemFirst") // DEBUG
                 let vc = AddItemFirstViewController(nibName: "AddItemFirstViewController", bundle: nil)
                 vc.title = "Add item"
                 vc.hidesBottomBarWhenPushed = true
@@ -36,7 +36,7 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
                     self.present(nav, animated: true)
                 }
             } catch {
-                print("[Dashboard] Not logged in, pushing SignIn") // DEBUG
+                debugLog("[Dashboard] Not logged in, pushing SignIn") // DEBUG
                 let nibName = "SignViewController"
                 let signInVC: SignViewController
                 if Bundle.main.path(forResource: nibName, ofType: "nib") != nil ||
@@ -308,7 +308,7 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
             if let button = sub as? UIButton {
                 button.isHidden = true
                 button.isUserInteractionEnabled = false
-                print("[Dashboard] Hiding legacy storyboard button: \(button)")
+                debugLog("[Dashboard] Hiding legacy storyboard button: \(button)")
             }
         }
     }

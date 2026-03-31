@@ -365,14 +365,14 @@ extension CategoriesViewController: UITableViewDelegate {
 
 extension CategoriesViewController: CategoryItemCellDelegate {
     func categoryItemCellDidTapRent(_ cell: CategoryItemCell) {
-        print("✅ CategoriesViewController: Rent delegate called!")
+        debugLog("✅ CategoriesViewController: Rent delegate called!")
         guard let indexPath = tableViewForItem.indexPath(for: cell) else {
-            print("❌ Could not find indexPath for cell")
+            debugLog("❌ Could not find indexPath for cell")
             return
         }
         let data = isFiltering ? filteredItems : items
         let item = data[indexPath.row]
-        print("📦 Opening RequestVC for item: \(item.title)")
+        debugLog("📦 Opening RequestVC for item: \(item.title)")
 
         let nibName = "RequestViewController"
         let requestVC: RequestViewController

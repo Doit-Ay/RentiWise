@@ -11,7 +11,6 @@ import UniformTypeIdentifiers
 import PhotosUI
 import AVFoundation
 import CoreLocation
-import UserNotifications
 
 final class ProfileViewController: UITableViewController {
     
@@ -25,9 +24,23 @@ final class ProfileViewController: UITableViewController {
     private var userPhone: String = ""
     private var phoneVerified: Bool = false
     private var kycStatus: String = "none"
-    private var notificationsEnabled: Bool {
-        get { UserDefaults.standard.bool(forKey: "notificationsEnabled") }
-        set { UserDefaults.standard.set(newValue, forKey: "notificationsEnabled") }
+    private var currentProfile: UserProfile?
+
+    private var showsPhoneVerificationRow: Bool {
+        isLoggedIn && !phoneVerified
+    }
+
+    private var showsKYCVerificationRow: Bool {
+        ((Bundle.main.object(forInfoDictionaryKey: "ENABLE_KYC_VERIFICATION") as? NSNumber)?.boolValue) ?? false
+    }
+
+    private var borrowingSetupRowIndex: Int {
+        showsPhoneVerificationRow ? 2 : 1
+    }
+
+    private var kycRowIndex: Int? {
+        guard showsKYCVerificationRow else { return nil }
+        return showsPhoneVerificationRow ? 3 : 2
     }
     
     // App brand color
@@ -78,9 +91,9 @@ final class ProfileViewController: UITableViewController {
         
         // Print the tab index
         if let idx = computeProfileTabIndex() {
-            print("[Profile] Tab index =", idx)
+            debugLog("[Profile] Tab index = \(idx)")
         } else {
-            print("[Profile] Tab index not found (not inside a UITabBarController).")
+            debugLog("[Profile] Tab index not found (not inside a UITabBarController).")
         }
     }
     
@@ -108,14 +121,23 @@ final class ProfileViewController: UITableViewController {
     }
     
     @objc private func editProfileTapped() {
-        let editVC = EditProfileViewController(
+        let baseProfile = currentProfile ?? UserProfile(
+            id: "",
             fullName: displayName == "Guest User" ? "" : displayName,
             email: userEmail,
-            phone: userPhone
+            phone: userPhone,
+            phoneVerified: phoneVerified,
+            kycStatus: kycStatus,
+            upiId: "",
+            collegeEmail: "",
+            isCollegeVerified: false,
+            averageRating: 0,
+            totalRentalsAsBorrower: 0,
+            borrowFreezeUntil: nil
         )
-        editVC.onSaved = { [weak self] newName, newPhone in
-            self?.displayName = newName.isEmpty ? "User" : newName
-            self?.userPhone = newPhone
+        let editVC = EditProfileViewController(profile: baseProfile)
+        editVC.onSaved = { [weak self] profile in
+            self?.applyProfile(profile)
             self?.tableView.reloadData()
         }
         let nav = UINavigationController(rootViewController: editVC)
@@ -153,10 +175,10 @@ final class ProfileViewController: UITableViewController {
         switch sectionType {
         case .account:
             if isLoggedIn {
-                // header + (verify phone if not verified) + KYC row
-                var count = 1 // header
-                if !phoneVerified { count += 1 } // verify phone
-                count += 1 // KYC row (always shown for logged in users)
+                // header + optional verify phone + borrowing setup + optional KYC row
+                var count = 2
+                if showsPhoneVerificationRow { count += 1 }
+                if showsKYCVerificationRow { count += 1 }
                 return count
             } else {
                 return 2 // header + sign up button
@@ -164,7 +186,7 @@ final class ProfileViewController: UITableViewController {
         case .more:
             return 4 // My Rentals, Wishlist, Privacy & Security, Contact Us
         case .settings:
-            return 1 // Notifications toggle
+            return 1 // App permissions
         case .signOut:
             return isLoggedIn ? 1 : 0
         }
@@ -223,9 +245,15 @@ final class ProfileViewController: UITableViewController {
                 cell.textLabel?.text = "Sign Up"
                 cell.textLabel?.textColor = brandTeal
             } else {
-                // Determine which row this is
-                let kycRowIndex = phoneVerified ? 1 : 2
-                if indexPath.row == kycRowIndex {
+                if showsPhoneVerificationRow && indexPath.row == 1 {
+                    cell.textLabel?.text = "Verify Phone Number"
+                    cell.textLabel?.textColor = brandTeal
+                    cell.accessoryType = .disclosureIndicator
+                    cell.imageView?.image = UIImage(systemName: "checkmark.shield")
+                    cell.imageView?.tintColor = .systemOrange
+                } else if indexPath.row == borrowingSetupRowIndex {
+                    configureBorrowingSetupCell(cell)
+                } else if let kycRowIndex, indexPath.row == kycRowIndex {
                     // KYC / Identity Verification row
                     cell.accessoryType = .disclosureIndicator
                     switch kycStatus {
@@ -250,13 +278,6 @@ final class ProfileViewController: UITableViewController {
                         cell.imageView?.image = UIImage(systemName: "person.badge.shield.checkmark")
                         cell.imageView?.tintColor = brandTeal
                     }
-                } else {
-                    // Verify Phone row (only shown if not verified)
-                    cell.textLabel?.text = "Verify Phone Number"
-                    cell.textLabel?.textColor = brandTeal
-                    cell.accessoryType = .disclosureIndicator
-                    cell.imageView?.image = UIImage(systemName: "checkmark.shield")
-                    cell.imageView?.tintColor = .systemOrange
                 }
             }
             return cell
@@ -289,17 +310,13 @@ final class ProfileViewController: UITableViewController {
             return cell
             
         case .settings:
-            cell.textLabel?.text = "Notifications"
+            cell.textLabel?.text = "App Permissions"
             cell.textLabel?.textColor = .label
-            cell.imageView?.image = UIImage(systemName: "bell")
+            cell.imageView?.image = UIImage(systemName: "slider.horizontal.3")
             cell.imageView?.tintColor = brandTeal
-            
-            let toggle = UISwitch()
-            toggle.onTintColor = brandTeal
-            toggle.isOn = notificationsEnabled
-            toggle.addTarget(self, action: #selector(notificationsToggled(_:)), for: .valueChanged)
-            cell.accessoryView = toggle
-            cell.selectionStyle = .none
+            cell.accessoryType = .disclosureIndicator
+            cell.accessoryView = nil
+            cell.selectionStyle = .default
             
             return cell
             
@@ -312,10 +329,6 @@ final class ProfileViewController: UITableViewController {
             cell.imageView?.image = nil
             return cell
         }
-    }
-    
-    @objc private func notificationsToggled(_ sender: UISwitch) {
-        notificationsEnabled = sender.isOn
     }
     
     // MARK: - TableView Delegate
@@ -331,13 +344,13 @@ final class ProfileViewController: UITableViewController {
                 // Sign up button
                 openSignUp()
             } else if isLoggedIn {
-                let kycRowIndex = phoneVerified ? 1 : 2
-                if indexPath.row == kycRowIndex {
+                if showsPhoneVerificationRow && indexPath.row == 1 {
+                    presentPhoneOTP()
+                } else if indexPath.row == borrowingSetupRowIndex {
+                    editProfileTapped()
+                } else if let kycRowIndex, indexPath.row == kycRowIndex {
                     // KYC row
                     presentKYCVerification()
-                } else if indexPath.row == 1 && !phoneVerified {
-                    // Verify phone
-                    presentPhoneOTP()
                 }
             }
             
@@ -366,7 +379,9 @@ final class ProfileViewController: UITableViewController {
             }
             
         case .settings:
-            break
+            let vc = AppPermissionsViewController()
+            vc.hidesBottomBarWhenPushed = true
+            navigationController?.pushViewController(vc, animated: true)
             
         case .signOut:
             Task { await signOut() }
@@ -434,7 +449,7 @@ final class ProfileViewController: UITableViewController {
             SavedAddressesStore.shared.resetToDefault()
             await refreshAuthState()
         } catch {
-            print("Sign out error:", error)
+            debugLog("Sign out error: \(error)")
         }
     }
     
@@ -447,6 +462,7 @@ final class ProfileViewController: UITableViewController {
         } else {
             await MainActor.run {
                 isLoggedIn = false
+                currentProfile = nil
                 displayName = "Guest User"
                 userEmail = ""
                 userPhone = ""
@@ -466,14 +482,11 @@ final class ProfileViewController: UITableViewController {
         do {
             let profile = try await service.fetchCurrentUserProfile()
             await MainActor.run {
-                self.displayName = profile.fullName.isEmpty ? "User" : profile.fullName
-                self.userEmail = profile.email
-                self.userPhone = profile.phone
-                self.phoneVerified = profile.phoneVerified
-                self.kycStatus = profile.kycStatus
+                self.applyProfile(profile)
             }
         } catch {
             await MainActor.run {
+                self.currentProfile = nil
                 self.displayName = "User"
                 self.userEmail = ""
                 self.userPhone = ""
@@ -481,6 +494,62 @@ final class ProfileViewController: UITableViewController {
                 self.kycStatus = "none"
             }
         }
+    }
+    
+    private func applyProfile(_ profile: UserProfile) {
+        currentProfile = profile
+        displayName = profile.fullName.isEmpty ? "User" : profile.fullName
+        userEmail = profile.email
+        userPhone = profile.phone
+        phoneVerified = profile.phoneVerified
+        kycStatus = profile.kycStatus
+    }
+
+    private func configureBorrowingSetupCell(_ cell: UITableViewCell) {
+        cell.accessoryType = .disclosureIndicator
+        cell.textLabel?.numberOfLines = 2
+
+        guard let profile = currentProfile else {
+            cell.textLabel?.text = "Complete borrowing profile"
+            cell.textLabel?.textColor = brandTeal
+            cell.imageView?.image = UIImage(systemName: "graduationcap")
+            cell.imageView?.tintColor = brandTeal
+            return
+        }
+
+        if !profile.isCollegeVerified {
+            cell.textLabel?.text = profile.collegeEmail.isEmpty
+                ? "Add your college email to unlock borrowing"
+                : "College email saved. Use a supported educational domain to unlock borrowing"
+            cell.textLabel?.textColor = .systemOrange
+            cell.imageView?.image = UIImage(systemName: "graduationcap.circle")
+            cell.imageView?.tintColor = .systemOrange
+            return
+        }
+
+        if profile.upiId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            cell.textLabel?.text = "College email verified. Add your UPI ID to finish borrowing setup"
+            cell.textLabel?.textColor = brandTeal
+            cell.imageView?.image = UIImage(systemName: "indianrupeesign.circle")
+            cell.imageView?.tintColor = brandTeal
+            return
+        }
+
+        if let freezeUntil = profile.borrowFreezeUntil, freezeUntil > Date() {
+            let formatter = DateFormatter()
+            formatter.dateStyle = .medium
+            formatter.timeStyle = .none
+            cell.textLabel?.text = "Borrowing paused until \(formatter.string(from: freezeUntil))"
+            cell.textLabel?.textColor = .systemRed
+            cell.imageView?.image = UIImage(systemName: "exclamationmark.shield")
+            cell.imageView?.tintColor = .systemRed
+            return
+        }
+
+        cell.textLabel?.text = "Borrowing profile ready"
+        cell.textLabel?.textColor = .systemGreen
+        cell.imageView?.image = UIImage(systemName: "checkmark.seal.fill")
+        cell.imageView?.tintColor = .systemGreen
     }
     
     private func computeProfileTabIndex() -> Int? {

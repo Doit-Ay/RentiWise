@@ -41,6 +41,10 @@ final class LenderView: UIView {
     // IMPORTANT: RequestWithItem and ItemLite are defined ONCE in DashboardLenderRequestViewController.swift
     private var myRequests: [RequestWithItem] = []
 
+    // Pending return/extension counts keyed by request ID for badge indicators
+    private var pendingSubRequestCounts: [String: Int] = [:]
+    private var pendingSubRequestTypes: [String: String] = [:] // "return", "extension", "both"
+
     // History data (segment 2)
     private var myHistory: [HistoryRow] = []
 
@@ -215,16 +219,16 @@ final class LenderView: UIView {
             let itemsService = ItemsService()
             let allItems = try await itemsService.fetchItems(category: "")
             
-            print("🔍 LenderView: Fetched \(allItems.count) total items")
+            debugLog("🔍 LenderView: Fetched \(allItems.count) total items")
             
             // Filter to only this owner's items, newest first
             let ownerItems = allItems
                 .filter { $0.owner_id.lowercased() == userId.lowercased() }
                 .sorted { ($0.created_at ?? Date.distantPast) > ($1.created_at ?? Date.distantPast) }
 
-            print("📦 LenderView: Filtered to \(ownerItems.count) owner items")
+            debugLog("📦 LenderView: Filtered to \(ownerItems.count) owner items")
             for (index, item) in ownerItems.enumerated() {
-                print("   Item \(index): \(item.title) - avg: \(item.average_rating ?? 0), count: \(item.review_count ?? 0)")
+                debugLog("   Item \(index): \(item.title) - avg: \(item.average_rating ?? 0), count: \(item.review_count ?? 0)")
             }
 
             await MainActor.run {
@@ -246,6 +250,8 @@ final class LenderView: UIView {
         guard let userId = await SupabaseManager.shared.currentUserId() else {
             await MainActor.run {
                 self.myRequests = []
+                self.pendingSubRequestCounts = [:]
+                self.pendingSubRequestTypes = [:]
                 self.tableView.reloadData()
                 self.updateEmptyStateIfNeeded()
             }
@@ -255,7 +261,7 @@ final class LenderView: UIView {
         // Base fields + items(...) via FK requests_item_id_fkey
         let select =
         """
-        id,item_id,owner_id,borrower_id,start_date,end_date,pickup_time,status,created_at,
+        id,item_id,owner_id,borrower_id,start_date,end_date,pickup_time,pickup_code,status,created_at,
         items(id,title,images,price_per_day,category)
         """
 
@@ -274,12 +280,15 @@ final class LenderView: UIView {
                 self.tableView.reloadData()
                 self.updateEmptyStateIfNeeded()
             }
+
+            // Fetch pending sub-request counts in the background for badge indicators
+            await fetchPendingSubRequestCounts(for: rows)
         } catch {
             // If join fails due to RLS or missing FK inference, fall back to base select so the list still shows.
             do {
                 let response = try await SupabaseManager.shared.client
                     .from("requests")
-                    .select("id,item_id,owner_id,borrower_id,start_date,end_date,pickup_time,status,created_at")
+                    .select("id,item_id,owner_id,borrower_id,start_date,end_date,pickup_time,pickup_code,status,created_at")
                     .eq("owner_id", value: userId)
                     .order("created_at", ascending: false)
                     .execute()
@@ -297,6 +306,7 @@ final class LenderView: UIView {
                             start_date: base.start_date,
                             end_date: base.end_date,
                             pickup_time: base.pickup_time,
+                            pickup_code: base.pickup_code,
                             status: base.status,
                             created_at: base.created_at,
                             items: nil
@@ -311,6 +321,81 @@ final class LenderView: UIView {
                     self.tableView.reloadData()
                     self.updateEmptyStateIfNeeded()
                 }
+            }
+        }
+    }
+
+    // MARK: - Pending sub-request counts (badge indicators)
+
+    /// Fetches pending return and extension request counts for all active requests.
+    /// Updates the request list cells to show badge indicators where action is needed.
+    private func fetchPendingSubRequestCounts(for requests: [RequestWithItem]) async {
+        let activeRequestIds = requests
+            .filter { ["accepted", "approved"].contains($0.status.lowercased()) }
+            .map { $0.id }
+
+        guard !activeRequestIds.isEmpty else {
+            await MainActor.run {
+                self.pendingSubRequestCounts = [:]
+                self.pendingSubRequestTypes = [:]
+            }
+            return
+        }
+
+        struct SubRequestRow: Decodable {
+            let request_id: String
+            let status: String
+        }
+
+        var counts: [String: Int] = [:]
+        var types: [String: String] = [:]
+
+        do {
+            // Fetch pending return requests
+            let returnResp = try await SupabaseManager.shared.client
+                .from("return_requests")
+                .select("request_id, status")
+                .in("request_id", values: activeRequestIds)
+                .eq("status", value: "pending")
+                .execute()
+
+            let returnRows = try JSONDecoder().decode([SubRequestRow].self, from: returnResp.data)
+            for row in returnRows {
+                counts[row.request_id, default: 0] += 1
+                types[row.request_id] = "return"
+            }
+        } catch {
+            debugLog("[LenderView] Error fetching pending return requests: \(error)")
+        }
+
+        do {
+            // Fetch pending extension requests
+            let extResp = try await SupabaseManager.shared.client
+                .from("extension_requests")
+                .select("request_id, status")
+                .in("request_id", values: activeRequestIds)
+                .eq("status", value: "pending")
+                .execute()
+
+            let extRows = try JSONDecoder().decode([SubRequestRow].self, from: extResp.data)
+            for row in extRows {
+                counts[row.request_id, default: 0] += 1
+                if let existing = types[row.request_id] {
+                    types[row.request_id] = (existing == "return") ? "both" : "extension"
+                } else {
+                    types[row.request_id] = "extension"
+                }
+            }
+        } catch {
+            debugLog("[LenderView] Error fetching pending extension requests: \(error)")
+        }
+
+        await MainActor.run {
+            self.pendingSubRequestCounts = counts
+            self.pendingSubRequestTypes = types
+            // Reload only the requests segment if currently visible
+            if self.selectedInnerIndex == 1 {
+                self.tableView.reloadData()
             }
         }
     }
@@ -403,6 +488,7 @@ private struct RequestBase: Decodable {
     let start_date: String
     let end_date: String
     let pickup_time: String?
+    let pickup_code: String?
     let status: String
     let created_at: String?
 }
@@ -477,8 +563,23 @@ extension LenderView: UITableViewDataSource {
                 }
             }
 
-            // Borrower label: keep status for now (you can change to "From: ..." later)
-            cell.itemBorrowerRequest.text = req.status.capitalized
+            // Status label with pending sub-request badge indicator
+            let pendingCount = pendingSubRequestCounts[req.id] ?? 0
+            if pendingCount > 0 {
+                let requestType = pendingSubRequestTypes[req.id] ?? "request"
+                let badgeText: String
+                switch requestType {
+                case "return":    badgeText = "⚠️ Return Pending"
+                case "extension": badgeText = "⚠️ Extension Pending"
+                case "both":      badgeText = "⚠️ Return + Extension Pending"
+                default:          badgeText = "⚠️ Action Needed"
+                }
+                cell.itemBorrowerRequest.text = badgeText
+                cell.itemBorrowerRequest.textColor = .systemOrange
+            } else {
+                cell.itemBorrowerRequest.text = req.rentalStatus.displayName
+                cell.itemBorrowerRequest.textColor = .label
+            }
 
             // Image: first item image if any
             if let path = req.items?.images.first,

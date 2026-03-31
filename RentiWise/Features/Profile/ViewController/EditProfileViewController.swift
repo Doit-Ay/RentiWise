@@ -6,27 +6,24 @@
 //
 
 import UIKit
-import Supabase
 
 class EditProfileViewController: UITableViewController {
     
     private let fullNameField = UITextField()
     private let emailField = UITextField()
     private let phoneField = UITextField()
+    private let upiIdField = UITextField()
+    private let collegeEmailField = UITextField()
     
-    private var fullName: String
-    private let email: String
-    private var phone: String
+    private let profile: UserProfile
     
-    var onSaved: ((_ newName: String, _ newPhone: String) -> Void)?
+    var onSaved: ((UserProfile) -> Void)?
     
     private var isSaving = false
     private var errorMessage: String?
     
-    init(fullName: String, email: String, phone: String) {
-        self.fullName = fullName
-        self.email = email
-        self.phone = phone
+    init(profile: UserProfile) {
+        self.profile = profile
         super.init(style: .insetGrouped)
     }
     
@@ -39,7 +36,6 @@ class EditProfileViewController: UITableViewController {
         
         title = "Edit Profile"
         let save = UIBarButtonItem(title: "Save", style: .done, target: self, action: #selector(saveTapped))
-        // Use the same brand tint as elsewhere
         save.tintColor = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0)
         navigationItem.rightBarButtonItem = save
         
@@ -53,16 +49,27 @@ class EditProfileViewController: UITableViewController {
     }
     
     private func setupTextFields() {
-        fullNameField.text = fullName
+        fullNameField.text = profile.fullName
         fullNameField.autocapitalizationType = .words
         fullNameField.addTarget(self, action: #selector(textFieldChanged), for: .editingChanged)
         
-        emailField.text = email
+        emailField.text = profile.email
         emailField.isEnabled = false
         emailField.textColor = .secondaryLabel
         
-        phoneField.text = phone
+        phoneField.text = profile.phone
         phoneField.keyboardType = .phonePad
+        
+        upiIdField.text = profile.upiId
+        upiIdField.placeholder = "yourname@upi"
+        upiIdField.autocapitalizationType = .none
+        upiIdField.autocorrectionType = .no
+        
+        collegeEmailField.text = profile.collegeEmail
+        collegeEmailField.placeholder = "name@college.edu"
+        collegeEmailField.keyboardType = .emailAddress
+        collegeEmailField.autocapitalizationType = .none
+        collegeEmailField.autocorrectionType = .no
     }
     
     @objc private func textFieldChanged() {
@@ -85,6 +92,7 @@ class EditProfileViewController: UITableViewController {
     private func save() async {
         await MainActor.run {
             isSaving = true
+            errorMessage = nil
             navigationItem.rightBarButtonItem?.isEnabled = false
         }
         
@@ -97,60 +105,115 @@ class EditProfileViewController: UITableViewController {
         
         let trimmedName = fullNameField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let trimmedPhone = phoneField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let trimmedUPI = upiIdField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let trimmedCollegeEmail = collegeEmailField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        
+        if !trimmedUPI.isEmpty && !trimmedUPI.contains("@") {
+            await MainActor.run {
+                presentInlineError("UPI ID should look like name@bank or name@upi.")
+            }
+            return
+        }
+        
+        if !trimmedCollegeEmail.isEmpty && !AuthValidationService().isValidEmail(trimmedCollegeEmail) {
+            await MainActor.run {
+                presentInlineError("Enter a valid college email address.")
+            }
+            return
+        }
         
         do {
-            guard let userId = await SupabaseManager.shared.currentUserId() else {
-                throw NSError(domain: "Profile", code: 1, userInfo: [NSLocalizedDescriptionKey: "Not signed in"])
-            }
-            
-            struct UpdateRow: Encodable {
-                let full_name: String
-                let phone: String
-            }
-            
-            _ = try await SupabaseManager.shared.client
-                .from("users")
-                .update(UpdateRow(full_name: trimmedName, phone: trimmedPhone))
-                .eq("id", value: userId)
-                .execute()
+            let savedProfile = try await ProfileService().saveCurrentUserProfile(
+                ProfileSaveInput(
+                    fullName: trimmedName,
+                    phone: trimmedPhone,
+                    upiId: trimmedUPI,
+                    collegeEmail: trimmedCollegeEmail
+                )
+            )
             
             await MainActor.run {
-                onSaved?(trimmedName, trimmedPhone)
-                dismiss(animated: true)
+                let successMessage = makeSuccessMessage(for: savedProfile)
+                let presenter = self.navigationController?.presentingViewController
+                onSaved?(savedProfile)
+                dismiss(animated: true) {
+                    let target = (presenter as? UINavigationController)?.topViewController ?? presenter
+                    guard let target else { return }
+                    let alert = UIAlertController(
+                        title: "Profile Updated",
+                        message: successMessage,
+                        preferredStyle: .alert
+                    )
+                    alert.addAction(UIAlertAction(title: "OK", style: .default))
+                    target.present(alert, animated: true)
+                }
             }
         } catch {
             await MainActor.run {
-                errorMessage = error.localizedDescription
-                tableView.reloadData()
+                presentInlineError(error.localizedDescription)
             }
         }
+    }
+    
+    @MainActor
+    private func presentInlineError(_ message: String) {
+        errorMessage = message
+        tableView.reloadData()
+    }
+
+    private func makeSuccessMessage(for profile: UserProfile) -> String {
+        if profile.isCollegeVerified {
+            if profile.upiId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return "Your college email was saved and verified. Add your UPI ID next to finish your borrowing setup."
+            }
+
+            return "Your profile changes were saved and your borrowing profile is ready."
+        }
+
+        if !profile.collegeEmail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return "Your profile changes were saved. Your college email is now on your account."
+        }
+
+        return "Your profile changes were saved successfully."
     }
     
     // MARK: - TableView DataSource
     
     override func numberOfSections(in tableView: UITableView) -> Int {
-        return errorMessage != nil ? 3 : 2
+        return errorMessage != nil ? 4 : 3
     }
     
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return section == 2 ? 1 : section == 0 ? 1 : 2
+        if errorMessage != nil && section == 3 { return 1 }
+        switch section {
+        case 0: return 1
+        case 1: return 3
+        default: return 1
+        }
     }
     
     override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
-        if section == 0 { return "Name" }
-        if section == 1 { return "Contact" }
+        switch section {
+        case 0: return "Name"
+        case 1: return "Contact"
+        case 2: return "Borrowing"
+        default: return nil
+        }
+    }
+    
+    override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
+        if section == 2 {
+            return "Educational email domains are marked as verified automatically in this beta build."
+        }
         return nil
     }
     
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
         cell.selectionStyle = .none
-        
-        // Clear previous content
         cell.contentView.subviews.forEach { $0.removeFromSuperview() }
         
-        if indexPath.section == 2 {
-            // Error message
+        if errorMessage != nil && indexPath.section == 3 {
             cell.textLabel?.text = errorMessage
             cell.textLabel?.textColor = .systemRed
             cell.textLabel?.font = .preferredFont(forTextStyle: .footnote)
@@ -158,43 +221,34 @@ class EditProfileViewController: UITableViewController {
             return cell
         }
         
-        if indexPath.section == 0 {
-            // Full name
-            fullNameField.translatesAutoresizingMaskIntoConstraints = false
-            fullNameField.placeholder = "Full Name"
-            cell.contentView.addSubview(fullNameField)
-            NSLayoutConstraint.activate([
-                fullNameField.leadingAnchor.constraint(equalTo: cell.contentView.leadingAnchor, constant: 16),
-                fullNameField.trailingAnchor.constraint(equalTo: cell.contentView.trailingAnchor, constant: -16),
-                fullNameField.topAnchor.constraint(equalTo: cell.contentView.topAnchor, constant: 12),
-                fullNameField.bottomAnchor.constraint(equalTo: cell.contentView.bottomAnchor, constant: -12)
-            ])
-        } else if indexPath.section == 1 {
-            if indexPath.row == 0 {
-                // Email
-                emailField.translatesAutoresizingMaskIntoConstraints = false
-                emailField.placeholder = "Email"
-                cell.contentView.addSubview(emailField)
-                NSLayoutConstraint.activate([
-                    emailField.leadingAnchor.constraint(equalTo: cell.contentView.leadingAnchor, constant: 16),
-                    emailField.trailingAnchor.constraint(equalTo: cell.contentView.trailingAnchor, constant: -16),
-                    emailField.topAnchor.constraint(equalTo: cell.contentView.topAnchor, constant: 12),
-                    emailField.bottomAnchor.constraint(equalTo: cell.contentView.bottomAnchor, constant: -12)
-                ])
-            } else {
-                // Phone
-                phoneField.translatesAutoresizingMaskIntoConstraints = false
-                phoneField.placeholder = "Phone"
-                cell.contentView.addSubview(phoneField)
-                NSLayoutConstraint.activate([
-                    phoneField.leadingAnchor.constraint(equalTo: cell.contentView.leadingAnchor, constant: 16),
-                    phoneField.trailingAnchor.constraint(equalTo: cell.contentView.trailingAnchor, constant: -16),
-                    phoneField.topAnchor.constraint(equalTo: cell.contentView.topAnchor, constant: 12),
-                    phoneField.bottomAnchor.constraint(equalTo: cell.contentView.bottomAnchor, constant: -12)
-                ])
+        switch indexPath.section {
+        case 0:
+            embed(field: fullNameField, in: cell, placeholder: "Full Name")
+        case 1:
+            switch indexPath.row {
+            case 0:
+                embed(field: emailField, in: cell, placeholder: "Email")
+            case 1:
+                embed(field: phoneField, in: cell, placeholder: "Phone")
+            default:
+                embed(field: upiIdField, in: cell, placeholder: "UPI ID")
             }
+        default:
+            embed(field: collegeEmailField, in: cell, placeholder: "College Email")
         }
         
         return cell
+    }
+    
+    private func embed(field: UITextField, in cell: UITableViewCell, placeholder: String) {
+        field.translatesAutoresizingMaskIntoConstraints = false
+        field.placeholder = placeholder
+        cell.contentView.addSubview(field)
+        NSLayoutConstraint.activate([
+            field.leadingAnchor.constraint(equalTo: cell.contentView.leadingAnchor, constant: 16),
+            field.trailingAnchor.constraint(equalTo: cell.contentView.trailingAnchor, constant: -16),
+            field.topAnchor.constraint(equalTo: cell.contentView.topAnchor, constant: 12),
+            field.bottomAnchor.constraint(equalTo: cell.contentView.bottomAnchor, constant: -12)
+        ])
     }
 }

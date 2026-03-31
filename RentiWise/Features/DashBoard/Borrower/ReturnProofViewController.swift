@@ -9,6 +9,7 @@ import UIKit
 import PhotosUI
 import Supabase
 import UniformTypeIdentifiers
+import CoreGraphics
 
 class ReturnProofViewController: UIViewController {
     
@@ -19,6 +20,7 @@ class ReturnProofViewController: UIViewController {
     var onRequestSubmitted: (() -> Void)?
     private var proofMediaURLs: [URL] = []
     private var notes: String = ""
+    private let proofBucket = "itemimages"
     
     // MARK: - IBOutlets
     
@@ -70,13 +72,17 @@ class ReturnProofViewController: UIViewController {
         itemNameLabel.text = req.items?.title ?? "Item"
         
         // Set rental period
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateStyle = .medium
-        dateFormatter.timeStyle = .none
-        
-        let startDate = dateFormatter.string(from: Date()) // Placeholder
-        let endDate = dateFormatter.string(from: Date()) // Placeholder
-        rentalPeriodLabel.text = "\(startDate) - \(endDate)"
+        let parser = DateFormatter()
+        parser.locale = Locale(identifier: "en_US_POSIX")
+        parser.dateFormat = "yyyy-MM-dd"
+
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+
+        let startText = parser.date(from: req.start_date).map { formatter.string(from: $0) } ?? req.start_date
+        let endText = parser.date(from: req.end_date).map { formatter.string(from: $0) } ?? req.end_date
+        rentalPeriodLabel.text = "\(startText) - \(endText)"
     }
     
     private func setupCollectionView() {
@@ -138,19 +144,32 @@ class ReturnProofViewController: UIViewController {
     
     // MARK: - API Calls
     
-    private func uploadMediaToSupabase(_ mediaURL: URL) async throws -> String {
-        // For now, we'll skip the actual upload and just return a placeholder path
-        // This requires proper Supabase Storage setup and import
-        let fileName = "return_proof_\(UUID().uuidString)_\(mediaURL.lastPathComponent)"
-        
-        // TODO: Implement actual Supabase Storage upload
-        // This would require:
-        // 1. Import Storage module
-        // 2. Create a storage bucket for return proofs
-        // 3. Upload the file data
-        
-        print("[ReturnProof] Would upload file: \(fileName)")
-        return fileName
+    private func uploadMediaToSupabase(_ mediaURL: URL, requestId: String) async throws -> String {
+        let fileExtension = mediaURL.pathExtension.isEmpty ? "jpg" : mediaURL.pathExtension.lowercased()
+        let objectPath = "return-proofs/\(requestId)/\(UUID().uuidString).\(fileExtension)"
+        let originalData = try Data(contentsOf: mediaURL)
+        let preparedData = await prepareMediaForUpload(data: originalData, sourceURL: mediaURL)
+        let contentType = contentType(for: mediaURL)
+
+        do {
+            try await SupabaseManager.shared.client
+                .storage
+                .from(proofBucket)
+                .upload(
+                    objectPath,
+                    data: preparedData,
+                    options: FileOptions(contentType: contentType)
+                )
+        } catch {
+            if isStorageForbidden(error) {
+                let signedURL = try await createSignedUploadURL(objectPath: objectPath, expiresIn: 120)
+                try await putData(to: signedURL, data: preparedData, contentType: contentType)
+            } else {
+                throw error
+            }
+        }
+
+        return objectPath
     }
     
     private func submitReturnRequest(for request: RequestWithItem) async {
@@ -158,7 +177,7 @@ class ReturnProofViewController: UIViewController {
             // Upload all media files
             var uploadedPaths: [String] = []
             for mediaURL in proofMediaURLs {
-                let path = try await uploadMediaToSupabase(mediaURL)
+                let path = try await uploadMediaToSupabase(mediaURL, requestId: request.id)
                 uploadedPaths.append(path)
             }
             
@@ -179,8 +198,6 @@ class ReturnProofViewController: UIViewController {
                 created_at: ISO8601DateFormatter().string(from: Date())
             )
             
-            // Insert into database
-            // NOTE: This requires a "return_requests" table in Supabase
             let _ = try await SupabaseManager.shared.client
                 .from("return_requests")
                 .insert(returnData)
@@ -189,17 +206,116 @@ class ReturnProofViewController: UIViewController {
             await MainActor.run {
                 self.submitButton.isEnabled = true
                 self.onRequestSubmitted?()   // notify BookingApprovalVC instantly
+
+                // Track analytics & notify lender
+                AnalyticsService.shared.trackSubRequestSubmitted(requestId: request.id, type: "return")
+                NotificationService.shared.notifyNewSubRequest(
+                    requestId: request.id,
+                    itemTitle: request.items?.title ?? "Item",
+                    type: "return"
+                )
+
                 self.showAlert(title: "Success", message: "Return request submitted successfully") {
                     self.dismiss(animated: true)
                 }
             }
         } catch {
-            print("[ReturnProof] Error submitting return request: \(error)")
+            debugLog("[ReturnProof] Error submitting return request: \(error)")
             await MainActor.run {
                 self.submitButton.isEnabled = true
                 self.showAlert(title: "Error", message: "Failed to submit return request. Please try again.")
             }
         }
+    }
+
+    private func isStorageForbidden(_ error: Error) -> Bool {
+        (error as? StorageError)?.statusCode == "403"
+    }
+
+    private func createSignedUploadURL(objectPath: String, expiresIn: Int) async throws -> URL {
+        let projectURL = SupabaseManager.shared.projectURL
+        var components = URLComponents(url: projectURL, resolvingAgainstBaseURL: false)!
+        components.path = "/storage/v1/object/upload/sign/\(proofBucket)"
+
+        guard let url = components.url else {
+            throw NSError(domain: "ReturnProof.Upload", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid upload URL."])
+        }
+
+        struct Body: Encodable {
+            let objectName: String
+            let expiresIn: Int
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 20
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(SupabaseManager.shared.publicAnonKey, forHTTPHeaderField: "apikey")
+        let token = try await SupabaseManager.shared.client.auth.session.accessToken
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.httpBody = try JSONEncoder().encode(Body(objectName: objectPath, expiresIn: expiresIn))
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw NSError(domain: "ReturnProof.Upload", code: (response as? HTTPURLResponse)?.statusCode ?? -1, userInfo: [NSLocalizedDescriptionKey: "Could not create an upload URL for return proof media."])
+        }
+
+        struct SignedUploadResponse: Decodable {
+            let signedUrl: String
+        }
+
+        let signedUpload = try JSONDecoder().decode(SignedUploadResponse.self, from: data)
+        guard let finalURL = URL(string: signedUpload.signedUrl, relativeTo: projectURL) else {
+            throw NSError(domain: "ReturnProof.Upload", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid signed upload URL returned by storage."])
+        }
+
+        return finalURL
+    }
+
+    private func putData(to url: URL, data: Data, contentType: String) async throws {
+        var request = URLRequest(url: url)
+        request.httpMethod = "PUT"
+        request.timeoutInterval = 30
+        request.setValue(contentType, forHTTPHeaderField: "Content-Type")
+        request.httpBody = data
+
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw NSError(domain: "ReturnProof.Upload", code: (response as? HTTPURLResponse)?.statusCode ?? -1, userInfo: [NSLocalizedDescriptionKey: "Return proof upload failed."])
+        }
+    }
+
+    private func prepareMediaForUpload(data: Data, sourceURL: URL) async -> Data {
+        guard let type = UTType(filenameExtension: sourceURL.pathExtension.lowercased()), type.conforms(to: .image) else {
+            return data
+        }
+
+        guard let image = UIImage(data: data) else { return data }
+
+        let maxDimension: CGFloat = 1600
+        let originalSize = image.size
+        let maxSide = max(originalSize.width, originalSize.height)
+        let scaleFactor = (maxSide > maxDimension && maxSide > 0) ? (maxDimension / maxSide) : 1.0
+
+        let targetSize = CGSize(width: originalSize.width * scaleFactor, height: originalSize.height * scaleFactor)
+        if scaleFactor >= 1.0 {
+            return image.jpegData(compressionQuality: 0.72) ?? data
+        }
+
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1.0
+        let renderer = UIGraphicsImageRenderer(size: targetSize, format: format)
+        let downscaled = renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: targetSize))
+        }
+        return downscaled.jpegData(compressionQuality: 0.72) ?? data
+    }
+
+    private func contentType(for mediaURL: URL) -> String {
+        guard let type = UTType(filenameExtension: mediaURL.pathExtension.lowercased()) else {
+            return "application/octet-stream"
+        }
+        return type.preferredMIMEType ?? "application/octet-stream"
     }
     
     // MARK: - Helpers

@@ -25,6 +25,13 @@ final class KYCVerificationViewController: UIViewController {
     private let subtitleLabel = UILabel()
     private let verifyButton = UIButton(type: .system)
     private let activityIndicator = UIActivityIndicatorView(style: .large)
+    private let urlSession: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = 20
+        configuration.timeoutIntervalForResource = 30
+        configuration.waitsForConnectivity = false
+        return URLSession(configuration: configuration)
+    }()
 
     private var currentStatus: String = "none"
 
@@ -185,6 +192,7 @@ final class KYCVerificationViewController: UIViewController {
 
                 var request = URLRequest(url: URL(string: functionUrl)!)
                 request.httpMethod = "POST"
+                request.timeoutInterval = 20
                 request.setValue("application/json", forHTTPHeaderField: "Content-Type")
                 request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
 
@@ -192,7 +200,7 @@ final class KYCVerificationViewController: UIViewController {
                 let anonKey = Bundle.main.object(forInfoDictionaryKey: "SUPABASE_ANON_KEY") as? String ?? ""
                 request.setValue(anonKey, forHTTPHeaderField: "apikey")
 
-                let (data, response) = try await URLSession.shared.data(for: request)
+                let (data, response) = try await urlSession.data(for: request)
 
                 guard let httpResponse = response as? HTTPURLResponse else {
                     throw NSError(domain: "KYC", code: 0, userInfo: [NSLocalizedDescriptionKey: "Invalid response"])
@@ -200,7 +208,7 @@ final class KYCVerificationViewController: UIViewController {
 
                 guard httpResponse.statusCode == 200 else {
                     let errorBody = String(data: data, encoding: .utf8) ?? "Unknown error"
-                    print("[KYC] Edge function error \(httpResponse.statusCode): \(errorBody)")
+                    debugLog("[KYC] Edge function returned status \(httpResponse.statusCode)")
                     throw NSError(domain: "KYC", code: httpResponse.statusCode,
                                   userInfo: [NSLocalizedDescriptionKey: "Failed to create session: \(errorBody)"])
                 }
@@ -216,7 +224,11 @@ final class KYCVerificationViewController: UIViewController {
 
                 // Use Option A: pass the session token to the SDK
                 await MainActor.run {
+                    #if DEBUG
                     let config = DiditSdk.Configuration(loggingEnabled: true)
+                    #else
+                    let config = DiditSdk.Configuration(loggingEnabled: false)
+                    #endif
                     DiditSdk.shared.startVerification(
                         token: sessionToken,
                         configuration: config
@@ -249,6 +261,8 @@ final class KYCVerificationViewController: UIViewController {
                     statusString = "declined"
                 case .pending:
                     statusString = "pending"
+                @unknown default:
+                    statusString = "pending"
                 }
 
                 // Save to Supabase
@@ -276,6 +290,8 @@ final class KYCVerificationViewController: UIViewController {
 
             case .failed(let error, _):
                 showAlert(title: "Error", message: error.localizedDescription)
+            @unknown default:
+                showAlert(title: "Verification Update", message: "Verification finished with a status this build does not recognise yet.")
             }
         }
     }

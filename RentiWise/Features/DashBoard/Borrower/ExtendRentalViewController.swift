@@ -49,7 +49,12 @@ class ExtendRentalViewController: UIViewController {
         
         // Configure date picker
         newEndDatePicker.datePickerMode = .date
-        newEndDatePicker.minimumDate = originalEndDate ?? Date()
+        let minDate = originalEndDate ?? Date()
+        newEndDatePicker.minimumDate = minDate
+        // Cap at 90 days from original end date to prevent excessive extensions
+        if let maxDate = Calendar.current.date(byAdding: .day, value: 90, to: minDate) {
+            newEndDatePicker.maximumDate = maxDate
+        }
         newEndDatePicker.addTarget(self, action: #selector(datePickerChanged), for: .valueChanged)
     }
     
@@ -172,12 +177,21 @@ class ExtendRentalViewController: UIViewController {
             await MainActor.run {
                 self.sendRequestButton.isEnabled = true
                 self.onRequestSubmitted?()   // notify BookingApprovalVC instantly
+
+                // Track analytics & notify lender
+                AnalyticsService.shared.trackSubRequestSubmitted(requestId: request.id, type: "extension")
+                NotificationService.shared.notifyNewSubRequest(
+                    requestId: request.id,
+                    itemTitle: request.items?.title ?? "Item",
+                    type: "extension"
+                )
+
                 self.showAlert(title: "Success", message: "Extension request sent to owner") {
                     self.dismiss(animated: true)
                 }
             }
         } catch {
-            print("[ExtendRental] Error submitting extension request: \\(error)")
+            debugLog("[ExtendRental] Error submitting extension request: \(error)")
             await MainActor.run {
                 self.sendRequestButton.isEnabled = true
                 self.showAlert(title: "Error", message: "Failed to send extension request. Please try again.")

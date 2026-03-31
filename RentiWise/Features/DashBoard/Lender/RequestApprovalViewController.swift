@@ -106,7 +106,7 @@ class RequestApprovalViewController: UIViewController {
         do {
             let tableName = requestType == .returnRequest ? "return_requests" : "extension_requests"
             
-            print("[RequestApproval] Fetching from \(tableName) with ID: \(requestId)")
+            debugLog("[RequestApproval] Fetching from \(tableName) with ID: \(requestId)")
             
             // Fetch just the request data
             let response = try await SupabaseManager.shared.client
@@ -129,7 +129,7 @@ class RequestApprovalViewController: UIViewController {
                 }
                 
                 let request = try JSONDecoder().decode(ReturnRequestData.self, from: data)
-                print("[RequestApproval] Return request loaded: \(request.id)")
+                debugLog("[RequestApproval] Return request loaded: \(request.id)")
                 
                 await MainActor.run {
                     self.returnNotesLabel?.text = request.notes?.isEmpty == false ? request.notes : "No notes provided"
@@ -153,7 +153,7 @@ class RequestApprovalViewController: UIViewController {
                 }
                 
                 let request = try JSONDecoder().decode(ExtensionRequestData.self, from: data)
-                print("[RequestApproval] Extension request loaded: \(request.id)")
+                debugLog("[RequestApproval] Extension request loaded: \(request.id)")
                 
                 await MainActor.run {
                     self.originalEndDateLabel?.text = "Original End: \(request.original_end_date)"
@@ -167,9 +167,9 @@ class RequestApprovalViewController: UIViewController {
             await fetchBookingDetails()
             
         } catch {
-            print("[RequestApproval] Error fetching request: \(error)")
+            debugLog("[RequestApproval] Error fetching request: \(error)")
             if let decodingError = error as? DecodingError {
-                print("[RequestApproval] Decoding error: \(decodingError)")
+                debugLog("[RequestApproval] Decoding error: \(decodingError)")
             }
             await MainActor.run {
                 showAlert(title: "Error", message: "Failed to load request details: \(error.localizedDescription)")
@@ -187,7 +187,7 @@ class RequestApprovalViewController: UIViewController {
                 let end_date: String
             }
             
-            print("[RequestApproval] Fetching booking with ID: \(bookingId)")
+            debugLog("[RequestApproval] Fetching booking with ID: \(bookingId)")
             
             let response = try await SupabaseManager.shared.client
                 .from("requests")
@@ -208,7 +208,7 @@ class RequestApprovalViewController: UIViewController {
                 self.rentalPeriodLabel?.text = "\(booking.start_date) to \(booking.end_date)"
             }
         } catch {
-            print("[RequestApproval] Error fetching booking: \(error)")
+            debugLog("[RequestApproval] Error fetching booking: \(error)")
             await MainActor.run {
                 self.itemNameLabel?.text = "Booking ID: \(self.bookingId)"
                 self.borrowerNameLabel?.text = "Loading..."
@@ -237,7 +237,7 @@ class RequestApprovalViewController: UIViewController {
                 self.itemNameLabel?.text = item.title
             }
         } catch {
-            print("[RequestApproval] Error fetching item: \(error)")
+            debugLog("[RequestApproval] Error fetching item: \(error)")
             await MainActor.run {
                 self.itemNameLabel?.text = "Item: \(itemId)"
             }
@@ -265,7 +265,7 @@ class RequestApprovalViewController: UIViewController {
                 self.borrowerNameLabel?.text = displayName
             }
         } catch {
-            print("[RequestApproval] Error fetching borrower: \(error)")
+            debugLog("[RequestApproval] Error fetching borrower: \(error)")
             await MainActor.run {
                 self.borrowerNameLabel?.text = "Borrower: \(borrowerId)"
             }
@@ -395,12 +395,30 @@ class RequestApprovalViewController: UIViewController {
             
             // If accepting a return request, also complete the main booking
             if requestType == .returnRequest && status == "accepted" {
+                struct BookingItemRow: Decodable {
+                    let item_id: String
+                }
+
                 let _ = try await SupabaseManager.shared.client
                     .from("requests")
                     .update(["status": "completed"])
                     .eq("id", value: bookingId)
                     .execute()
-                print("[RequestApproval] Main request \(bookingId) marked as completed.")
+
+                if let bookingData = try? await SupabaseManager.shared.client
+                    .from("requests")
+                    .select("item_id")
+                    .eq("id", value: bookingId)
+                    .single()
+                    .execute(),
+                   let booking = try? JSONDecoder().decode(BookingItemRow.self, from: bookingData.data) {
+                    let _ = try await SupabaseManager.shared.client
+                        .from("items")
+                        .update(["is_active": true])
+                        .eq("id", value: booking.item_id)
+                        .execute()
+                }
+                debugLog("[RequestApproval] Main request \(bookingId) marked as completed.")
             }
             
             // If accepting an extension request, update the main booking end_date and total_price
@@ -450,19 +468,32 @@ class RequestApprovalViewController: UIViewController {
                     .eq("id", value: bookingId)
                     .execute()
                     
-                print("[RequestApproval] Main request \(bookingId) extended to \(extData.new_end_date) with new total: \(newTotal).")
+                debugLog("[RequestApproval] Main request \(bookingId) extended to \(extData.new_end_date) with new total: \(newTotal).")
             }
             
             await MainActor.run {
                 let message = status == "accepted" ? "Request has been accepted" : "Request has been rejected"
-                showAlert(title: "Success", message: message) {
+
+                // Notify all observers (LenderView, BookingApprovalVC) so they refresh
+                NotificationCenter.default.post(name: Notification.Name("requestsShouldRefresh"), object: nil)
+
+                // If return was accepted, also fire the booking-completed notification
+                if self.requestType == .returnRequest && status == "accepted" {
+                    NotificationCenter.default.post(
+                        name: BookingApprovalViewController.requestCancelledNotification,
+                        object: nil,
+                        userInfo: ["requestId": self.bookingId]
+                    )
+                }
+
+                self.showAlert(title: "Success", message: message) {
                     self.navigationController?.popViewController(animated: true)
                 }
             }
         } catch {
-            print("[RequestApproval] Error updating status: \(error)")
+            debugLog("[RequestApproval] Error updating status: \(error)")
             await MainActor.run {
-                showAlert(title: "Error", message: "Failed to update request status")
+                self.showAlert(title: "Error", message: "Failed to update request status")
             }
         }
     }

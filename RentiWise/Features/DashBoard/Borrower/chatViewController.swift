@@ -18,7 +18,7 @@ final class ChatThreadViewController: UIViewController {
     // Backend models
     private var conversation: ChatConversation?
     private var messages: [ChatMessage] = [] {
-        didSet { emptyStateLabel.isHidden = !messages.isEmpty }
+        didSet { refreshEmptyState() }
     }
 
     // Current user id
@@ -46,6 +46,12 @@ final class ChatThreadViewController: UIViewController {
     private var realtimeChannel: RealtimeChannelV2?
 
     private var periodicRefreshTimer: Timer?
+    private let safetyService = CommunitySafetyService.shared
+    private var otherParticipantDisplayName: String?
+
+    private var isConversationBlocked: Bool {
+        safetyService.isBlocked(otherUserId)
+    }
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -58,10 +64,23 @@ final class ChatThreadViewController: UIViewController {
             target: self,
             action: #selector(closeTapped)
         )
+        navigationItem.rightBarButtonItem = UIBarButtonItem(
+            image: UIImage(systemName: "ellipsis.circle"),
+            style: .plain,
+            target: self,
+            action: #selector(didTapSafetyMenu)
+        )
 
         setupTable()
         setupInputBar()
         observeKeyboard()
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleBlockListChanged),
+            name: CommunitySafetyService.blockedUsersDidChangeNotification,
+            object: nil
+        )
+        applySafetyState()
 
         Task { await bootstrapConversationAndLoad() }
     }
@@ -77,7 +96,10 @@ final class ChatThreadViewController: UIViewController {
 
     deinit {
         NotificationCenter.default.removeObserver(self)
-        Task { await unsubscribeRealtime() }
+        let channel = realtimeChannel
+        if let channel {
+            Task { await channel.unsubscribe() }
+        }
         periodicRefreshTimer?.invalidate()
         periodicRefreshTimer = nil
     }
@@ -210,7 +232,7 @@ final class ChatThreadViewController: UIViewController {
         let other = otherUserId?.trimmingCharacters(in: .whitespacesAndNewlines)
         let item = itemId?.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        print("[Chat] open params -> me=\(me) other=\(other ?? "nil") itemId=\(item ?? "nil")")
+        debugLog("[Chat] Starting conversation bootstrap")
 
         // Basic validation: must have other != me; item required for item-bound chat in this app
         if let other, !other.isEmpty, other == me {
@@ -225,19 +247,27 @@ final class ChatThreadViewController: UIViewController {
             await MainActor.run { self.presentError("Missing item context for chat.") }
             return
         }
+        if safetyService.isBlocked(other) {
+            await MainActor.run {
+                self.applySafetyState()
+            }
+            return
+        }
 
         do {
             // Require itemId to ensure correct lender/borrower pairing
             let convo = try await ChatServiceV2.shared.getOrCreateConversation(withUserId: other, itemId: item)
             await MainActor.run {
                 self.conversation = convo
-                print("[Chat] conversation id=\(convo.id) item=\(convo.item_id ?? "nil") lender=\(convo.lender_id) borrower=\(convo.borrower_id)")
+                debugLog("[Chat] Conversation ready")
             }
+
+            await loadOtherParticipantNameIfNeeded(userId: other)
 
             // Load messages
             let loaded = try await ChatServiceV2.shared.fetchMessages(conversationId: convo.id)
             await MainActor.run {
-                print("[Chat] loaded messages count=\(loaded.count)")
+                debugLog("[Chat] Loaded \(loaded.count) messages")
                 self.messages = loaded
                 self.tableView.reloadData()
                 self.scrollToBottom(animated: false)
@@ -257,6 +287,12 @@ final class ChatThreadViewController: UIViewController {
 
     @objc private func sendTapped() {
         Task {
+            guard !isConversationBlocked else {
+                await MainActor.run {
+                    self.applySafetyState()
+                }
+                return
+            }
             let text = (inputField.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             guard !text.isEmpty else { return }
             guard let convoId = conversation?.id else {
@@ -270,7 +306,7 @@ final class ChatThreadViewController: UIViewController {
             do {
                 let sent = try await ChatServiceV2.shared.sendMessage(conversationId: convoId, text: text)
                 await MainActor.run {
-                    print("[Chat] sent message id=\(sent.id) convo=\(sent.conversation_id)")
+                    debugLog("[Chat] Message sent")
                     self.messages.append(sent)
                     self.tableView.reloadData()
                     self.scrollToBottom(animated: true)
@@ -299,6 +335,157 @@ final class ChatThreadViewController: UIViewController {
         present(ac, animated: true)
     }
 
+    private func refreshEmptyState() {
+        if isConversationBlocked {
+            emptyStateLabel.text = "You blocked this user. Unblock them in Privacy & Security to chat again."
+            emptyStateLabel.isHidden = false
+            return
+        }
+
+        emptyStateLabel.text = "Start your conversation"
+        emptyStateLabel.isHidden = !messages.isEmpty
+    }
+
+    private func applySafetyState() {
+        let blocked = isConversationBlocked
+        tableView.isHidden = blocked
+        inputBar.isHidden = blocked
+        inputField.resignFirstResponder()
+        if blocked {
+            messages = []
+            Task { await unsubscribeRealtime() }
+            stopPeriodicRefresh()
+        }
+        refreshEmptyState()
+    }
+
+    @objc private func handleBlockListChanged() {
+        applySafetyState()
+        guard !isConversationBlocked, conversation != nil else { return }
+        Task { await bootstrapConversationAndLoad() }
+    }
+
+    private func loadOtherParticipantNameIfNeeded(userId: String) async {
+        guard otherParticipantDisplayName == nil else { return }
+        struct UserProfileDTO: Decodable {
+            let full_name: String?
+        }
+
+        do {
+            let response = try await SupabaseManager.shared.client
+                .from("user_profiles")
+                .select("full_name")
+                .eq("id", value: userId)
+                .single()
+                .execute()
+            let dto = try JSONDecoder().decode(UserProfileDTO.self, from: response.data)
+            await MainActor.run {
+                self.otherParticipantDisplayName = dto.full_name?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? dto.full_name : "User"
+            }
+        } catch {
+            await MainActor.run {
+                self.otherParticipantDisplayName = "User"
+            }
+        }
+    }
+
+    @objc private func didTapSafetyMenu(_ sender: UIBarButtonItem) {
+        guard let otherUserId, !otherUserId.isEmpty else { return }
+
+        let actionSheet = UIAlertController(title: "Safety Tools", message: nil, preferredStyle: .actionSheet)
+        actionSheet.addAction(UIAlertAction(title: "Report Conversation", style: .default) { [weak self] _ in
+            self?.presentReportReasons(anchor: sender)
+        })
+
+        let isBlocked = safetyService.isBlocked(otherUserId)
+        let blockTitle = isBlocked ? "Unblock User" : "Block User"
+        actionSheet.addAction(UIAlertAction(title: blockTitle, style: .destructive) { [weak self] _ in
+            guard let self else { return }
+            if isBlocked {
+                self.safetyService.unblock(userId: otherUserId)
+                self.presentInfo("User Unblocked", message: "You can chat with them again.")
+            } else {
+                self.confirmBlockUser(userId: otherUserId)
+            }
+        })
+        actionSheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        if let popover = actionSheet.popoverPresentationController {
+            popover.barButtonItem = sender
+        }
+        present(actionSheet, animated: true)
+    }
+
+    private func presentReportReasons(anchor: UIBarButtonItem) {
+        let reasons = ["Harassment", "Scam or fraud", "Unsafe meetup", "Spam", "Other"]
+        let actionSheet = UIAlertController(title: "Report Conversation", message: "Why are you reporting this chat?", preferredStyle: .actionSheet)
+        for reason in reasons {
+            actionSheet.addAction(UIAlertAction(title: reason, style: .default) { [weak self] _ in
+                self?.presentReportDetails(reason: reason)
+            })
+        }
+        actionSheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        if let popover = actionSheet.popoverPresentationController {
+            popover.barButtonItem = anchor
+        }
+        present(actionSheet, animated: true)
+    }
+
+    private func presentReportDetails(reason: String) {
+        let alert = UIAlertController(title: "Report Conversation", message: "Add any details that will help our review team.", preferredStyle: .alert)
+        alert.addTextField { textField in
+            textField.placeholder = "Optional details"
+            textField.clearButtonMode = .whileEditing
+        }
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Submit", style: .default) { [weak self, weak alert] _ in
+            guard let self, let otherUserId = self.otherUserId else { return }
+            let details = alert?.textFields?.first?.text
+            Task {
+                do {
+                    try await self.safetyService.reportConversation(
+                        otherUserId: otherUserId,
+                        otherDisplayName: self.otherParticipantDisplayName,
+                        conversationId: self.conversation?.id,
+                        itemId: self.itemId,
+                        reason: reason,
+                        details: details
+                    )
+                    await MainActor.run {
+                        self.presentInfo("Report Sent", message: "Thanks. Our team will review this conversation.")
+                    }
+                } catch {
+                    await MainActor.run {
+                        self.presentError(error.localizedDescription)
+                    }
+                }
+            }
+        })
+        present(alert, animated: true)
+    }
+
+    private func confirmBlockUser(userId: String) {
+        let displayName = otherParticipantDisplayName ?? "this user"
+        let alert = UIAlertController(
+            title: "Block \(displayName)?",
+            message: "Their chat and listings will be hidden immediately.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Block", style: .destructive) { [weak self] _ in
+            guard let self else { return }
+            self.safetyService.block(userId: userId, displayName: self.otherParticipantDisplayName ?? "User")
+            self.applySafetyState()
+            self.presentInfo("User Blocked", message: "This conversation is now hidden from your account.")
+        })
+        present(alert, animated: true)
+    }
+
+    private func presentInfo(_ title: String, message: String) {
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
+    }
+
     // MARK: - Realtime
 
     private func subscribeRealtime(conversationId: String) async {
@@ -311,7 +498,7 @@ final class ChatThreadViewController: UIViewController {
         // INSERT stream for new messages
         let insertStream = channel.postgresChange(InsertAction.self, schema: "public", table: "chat_messages", filter: "conversation_id=eq.\(conversationId)")
 
-        Task.detached { [weak self] in
+        Task { [weak self] in
             guard let self else { return }
             for await insert in insertStream {
                 do {
@@ -320,17 +507,21 @@ final class ChatThreadViewController: UIViewController {
                     let msg = try insert.decodeRecord(as: ChatMessage.self, decoder: decoder)
 
                     // Ignore messages we already have (simple check by id)
-                    if self.messages.contains(where: { $0.id == msg.id }) { continue }
+                    let alreadyExists = await MainActor.run {
+                        self.messages.contains(where: { $0.id == msg.id })
+                    }
+                    if alreadyExists { continue }
 
                     await MainActor.run {
-                        print("[Chat] realtime insert id=\(msg.id)")
+                        debugLog("[Chat] Realtime insert received")
                         self.messages.append(msg)
                         self.tableView.reloadData()
                         self.scrollToBottom(animated: true)
                     }
 
                     // If the message is from the other participant, mark as read
-                    if let me = self.currentUserId, msg.sender_id.lowercased() != me.lowercased() {
+                    let me = await MainActor.run { self.currentUserId }
+                    if let me, msg.sender_id.lowercased() != me.lowercased() {
                         try? await ChatServiceV2.shared.markMessagesAsRead(conversationId: conversationId)
                     }
                 } catch {
@@ -344,7 +535,7 @@ final class ChatThreadViewController: UIViewController {
             self.realtimeChannel = channel
             await MainActor.run { self.stopPeriodicRefresh() }
         } catch {
-            print("[Chat] Realtime subscribe failed for conversation=\(conversationId): \(error)")
+            debugLog("[Chat] Realtime subscribe failed: \(error)")
             await MainActor.run {
                 self.showStatusBanner("Live updates unavailable. Messages will appear shortly.")
                 self.startPeriodicRefresh(conversationId: conversationId)
@@ -369,7 +560,7 @@ final class ChatThreadViewController: UIViewController {
                     await MainActor.run {
                         // Only update if there are new messages
                         if fresh.count != self.messages.count {
-                            print("[Chat] periodic refresh updated \(fresh.count) messages")
+                            debugLog("[Chat] Periodic refresh updated message count to \(fresh.count)")
                             self.messages = fresh
                             self.tableView.reloadData()
                             self.scrollToBottom(animated: true)
@@ -525,11 +716,11 @@ extension ChatThreadViewController {
     // - If caller is borrower (not owner), you can pass only itemId; we'll resolve owner and set otherUserId.
     // - If caller is owner, you must pass borrowerId as otherUserId; if missing, we'll alert and do nothing.
     static func open(from presentingVC: UIViewController, itemId: String, otherUserId: String? = nil) {
-        print("[ChatThread.open] itemId=\(itemId), otherUserId=\(otherUserId ?? "nil")")
+        debugLog("[ChatThread.open] Opening chat flow")
         
         Task {
             guard let me = await SupabaseManager.shared.currentUserId() else {
-                print("[ChatThread.open] ERROR: Not signed in")
+                debugLog("[ChatThread.open] Refused chat open while signed out")
                 await MainActor.run {
                     let ac = UIAlertController(title: "Chat", message: "Please sign in to chat.", preferredStyle: .alert)
                     ac.addAction(UIAlertAction(title: "OK", style: .default))
@@ -537,8 +728,6 @@ extension ChatThreadViewController {
                 }
                 return
             }
-            
-            print("[ChatThread.open] Current user: \(me)")
 
             // Resolve item owner
             struct OwnerDTO: Decodable { let owner_id: String }
@@ -550,17 +739,15 @@ extension ChatThreadViewController {
                     .single()
                     .execute()
                 let owner = try JSONDecoder().decode(OwnerDTO.self, from: resp.data).owner_id
-                
-                print("[ChatThread.open] Item owner: \(owner)")
 
                 let vc = ChatThreadViewController()
                 vc.itemId = itemId
 
                 if me.lowercased() == owner.lowercased() {
-                    print("[ChatThread.open] Current user IS the owner")
+                    debugLog("[ChatThread.open] Owner flow")
                     // Current user is owner → must have a borrower id
                     guard let borrower = otherUserId, !borrower.isEmpty, borrower.lowercased() != me.lowercased() else {
-                        print("[ChatThread.open] ERROR: Borrower not specified or invalid. otherUserId=\(otherUserId ?? "nil")")
+                        debugLog("[ChatThread.open] Missing borrower for owner flow")
                         await MainActor.run {
                             let ac = UIAlertController(title: "Chat", message: "Borrower not specified for this item.", preferredStyle: .alert)
                             ac.addAction(UIAlertAction(title: "OK", style: .default))
@@ -569,12 +756,23 @@ extension ChatThreadViewController {
                         return
                     }
                     vc.otherUserId = borrower
-                    print("[ChatThread.open] Setting otherUserId=\(borrower) (borrower)")
                 } else {
-                    print("[ChatThread.open] Current user is NOT the owner - they are borrower")
+                    debugLog("[ChatThread.open] Borrower flow")
                     // Current user is borrower → other = owner
                     vc.otherUserId = owner
-                    print("[ChatThread.open] Setting otherUserId=\(owner) (owner)")
+                }
+
+                if CommunitySafetyService.shared.isBlocked(vc.otherUserId) {
+                    await MainActor.run {
+                        let ac = UIAlertController(
+                            title: "User Blocked",
+                            message: "You blocked this user. Unblock them in Privacy & Security to chat again.",
+                            preferredStyle: .alert
+                        )
+                        ac.addAction(UIAlertAction(title: "OK", style: .default))
+                        presentingVC.present(ac, animated: true)
+                    }
+                    return
                 }
 
                 await MainActor.run {
@@ -583,7 +781,7 @@ extension ChatThreadViewController {
                     presentingVC.present(nav, animated: true)
                 }
             } catch {
-                print("[ChatThread.open] ERROR: Unable to fetch item owner - \(error)")
+                debugLog("[ChatThread.open] Unable to fetch item owner: \(error)")
                 await MainActor.run {
                     let ac = UIAlertController(title: "Chat", message: "Unable to open chat for this item.", preferredStyle: .alert)
                     ac.addAction(UIAlertAction(title: "OK", style: .default))

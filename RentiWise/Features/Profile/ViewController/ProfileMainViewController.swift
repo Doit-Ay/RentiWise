@@ -90,7 +90,7 @@ class ProfileMainViewController: UIViewController {
     @IBAction func signOut(_ sender: UIButton) {
         Task {
             do {
-                try await SupabaseManager.shared.client.auth.signOut()
+                try await SupabaseManager.shared.signOut()
                 // Reset location to default (Chennai, Tamil Nadu)
                 SavedAddressesStore.shared.resetToDefault()
                 await MainActor.run {

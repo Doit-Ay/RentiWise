@@ -91,7 +91,7 @@ class NotificationViewController: UIViewController {
                 self.updateEmptyState()
             }
         } catch {
-            print("[Notifications] Error loading notifications: \\(error)")
+            debugLog("[Notifications] Error loading notifications: \(error)")
             await MainActor.run {
                 self.updateEmptyState()
             }
@@ -251,7 +251,7 @@ class NotificationViewController: UIViewController {
                 }
             }
         } catch {
-            print("[Notifications] Error marking as read: \\(error)")
+            debugLog("[Notifications] Error marking as read: \(error)")
         }
     }
 }

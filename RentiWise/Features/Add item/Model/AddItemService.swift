@@ -20,6 +20,7 @@ protocol AddItemServicing {
 final class AddItemService: AddItemServicing {
 
     private let client: SupabaseClient
+    private let urlSession: URLSession
     // Ensure this matches the exact bucket ID in your Supabase project (case-sensitive).
     private let storageBucket = "itemimages"
 
@@ -35,10 +36,17 @@ final class AddItemService: AddItemServicing {
 
     init(client: SupabaseClient = SupabaseManager.shared.client) {
         self.client = client
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = 20
+        configuration.timeoutIntervalForResource = 30
+        configuration.waitsForConnectivity = false
+        self.urlSession = URLSession(configuration: configuration)
     }
 
     // MARK: - Public entry
     func insertItem(draft: AddItemDraft, status: ((String) -> Void)? = nil) async throws -> ItemRow {
+        try SafetyContentPolicy.validateListing(draft)
+
         // 1) Ensure user is logged in
         status?("Checking session…")
         let session: Session
@@ -101,6 +109,8 @@ final class AddItemService: AddItemServicing {
 
     // MARK: - Update existing item
     func updateItem(draft: AddItemDraft, status: ((String) -> Void)? = nil) async throws -> ItemRow {
+        try SafetyContentPolicy.validateListing(draft)
+
         guard let itemId = draft.existingItemId else {
             throw wrap(NSError(domain: "AddItem.Update", code: -1, userInfo: [NSLocalizedDescriptionKey: "Missing item id for update."]), category: "Input", hint: "Draft.existingItemId is nil.")
         }
@@ -280,13 +290,14 @@ final class AddItemService: AddItemServicing {
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
+        request.timeoutInterval = 20
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(SupabaseManager.shared.publicAnonKey, forHTTPHeaderField: "apikey")
         let token = try await client.auth.session.accessToken
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.httpBody = bodyData
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await urlSession.data(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw wrap(NSError(domain: "SignedUploadURL", code: (response as? HTTPURLResponse)?.statusCode ?? -1, userInfo: [NSLocalizedDescriptionKey: "Failed to create signed upload URL"]), category: "Storage", hint: "Check bucket id, RLS and token.")
         }
@@ -302,10 +313,11 @@ final class AddItemService: AddItemServicing {
     private func putData(to url: URL, data: Data, contentType: String) async throws {
         var request = URLRequest(url: url)
         request.httpMethod = "PUT"
+        request.timeoutInterval = 30
         request.setValue(contentType, forHTTPHeaderField: "Content-Type")
         request.httpBody = data
 
-        let (_, response) = try await URLSession.shared.data(for: request)
+        let (_, response) = try await urlSession.data(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw wrap(NSError(domain: "SignedUploadPUT", code: (response as? HTTPURLResponse)?.statusCode ?? -1, userInfo: [NSLocalizedDescriptionKey: "PUT failed"]), category: "Storage", hint: "Signed URL expired or invalid.")
         }
@@ -351,4 +363,3 @@ final class AddItemService: AddItemServicing {
         ])
     }
 }
-

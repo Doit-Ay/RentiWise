@@ -47,7 +47,7 @@ class PrivacySecurityViewController: UITableViewController {
         
         switch sectionType {
         case .privacy:
-            return 2 // Manage Data, App Permissions
+            return 5 // Terms, Privacy Policy, Manage Data, Blocked Users, App Permissions
         case .security:
             return 1 // Change Password
         }
@@ -73,7 +73,13 @@ class PrivacySecurityViewController: UITableViewController {
         switch sectionType {
         case .privacy:
             if indexPath.row == 0 {
+                cell.textLabel?.text = "Terms of Service"
+            } else if indexPath.row == 1 {
+                cell.textLabel?.text = "Privacy Policy"
+            } else if indexPath.row == 2 {
                 cell.textLabel?.text = "Manage Data"
+            } else if indexPath.row == 3 {
+                cell.textLabel?.text = "Blocked Users"
             } else {
                 cell.textLabel?.text = "App Permissions"
             }
@@ -92,8 +98,20 @@ class PrivacySecurityViewController: UITableViewController {
         switch sectionType {
         case .privacy:
             if indexPath.row == 0 {
+                let vc = LegalDocumentViewController(document: .termsOfService)
+                vc.hidesBottomBarWhenPushed = true
+                navigationController?.pushViewController(vc, animated: true)
+            } else if indexPath.row == 1 {
+                let vc = LegalDocumentViewController(document: .privacyPolicy)
+                vc.hidesBottomBarWhenPushed = true
+                navigationController?.pushViewController(vc, animated: true)
+            } else if indexPath.row == 2 {
                 // Manage Data
                 let vc = ManageDataViewController()
+                vc.hidesBottomBarWhenPushed = true
+                navigationController?.pushViewController(vc, animated: true)
+            } else if indexPath.row == 3 {
+                let vc = BlockedUsersViewController()
                 vc.hidesBottomBarWhenPushed = true
                 navigationController?.pushViewController(vc, animated: true)
             } else {
@@ -108,5 +126,126 @@ class PrivacySecurityViewController: UITableViewController {
             vc.hidesBottomBarWhenPushed = true
             navigationController?.pushViewController(vc, animated: true)
         }
+    }
+}
+
+enum LegalDocument {
+    case termsOfService
+    case privacyPolicy
+
+    var title: String {
+        switch self {
+        case .termsOfService:
+            return "Terms of Service"
+        case .privacyPolicy:
+            return "Privacy Policy"
+        }
+    }
+
+    var body: String {
+        switch self {
+        case .termsOfService:
+            return """
+            RentiWise helps people discover, request, lend, and borrow real-world items from each other.
+
+            Payments and transactions:
+            - Rental fees are arranged directly between users, typically through UPI or another method both users agree on.
+            - RentiWise does not store card numbers, hold funds, issue credit, or act as a bank or escrow service.
+            - Lenders and borrowers must review the item details, pricing, duration, pickup plan, and payment terms before completing a handoff.
+
+            User responsibilities:
+            - Lenders must post accurate item descriptions, prices, photos, and availability.
+            - Borrowers must return items on time and in the agreed condition.
+            - Users are responsible for any damage, late return, fraud, or payment dispute they create.
+
+            Safety rules:
+            - Illegal, hazardous, counterfeit, stolen, or otherwise prohibited items may not be listed.
+            - Users can report listings, conversations, and profiles, and can block other users inside the app.
+            - RentiWise may remove content, suspend accounts, or restrict activity to protect the community.
+
+            Disputes and support:
+            - Users should first document and discuss issues in the in-app chat.
+            - Damage, return, refund, or conduct issues should also be reported through the in-app Support screen.
+            - You can contact the team at support@rentiwise.com for escalations or account help.
+
+            Platform limits:
+            - RentiWise is not a party to the final lending agreement between users.
+            - We may review platform activity, listing data, support tickets, and safety reports to investigate abuse or policy violations.
+            - By using the app, you accept responsibility for the lending decisions you make with other users.
+            """
+        case .privacyPolicy:
+            return """
+            RentiWise collects the information needed to operate the marketplace, keep users safer, and support lending transactions.
+
+            Data we collect:
+            - Account information such as your name, email address, phone number, and profile details
+            - Listing information, item photos, reviews, request history, messages, and support tickets
+            - Approximate location data used to show nearby items and pickup relevance
+            - College or identity-verification details you choose to provide for trust and safety checks
+            - UPI ID or payout details you enter so other users can pay you directly
+
+            How we use data:
+            - To create and manage your account
+            - To show listings, coordinate requests, and support item handoffs
+            - To investigate reports, enforce safety rules, and reduce fraud or abusive behavior
+            - To provide support and resolve disputes, returns, or account issues
+
+            Payments:
+            - RentiWise does not collect raw card numbers or store card credentials.
+            - Rental payments are arranged directly between users, so the app only stores the payment identifiers you choose to share, such as a UPI ID.
+
+            Storage and sharing:
+            - RentiWise uses Supabase services to store app data and operate backend features.
+            - If you start identity verification, verification data may also be processed by our verification providers for that flow.
+            - We do not sell your personal data.
+            - We may disclose information when required for legal compliance, safety investigations, fraud prevention, or dispute handling.
+
+            Your choices:
+            - You can update profile information inside the app.
+            - You can review blocked users and app permissions from Privacy & Security.
+            - You can delete your account from Manage Data. That flow is designed to remove your login, profile, listings, requests, messages, support history, and saved data from RentiWise.
+            - For privacy questions or deletion help, contact support@rentiwise.com.
+            """
+        }
+    }
+}
+
+final class LegalDocumentViewController: UIViewController {
+
+    private let document: LegalDocument
+
+    init(document: LegalDocument) {
+        self.document = document
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+
+        title = document.title
+        view.backgroundColor = .systemBackground
+
+        let textView = UITextView()
+        textView.translatesAutoresizingMaskIntoConstraints = false
+        textView.isEditable = false
+        textView.alwaysBounceVertical = true
+        textView.backgroundColor = .clear
+        textView.textColor = .label
+        textView.font = .preferredFont(forTextStyle: .body)
+        textView.textContainerInset = UIEdgeInsets(top: 20, left: 20, bottom: 24, right: 20)
+        textView.text = document.body
+
+        view.addSubview(textView)
+
+        NSLayoutConstraint.activate([
+            textView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            textView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            textView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            textView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
     }
 }

@@ -7,23 +7,24 @@
 
 import UIKit
 import Supabase
-#if canImport(GoogleSignIn)
-import GoogleSignIn
-import GoogleSignInSwift
-#endif
 
 @MainActor
-final class SignUpViewController: UIViewController {
+final class SignUpViewController: UIViewController, UITextViewDelegate {
 
+    @IBOutlet private weak var authFormStackView: UIStackView!
     @IBOutlet private weak var signUpEmailText: UITextField!
     @IBOutlet private weak var signUpPasswordText: UITextField!
     @IBOutlet private weak var signUpFullNameText: UITextField!
     @IBOutlet private weak var signUpNumberText: UITextField!
     @IBOutlet private weak var signUpButton: UIButton!
+    @IBOutlet private weak var socialAuthStackView: UIStackView!
 
     private let validation = AuthValidationService()
     private var signUpService: SignUpServicing
     private var isLoading: Bool = false
+    private let signInService = SignInService()
+    private var hasAcceptedAccountLegalConsent = false
+    private let legalNoticeTextView = UITextView()
 
     // Designated DI initializer
     init(service: SignUpServicing) {
@@ -57,21 +58,39 @@ final class SignUpViewController: UIViewController {
             target: self,
             action: #selector(backToProfile)
         )
+        navigationItem.rightBarButtonItem = UIBarButtonItem(
+            title: "Legal",
+            style: .plain,
+            target: self,
+            action: #selector(showLegalMenu)
+        )
+        configureSocialAuthButtons()
+        configureLegalNotice()
     }
 
     @objc private func backToProfile() {
         routeToProfileTab()
     }
 
-    @IBAction private func GoogleSignIn(_ sender: UIButton) {
-#if canImport(GoogleSignIn)
-        Task { await handleGoogleSignIn() }
-#else
-        presentAlert(title: "Unavailable", message: "Google Sign-In is not available in this build.")
-#endif
+    @objc private func showLegalMenu() {
+        let alert = UIAlertController(title: "Legal", message: "Review our terms and privacy details before continuing.", preferredStyle: .actionSheet)
+        alert.addAction(UIAlertAction(title: "Terms of Service", style: .default) { [weak self] _ in
+            self?.openLegalDocument(.termsOfService)
+        })
+        alert.addAction(UIAlertAction(title: "Privacy Policy", style: .default) { [weak self] _ in
+            self?.openLegalDocument(.privacyPolicy)
+        })
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        if let popover = alert.popoverPresentationController {
+            popover.barButtonItem = navigationItem.rightBarButtonItem
+        }
+        present(alert, animated: true)
     }
-    @IBAction private func AppleSignIn(_ sender: UIButton) {}
 
+    @IBAction private func GoogleSignIn(_ sender: UIButton) {
+        // Google Sign-In removed for Guideline 4.8 compliance (requires SIWA).
+        // Email/password authentication remains available.
+    }
     @IBAction private func signUpTapped(_ sender: UIButton) {
         Task { await signUp() }
     }
@@ -97,6 +116,8 @@ final class SignUpViewController: UIViewController {
     }
 
     private func signUp() async {
+        guard await ensureAccountLegalConsentIfNeeded(anchor: signUpButton) else { return }
+
         let email = signUpEmailText.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let password = signUpPasswordText.text ?? ""
         let fullName = signUpFullNameText.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -130,12 +151,12 @@ final class SignUpViewController: UIViewController {
                     email: email,
                     profile: profile
                 )
+                AuthSessionStateStore.markSignedIn(provider: .password)
 
                 // Sanity-check the session is live
                 _ = try await SupabaseManager.shared.client.auth.session
 
-                // Present OTP verification screen with pre-filled phone
-                presentPhoneOTP(prefillPhone: phone)
+                await presentPhoneOTPIfNeeded(fallbackPhone: phone)
             } else {
                 presentAlert(
                     title: "Confirm your email",
@@ -147,54 +168,121 @@ final class SignUpViewController: UIViewController {
         }
     }
 
-#if canImport(GoogleSignIn)
-    @MainActor
-    private func handleGoogleSignIn() async {
-        isLoading = true
-        defer { isLoading = false }
 
-        guard let clientID = Bundle.main.infoDictionary?["GIDClientID"] as? String, !clientID.isEmpty else {
-            presentAlert(title: "Configuration Error", message: "Google Client ID not configured.")
-            return
+
+    private func configureLegalNotice() {
+        legalNoticeTextView.translatesAutoresizingMaskIntoConstraints = false
+        legalNoticeTextView.backgroundColor = .clear
+        legalNoticeTextView.isEditable = false
+        legalNoticeTextView.isScrollEnabled = false
+        legalNoticeTextView.delegate = self
+        legalNoticeTextView.textAlignment = .center
+        legalNoticeTextView.adjustsFontForContentSizeCategory = true
+        legalNoticeTextView.textContainerInset = .zero
+        legalNoticeTextView.textContainer.lineFragmentPadding = 0
+        legalNoticeTextView.linkTextAttributes = [
+            .foregroundColor: UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0),
+            .underlineStyle: NSUnderlineStyle.single.rawValue
+        ]
+        legalNoticeTextView.attributedText = makeLegalNoticeText(prefix: "By signing up, you agree to our ")
+        legalNoticeTextView.accessibilityIdentifier = "sign_up_legal_notice"
+
+        view.addSubview(legalNoticeTextView)
+        NSLayoutConstraint.activate([
+            legalNoticeTextView.leadingAnchor.constraint(equalTo: authFormStackView.leadingAnchor),
+            legalNoticeTextView.trailingAnchor.constraint(equalTo: authFormStackView.trailingAnchor),
+            legalNoticeTextView.topAnchor.constraint(greaterThanOrEqualTo: authFormStackView.bottomAnchor, constant: 4),
+            legalNoticeTextView.bottomAnchor.constraint(equalTo: signUpButton.topAnchor, constant: -4)
+        ])
+    }
+
+    private func makeLegalNoticeText(prefix: String) -> NSAttributedString {
+        let text = prefix + "Terms of Service and Privacy Policy."
+        let attributed = NSMutableAttributedString(
+            string: text,
+            attributes: [
+                .font: UIFont.systemFont(ofSize: 10.5, weight: .regular),
+                .foregroundColor: UIColor.secondaryLabel
+            ]
+        )
+        let nsText = text as NSString
+        attributed.addAttribute(.link, value: "rentiwise://legal/terms", range: nsText.range(of: "Terms of Service"))
+        attributed.addAttribute(.link, value: "rentiwise://legal/privacy", range: nsText.range(of: "Privacy Policy"))
+        return attributed
+    }
+
+    func textView(
+        _ textView: UITextView,
+        shouldInteractWith url: URL,
+        in characterRange: NSRange,
+        interaction: UITextItemInteraction
+    ) -> Bool {
+        switch url.absoluteString {
+        case "rentiwise://legal/terms":
+            openLegalDocument(.termsOfService)
+        case "rentiwise://legal/privacy":
+            openLegalDocument(.privacyPolicy)
+        default:
+            return true
         }
+        return false
+    }
 
-        GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: clientID)
+    private func configureSocialAuthButtons() {
+        // Social auth buttons removed for Guideline 4.8 compliance.
+        // Google Sign-In requires Sign in with Apple to also be offered.
+        // Hide the stack view since no social buttons are available.
+        socialAuthStackView?.isHidden = true
+    }
 
-        do {
-            // Present from self to avoid nil presenter issues
-            let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: self)
-            guard let idToken = result.user.idToken?.tokenString else {
-                presentAlert(title: "Sign In Error", message: "Missing Google ID token.")
-                return
+    private func ensureAccountLegalConsentIfNeeded(anchor: UIView?) async -> Bool {
+        if hasAcceptedAccountLegalConsent { return true }
+
+        return await withCheckedContinuation { continuation in
+            let alert = UIAlertController(
+                title: "Before Creating Your Account",
+                message: "Please review and agree to the Terms of Service and Privacy Policy before continuing.",
+                preferredStyle: .actionSheet
+            )
+            alert.addAction(UIAlertAction(title: "Review Terms of Service", style: .default) { [weak self] _ in
+                self?.openLegalDocument(.termsOfService)
+                continuation.resume(returning: false)
+            })
+            alert.addAction(UIAlertAction(title: "Review Privacy Policy", style: .default) { [weak self] _ in
+                self?.openLegalDocument(.privacyPolicy)
+                continuation.resume(returning: false)
+            })
+            alert.addAction(UIAlertAction(title: "Agree & Continue", style: .default) { [weak self] _ in
+                self?.hasAcceptedAccountLegalConsent = true
+                continuation.resume(returning: true)
+            })
+            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in
+                continuation.resume(returning: false)
+            })
+            if let popover = alert.popoverPresentationController {
+                popover.sourceView = anchor ?? self.view
+                popover.sourceRect = anchor?.bounds ?? self.view.bounds
             }
-            let accessToken = result.user.accessToken.tokenString
-
-            do {
-                let signInService = SignInService()
-                let session: Session = try await signInService.signInWithGoogle(idToken: idToken, accessToken: accessToken)
-                try await signInService.upsertInitialProfile(userId: session.user.id.uuidString, email: session.user.email ?? "")
-
-                // Sanity-check the session is live
-                _ = try await SupabaseManager.shared.client.auth.session
-
-                // Present OTP verification screen
-                presentPhoneOTP(prefillPhone: "")
-            } catch {
-                presentAlert(title: "Google Sign In Failed", message: error.localizedDescription)
-            }
-        } catch {
-            if (error as NSError).code == GIDSignInError.canceled.rawValue { return }
-            presentAlert(title: "Google Sign In Failed", message: error.localizedDescription)
+            present(alert, animated: true)
         }
     }
-#else
-    @MainActor
-    private func handleGoogleSignIn() async {
-        presentAlert(title: "Unavailable", message: "Google Sign-In is not available in this build.")
-    }
-#endif
 
     // MARK: - Phone OTP
+    private func presentPhoneOTPIfNeeded(fallbackPhone: String) async {
+        let service = ProfileService()
+        do {
+            let profile = try await service.fetchCurrentUserProfile()
+            if profile.phoneVerified {
+                routeToProfileTab()
+            } else {
+                let prefillPhone = profile.phone.isEmpty ? fallbackPhone : profile.phone
+                presentPhoneOTP(prefillPhone: prefillPhone)
+            }
+        } catch {
+            presentPhoneOTP(prefillPhone: fallbackPhone)
+        }
+    }
+
     private func presentPhoneOTP(prefillPhone: String) {
         let otpVC = PhoneOTPViewController()
         otpVC.prefillPhone = prefillPhone
@@ -254,10 +342,15 @@ final class SignUpViewController: UIViewController {
         }
     }
 
+    private func openLegalDocument(_ document: LegalDocument) {
+        let vc = LegalDocumentViewController(document: document)
+        vc.hidesBottomBarWhenPushed = true
+        navigationController?.pushViewController(vc, animated: true)
+    }
+
     private func presentAlert(title: String, message: String) {
         let a = UIAlertController(title: title, message: message, preferredStyle: .alert)
         a.addAction(UIAlertAction(title: "OK", style: .default))
         present(a, animated: true)
     }
 }
-

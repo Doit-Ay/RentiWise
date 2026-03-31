@@ -15,6 +15,12 @@ struct UserProfile {
     let phone: String
     let phoneVerified: Bool
     let kycStatus: String
+    let upiId: String
+    let collegeEmail: String
+    let isCollegeVerified: Bool
+    let averageRating: Double
+    let totalRentalsAsBorrower: Int
+    let borrowFreezeUntil: Date?
 }
 
 // Raw DB row from Supabase "users" table
@@ -28,3 +34,20 @@ struct DBUserRow: Decodable {
     let kyc_status: String?
 }
 
+struct DBUserProfileRow: Decodable {
+    let id: String
+    let full_name: String?
+    let upi_id: String?
+    let college_email: String?
+    let is_college_verified: Bool?
+    let average_rating: Double?
+    let total_rentals_as_borrower: Int?
+    let borrow_freeze_until: Date?
+}
+
+struct ProfileSaveInput {
+    let fullName: String
+    let phone: String
+    let upiId: String
+    let collegeEmail: String
+}

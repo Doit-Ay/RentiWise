@@ -27,7 +27,11 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
     private var reviews: [Review] = []
     // Removed wishlist bar button; we keep only Share in the nav bar
     private var shareButton: UIBarButtonItem?
+    private var safetyButton: UIBarButtonItem?
     private var isWishlisted: Bool = false
+    private let safetyService = CommunitySafetyService.shared
+    private var ownerDisplayName: String?
+    private var hasPresentedBlockedOwnerAlert = false
 
     // MARK: - Display mode
     enum DisplayMode {
@@ -146,8 +150,12 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         let shareImage = UIImage(systemName: "square.and.arrow.up")
         let shareBtn = UIBarButtonItem(image: shareImage, style: .plain, target: self, action: #selector(didTapShare))
         shareBtn.tintColor = brandTeal
+        let safetyImage = UIImage(systemName: "ellipsis.circle")
+        let safetyBtn = UIBarButtonItem(image: safetyImage, style: .plain, target: self, action: #selector(didTapSafetyMenu))
+        safetyBtn.tintColor = brandTeal
         self.shareButton = shareBtn
-        navigationItem.rightBarButtonItems = [shareBtn]
+        self.safetyButton = safetyBtn
+        navigationItem.rightBarButtonItems = [shareBtn, safetyBtn]
     }
 
     @objc private func didTapShare() {
@@ -299,6 +307,7 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
     private func bindItemToUI() {
         guard let item = selectedItem else { return }
         guard isViewLoaded else { return }
+        guard ensureOwnerIsNotBlocked() else { return }
 
         // Title
         self.title = item.title
@@ -331,11 +340,9 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         descriptionBodyLabel?.numberOfLines = 0
         descriptionBodyLabel?.preferredMaxLayoutWidth = descriptionBodyLabel?.bounds.width ?? 0
 
-        // Deposit card text
-        depositTitleLabel?.text = "Refundable Deposit"
-        let depositNumber = NSNumber(value: item.deposit_amount)
-        let depositText = currencyFormatter.string(from: depositNumber) ?? String(format: "₹%.2f", item.deposit_amount)
-        depositBodyLabel?.text = "A \(depositText) deposit is required and will be fully refunded when the item is returned in the same condition."
+        // Repurpose the old deposit card as a TestFlight-safe payment explainer.
+        depositTitleLabel?.text = "Direct Payment"
+        depositBodyLabel?.text = "Payment is arranged directly with the lender via UPI after your request is accepted. RentiWise does not process payments or hold deposits."
 
         // Owner defaults
         ownerNameLabel?.text = nil
@@ -456,6 +463,15 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
 
         // Hide views
         ownerCard?.isHidden = isOwn
+
+        // Make owner card tappable to view the owner's profile (with report/block)
+        if !isOwn, let card = ownerCard {
+            card.isUserInteractionEnabled = true
+            if card.gestureRecognizers?.isEmpty ?? true {
+                let tap = UITapGestureRecognizer(target: self, action: #selector(didTapOwnerCard))
+                card.addGestureRecognizer(tap)
+            }
+        }
         depositCard?.isHidden = isOwn
         writeAReview?.isHidden = isOwn
         rentNowoutlet?.isHidden = isOwn
@@ -552,7 +568,8 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         draft.category = item.category ?? ""
         draft.condition = item.condition ?? ""
         draft.pricePerDay = item.price_per_day
-        draft.depositAmount = item.deposit_amount
+        draft.depositAmount = 0
+        draft.declaredValue = item.declared_value ?? 0
         draft.isActive = item.is_active
 
         // Download existing images (up to 4) as Data so the first screen can show them
@@ -730,6 +747,7 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
 
     private func renderOwner(fullName: String?, avatarURLString: String?) {
         let name = (fullName?.isEmpty == false) ? fullName! : "Owner"
+        ownerDisplayName = name
         ownerNameLabel?.text = name
         ownerRating?.text = "★ 4.5"
 
@@ -1297,7 +1315,7 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
             let review_text: String?
         }
         let row = NewReviewRow(item_id: itemId, reviewer_id: reviewerId, rating: rating, review_text: text)
-        print("[InsertReview] Payload item_id=\(itemId) reviewer_id=\(reviewerId) rating=\(rating) textLen=\(text.count)")
+        debugLog("[InsertReview] Submitting review payload")
 
         // Request the inserted row back to verify the DB stored the text
         let resp = try await SupabaseManager.shared.client
@@ -1308,9 +1326,9 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
             .execute()
 
         if let json = String(data: resp.data, encoding: .utf8) {
-            print("[InsertReview] DB echoed row:", json)
+            debugLog("[InsertReview] Inserted review echoed from DB: \(json)")
         } else {
-            print("[InsertReview] Insert succeeded; unable to stringify response.")
+            debugLog("[InsertReview] Insert succeeded")
         }
     }
 
@@ -1519,6 +1537,7 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
 
     @IBAction func didTapRentNow(_ sender: UIButton) {
         guard let item = selectedItem else { return }
+        guard ensureOwnerIsNotBlocked() else { return }
         // Prevent if already requested
         guard sender.isEnabled else { return }
 
@@ -1545,6 +1564,234 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         }
     }
 
+    @objc private func didTapOwnerCard() {
+        guard let item = selectedItem else { return }
+        UserProfileViewController.open(from: self, userId: item.owner_id, displayName: ownerDisplayName)
+    }
+
+    @objc private func didTapSafetyMenu(_ sender: UIBarButtonItem) {
+        guard let item = selectedItem else { return }
+        guard ensureSignedInForSafetyTools() else { return }
+
+        let actionSheet = UIAlertController(title: "Safety Tools", message: nil, preferredStyle: .actionSheet)
+        actionSheet.addAction(UIAlertAction(title: "Report Listing", style: .default) { [weak self] _ in
+            self?.presentListingReportReasons(anchor: sender)
+        })
+        actionSheet.addAction(UIAlertAction(title: "Report User", style: .default) { [weak self] _ in
+            self?.presentUserReportReasons(anchor: sender)
+        })
+
+        let isBlocked = safetyService.isBlocked(item.owner_id)
+        let blockTitle = isBlocked ? "Unblock User" : "Block User"
+        actionSheet.addAction(UIAlertAction(title: blockTitle, style: .destructive) { [weak self] _ in
+            guard let self else { return }
+            if isBlocked {
+                self.safetyService.unblock(userId: item.owner_id)
+                self.presentInfoAlert(title: "User Unblocked", message: "Their listings and chat will be visible again.")
+            } else {
+                self.confirmBlockOwner()
+            }
+        })
+
+        actionSheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        if let popover = actionSheet.popoverPresentationController {
+            popover.barButtonItem = sender
+        }
+        present(actionSheet, animated: true)
+    }
+
+    private func ensureSignedInForSafetyTools() -> Bool {
+        if SupabaseManager.shared.currentUserIdSync() != nil {
+            return true
+        }
+
+        let alert = UIAlertController(
+            title: "Sign in required",
+            message: "Please sign in to report or block users.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Sign In", style: .default) { [weak self] _ in
+            self?.openSignInForSafetyTools()
+        })
+        present(alert, animated: true)
+        return false
+    }
+
+    private func openSignInForSafetyTools() {
+        let nibName = "SignViewController"
+        let signInVC: SignViewController
+        if Bundle.main.path(forResource: nibName, ofType: "nib") != nil ||
+            Bundle.main.path(forResource: nibName, ofType: "xib") != nil {
+            signInVC = SignViewController(nibName: nibName, bundle: nil)
+        } else {
+            signInVC = SignViewController(service: SignInService())
+        }
+        signInVC.title = "Sign In"
+        signInVC.hidesBottomBarWhenPushed = true
+
+        if let nav = navigationController {
+            nav.pushViewController(signInVC, animated: true)
+        } else {
+            let nav = UINavigationController(rootViewController: signInVC)
+            nav.modalPresentationStyle = .fullScreen
+            present(nav, animated: true)
+        }
+    }
+
+    private func presentListingReportReasons(anchor: UIBarButtonItem) {
+        presentReportReasonSheet(
+            title: "Report Listing",
+            reasons: ["Scam or fraud", "Prohibited item", "Unsafe meetup", "Spam", "Other"],
+            barButtonItem: anchor
+        ) { [weak self] reason, details in
+            guard let self, let item = self.selectedItem else { return }
+            Task {
+                do {
+                    try await self.safetyService.reportListing(
+                        item: item,
+                        ownerDisplayName: self.ownerDisplayName,
+                        reason: reason,
+                        details: details
+                    )
+                    await MainActor.run {
+                        self.presentInfoAlert(title: "Report Sent", message: "Thanks. Our team will review this listing.")
+                    }
+                } catch {
+                    await MainActor.run {
+                        self.presentError(error.localizedDescription)
+                    }
+                }
+            }
+        }
+    }
+
+    private func presentUserReportReasons(anchor: UIBarButtonItem) {
+        guard let item = selectedItem else { return }
+        presentReportReasonSheet(
+            title: "Report User",
+            reasons: ["Harassment", "Scam or fraud", "Unsafe behavior", "Spam", "Other"],
+            barButtonItem: anchor
+        ) { [weak self] reason, details in
+            guard let self else { return }
+            Task {
+                do {
+                    try await self.safetyService.reportUser(
+                        userId: item.owner_id,
+                        displayName: self.ownerDisplayName,
+                        context: "Listing detail for item \(item.id)",
+                        reason: reason,
+                        details: details
+                    )
+                    await MainActor.run {
+                        self.presentInfoAlert(title: "Report Sent", message: "Thanks. Our team will review this account.")
+                    }
+                } catch {
+                    await MainActor.run {
+                        self.presentError(error.localizedDescription)
+                    }
+                }
+            }
+        }
+    }
+
+    private func presentReportReasonSheet(
+        title: String,
+        reasons: [String],
+        barButtonItem: UIBarButtonItem,
+        submit: @escaping (String, String?) -> Void
+    ) {
+        let actionSheet = UIAlertController(title: title, message: "Why are you reporting this?", preferredStyle: .actionSheet)
+        for reason in reasons {
+            actionSheet.addAction(UIAlertAction(title: reason, style: .default) { [weak self] _ in
+                self?.presentReportDetailsPrompt(title: title, reason: reason, submit: submit)
+            })
+        }
+        actionSheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        if let popover = actionSheet.popoverPresentationController {
+            popover.barButtonItem = barButtonItem
+        }
+        present(actionSheet, animated: true)
+    }
+
+    private func presentReportDetailsPrompt(
+        title: String,
+        reason: String,
+        submit: @escaping (String, String?) -> Void
+    ) {
+        let alert = UIAlertController(title: title, message: "Add any details that will help our review team.", preferredStyle: .alert)
+        alert.addTextField { textField in
+            textField.placeholder = "Optional details"
+            textField.clearButtonMode = .whileEditing
+        }
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Submit", style: .default) { [weak alert] _ in
+            let details = alert?.textFields?.first?.text
+            submit(reason, details)
+        })
+        present(alert, animated: true)
+    }
+
+    private func confirmBlockOwner() {
+        guard let item = selectedItem else { return }
+        let displayName = ownerDisplayName ?? "this user"
+        let alert = UIAlertController(
+            title: "Block \(displayName)?",
+            message: "Their listings and chat will be hidden immediately.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Block", style: .destructive) { [weak self] _ in
+            guard let self else { return }
+            self.safetyService.block(userId: item.owner_id, displayName: self.ownerDisplayName ?? "User")
+            self.presentInfoAlert(title: "User Blocked", message: "Their content is now hidden from your account.") { [weak self] in
+                guard let self else { return }
+                if let nav = self.navigationController {
+                    nav.popViewController(animated: true)
+                } else {
+                    self.dismiss(animated: true)
+                }
+            }
+        })
+        present(alert, animated: true)
+    }
+
+    private func ensureOwnerIsNotBlocked() -> Bool {
+        guard let item = selectedItem, !safetyService.isBlocked(item.owner_id) else {
+            presentBlockedOwnerAlertIfNeeded()
+            return false
+        }
+        return true
+    }
+
+    private func presentBlockedOwnerAlertIfNeeded() {
+        guard !hasPresentedBlockedOwnerAlert else { return }
+        hasPresentedBlockedOwnerAlert = true
+
+        let alert = UIAlertController(
+            title: "User Blocked",
+            message: "You blocked the owner of this item. Unblock them in Privacy & Security to view this listing again.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "OK", style: .default, handler: { [weak self] _ in
+            guard let self else { return }
+            if let nav = self.navigationController {
+                nav.popViewController(animated: true)
+            } else {
+                self.dismiss(animated: true)
+            }
+        }))
+        present(alert, animated: true)
+    }
+
+    private func presentInfoAlert(title: String, message: String, completion: (() -> Void)? = nil) {
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in
+            completion?()
+        })
+        present(alert, animated: true)
+    }
+
     // MARK: - Duplicate Request Check
 
     private func checkExistingRequestForItem(itemId: String, borrowerId: String) async {
@@ -1557,7 +1804,7 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
                 .select("id")
                 .eq("item_id", value: itemId)
                 .eq("borrower_id", value: borrowerId)
-                .in("status", values: ["pending", "accepted"])
+                .in("status", values: ["pending", "accepted", "approved"])
                 .limit(1)
                 .execute()
 
@@ -1576,12 +1823,12 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
                 }
             }
         } catch {
-            print("[ProductVC] Error checking existing request: \(error)")
+            debugLog("[ProductVC] Error checking existing request: \(error)")
         }
     }
     
     @IBAction func didtappreviewbutton(_ sender: UIButton) {
-        guard let item = selectedItem else { return }
+        guard selectedItem != nil else { return }
 
         let nibName = "WriteReviewViewController"
         let reviewVC: WriteReviewViewController
@@ -1598,11 +1845,11 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         // Add completion handler to receive new review and update UI
         reviewVC.onReviewSubmitted = { [weak self] rating, text in
             guard let self = self else { return }
-            print("[ProductVC] onReviewSubmitted rating=\(rating), textLen=\(text.count)")
+            debugLog("[ProductVC] onReviewSubmitted rating=\(rating), textLen=\(text.count)")
             Task { [weak self] in
                 guard let self = self else { return }
                 do {
-                    print("[ProductVC] Will insert rating=\(rating) textLen=\(text.count)")
+                    debugLog("[ProductVC] Will insert rating=\(rating) textLen=\(text.count)")
                     try await self.insertReviewIntoSupabase(rating: rating, text: text)
                 } catch {
                     await MainActor.run {
@@ -1661,4 +1908,3 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         }
     }
 }
-

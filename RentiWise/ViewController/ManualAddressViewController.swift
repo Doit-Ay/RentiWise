@@ -549,13 +549,13 @@ final class ManualAddressViewController: UIViewController {
             do {
                 let placemarks = try await geocoder.geocodeAddressString(primary)
                 if let loc = placemarks.first?.location {
-                    print("[Address] Geocoded full address OK: \(primary) -> \(loc.coordinate.latitude), \(loc.coordinate.longitude)")
+                    debugLog("[Address] Geocoded full address OK: \(primary) -> \(loc.coordinate.latitude), \(loc.coordinate.longitude)")
                     return (loc.coordinate.latitude, loc.coordinate.longitude)
                 } else {
-                    print("[Address] Geocode returned no results for full address: \(primary)")
+                    debugLog("[Address] Geocode returned no results for full address: \(primary)")
                 }
             } catch {
-                print("[Address] Geocode error for full address '\(primary)': \(error.localizedDescription)")
+                debugLog("[Address] Geocode error for full address '\(primary)': \(error.localizedDescription)")
             }
         }
 
@@ -565,24 +565,24 @@ final class ManualAddressViewController: UIViewController {
             do {
                 let placemarks = try await geocoder.geocodeAddressString(fallback)
                 if let loc = placemarks.first?.location {
-                    print("[Address] Geocoded fallback OK: \(fallback) -> \(loc.coordinate.latitude), \(loc.coordinate.longitude)")
+                    debugLog("[Address] Geocoded fallback OK: \(fallback) -> \(loc.coordinate.latitude), \(loc.coordinate.longitude)")
                     // FIX: use loc.coordinate.longitude (not loc.longitude)
                     return (loc.coordinate.latitude, loc.coordinate.longitude)
                 } else {
-                    print("[Address] Geocode returned no results for fallback: \(fallback)")
+                    debugLog("[Address] Geocode returned no results for fallback: \(fallback)")
                 }
             } catch {
-                print("[Address] Geocode error for fallback '\(fallback)': \(error.localizedDescription)")
+                debugLog("[Address] Geocode error for fallback '\(fallback)': \(error.localizedDescription)")
             }
         }
 
         // 3) Optional: as a last resort, try current GPS (if allowed)
         do {
             let loc = try await AppLocationManager.shared.currentLocation()
-            print("[Address] Using current GPS as last resort: \(loc.coordinate.latitude), \(loc.coordinate.longitude)")
+            debugLog("[Address] Using current GPS as last resort: \(loc.coordinate.latitude), \(loc.coordinate.longitude)")
             return (loc.coordinate.latitude, loc.coordinate.longitude)
         } catch {
-            print("[Address] GPS fallback not available: \(error.localizedDescription)")
+            debugLog("[Address] GPS fallback not available: \(error.localizedDescription)")
         }
 
         // Failed to resolve coords; proceed without
@@ -608,7 +608,7 @@ final class ManualAddressViewController: UIViewController {
 
             // 2) Resolve coordinates with robust fallbacks
             let (lat, lon) = await resolveCoordinatesForSave()
-            print("[Address] Final coords to save: lat=\(String(describing: lat)) lon=\(String(describing: lon))")
+            debugLog("[Address] Final coords to save: lat=\(String(describing: lat)) lon=\(String(describing: lon))")
 
             do {
                 let userId = try await service.currentUserId()

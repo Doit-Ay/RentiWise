@@ -10,6 +10,8 @@
     <objects>
         <placeholder placeholderIdentifier="IBFilesOwner" id="-1" userLabel="File's Owner" customClass="SignViewController" customModule="RentiWise" customModuleProvider="target">
             <connections>
+                <outlet property="authFormStackView" destination="dci-21-th7" id="cfK-wr-b0i"/>
+                <outlet property="socialAuthStackView" destination="kV0-Tt-mON" id="eJh-lq-f1e"/>
                 <outlet property="signInButton" destination="YKm-RI-HXf" id="aUP-wq-gqp"/>
                 <outlet property="signInEmailText" destination="v8W-Y8-oKQ" id="BDq-sh-c4T"/>
                 <outlet property="signInPasswordText" destination="KOP-gV-K2u" id="yof-TK-C4f"/>
@@ -110,21 +112,7 @@
                                 <action selector="GoogleSignIn:" destination="-1" eventType="touchUpInside" id="FGf-jU-HSH"/>
                             </connections>
                         </button>
-                        <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="Fjh-tP-9Tj">
-                            <rect key="frame" x="73.999999999999986" y="0.0" width="74.000000000000014" height="64"/>
-                            <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
-                            <state key="normal" title="Button"/>
-                            <buttonConfiguration key="configuration" style="plain" image="Apple"/>
-                            <connections>
-                                <action selector="AppleSignIn:" destination="-1" eventType="touchUpInside" id="G4r-Uu-Ipo"/>
-                            </connections>
-                        </button>
                     </subviews>
-                    <variation key="default">
-                        <mask key="subviews">
-                            <exclude reference="Fjh-tP-9Tj"/>
-                        </mask>
-                    </variation>
                 </stackView>
                 <stackView opaque="NO" contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="tzd-7Z-Lcp">
                     <rect key="frame" x="53.333333333333343" y="742.33333333333337" width="286.33333333333326" height="29.666666666666629"/>
