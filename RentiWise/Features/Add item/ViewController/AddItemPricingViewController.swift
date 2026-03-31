@@ -7,13 +7,25 @@
 
 import UIKit
 
-class AddItemPricingViewController: UIViewController {
+class AddItemPricingViewController: UIViewController, UITextFieldDelegate {
 
     // Injected draft from previous screen
     var draft: AddItemDraft = AddItemDraft()
 
     @IBOutlet weak var pricePerDay: UITextField!
     @IBOutlet weak var refundableDeposit: UITextField!
+
+    // Feature 3: High-value deposit warning
+    private let depositWarningLabel: UILabel = {
+        let label = UILabel()
+        label.text = "⚠️ High-value items may need extra trust coordination with your borrower."
+        label.font = .systemFont(ofSize: 13)
+        label.textColor = .systemOrange
+        label.numberOfLines = 0
+        label.isHidden = true
+        label.translatesAutoresizingMaskIntoConstraints = false
+        return label
+    }()
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -35,6 +47,19 @@ class AddItemPricingViewController: UIViewController {
         let doneToolbar = makeDoneToolbar()
         pricePerDay?.inputAccessoryView = doneToolbar
         refundableDeposit?.inputAccessoryView = doneToolbar
+
+        // Feature 3: Wire deposit field delegate and add warning label
+        refundableDeposit?.delegate = self
+        if let depositField = refundableDeposit {
+            if let sv = depositField.superview {
+                sv.addSubview(depositWarningLabel)
+                NSLayoutConstraint.activate([
+                    depositWarningLabel.topAnchor.constraint(equalTo: depositField.bottomAnchor, constant: 4),
+                    depositWarningLabel.leadingAnchor.constraint(equalTo: depositField.leadingAnchor),
+                    depositWarningLabel.trailingAnchor.constraint(equalTo: depositField.trailingAnchor),
+                ])
+            }
+        }
     }
 
     // Dismiss keyboard utility
@@ -123,5 +148,18 @@ class AddItemPricingViewController: UIViewController {
         let a = UIAlertController(title: title, message: message, preferredStyle: .alert)
         a.addAction(UIAlertAction(title: "OK", style: .default))
         present(a, animated: true)
+    }
+
+    // MARK: - UITextFieldDelegate (Feature 3: Value Cap Warning)
+    func textField(_ textField: UITextField, shouldChangeCharactersIn range: NSRange, replacementString string: String) -> Bool {
+        if textField == refundableDeposit {
+            // Compute new text after replacement
+            let currentText = textField.text ?? ""
+            guard let stringRange = Range(range, in: currentText) else { return true }
+            let updatedText = currentText.replacingCharacters(in: stringRange, with: string)
+            let value = Double(updatedText) ?? 0
+            depositWarningLabel.isHidden = (value <= 10000)
+        }
+        return true
     }
 }

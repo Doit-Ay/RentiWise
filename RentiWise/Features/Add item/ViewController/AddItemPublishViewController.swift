@@ -6,6 +6,7 @@
 //
 
 import UIKit
+import Supabase
 
 class AddItemPublishViewController: UIViewController {
 
@@ -75,13 +76,92 @@ class AddItemPublishViewController: UIViewController {
     }
 
     @IBAction func PublishTapped(_ sender: UIButton) {
+        // Phone verification gate — must be verified to list items
         Task {
-            if draft.isEditing {
-                await update()
-            } else {
-                await publish()
+            guard let userId = await SupabaseManager.shared.currentUserId() else {
+                await self.runPublishFlow(sender)
+                return
+            }
+            let isPhoneVerified = await PhoneVerificationService.shared.isPhoneVerified(userId: userId)
+            if !isPhoneVerified {
+                await MainActor.run {
+                    let phoneVC = PhoneVerificationViewController()
+                    phoneVC.onVerificationComplete = { [weak self] in
+                        self?.dismiss(animated: true) {
+                            guard let self else { return }
+                            self.PublishTapped(sender)
+                        }
+                    }
+                    let nav = UINavigationController(rootViewController: phoneVC)
+                    nav.modalPresentationStyle = .fullScreen
+                    self.present(nav, animated: true)
+                }
+                return
+            }
+            await self.runPublishFlow(sender)
+        }
+    }
+
+    private func runPublishFlow(_ sender: UIButton) async {
+        await MainActor.run {
+            // VALIDATION: ensure required fields are filled before submitting
+            let trimmedTitle = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmedTitle.isEmpty {
+                let alert = UIAlertController(title: "Missing Title",
+                                              message: "Please enter a title for your listing.",
+                                              preferredStyle: .alert)
+                alert.addAction(UIAlertAction(title: "OK", style: .default))
+                present(alert, animated: true)
+                return
+            }
+            if draft.pricePerDay <= 0 {
+                let alert = UIAlertController(title: "Invalid Price",
+                                              message: "Price per day must be greater than ₹0.",
+                                              preferredStyle: .alert)
+                alert.addAction(UIAlertAction(title: "OK", style: .default))
+                present(alert, animated: true)
+                return
+            }
+            Task {
+                if self.draft.isEditing {
+                    await self.update()
+                } else {
+                    await self.checkFreeTierAndPublish()
+                }
             }
         }
+    }
+
+    private func checkFreeTierAndPublish() async {
+        do {
+            let isPro = await IAPManager.shared.isProUser()
+            if !isPro {
+                guard let userId = await SupabaseManager.shared.currentUserId() else {
+                    await publish()
+                    return
+                }
+                let resp = try await SupabaseManager.shared.client
+                    .from("items")
+                    .select("id", head: true, count: .exact)
+                    .eq("owner_id", value: userId)
+                    .execute()
+                let count = resp.count ?? 0
+                if count >= 3 {
+                    await MainActor.run {
+                        let upgradeVC = UpgradeProViewController()
+                        upgradeVC.hidesBottomBarWhenPushed = true
+                        upgradeVC.onSubscribed = { [weak self] in
+                            Task { await self?.publish() }
+                        }
+                        self.navigationController?.pushViewController(upgradeVC, animated: true)
+                    }
+                    return
+                }
+            }
+        } catch {
+            print("[AddItem] Free tier check error: \(error)")
+        }
+        await publish()
     }
 
     private func publish() async {

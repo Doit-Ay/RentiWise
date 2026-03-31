@@ -80,9 +80,12 @@ class NotificationViewController: UIViewController {
             
             // Fetch return requests  
             let returnRequests = try await fetchReturnRequests(for: userId)
+
+            // Fetch general notifications (accept/reject/payment/pickup)
+            let generalNotifications = try await fetchGeneralNotifications(for: userId)
             
             // Combine and sort by date
-            var allNotifications = extensionRequests + returnRequests
+            var allNotifications = extensionRequests + returnRequests + generalNotifications
             allNotifications.sort { $0.createdAt > $1.createdAt }
             
             await MainActor.run {
@@ -229,13 +232,70 @@ class NotificationViewController: UIViewController {
         emptyStateView.isHidden = !notifications.isEmpty
         tableView.isHidden = notifications.isEmpty
     }
+
+    // MARK: - General Notifications (from notifications table)
+
+    private func fetchGeneralNotifications(for userId: String) async throws -> [NotificationItem] {
+        struct GeneralNotificationRow: Decodable {
+            let id: String
+            let type: String
+            let title: String
+            let message: String
+            let request_id: String?
+            let is_read: Bool?
+            let created_at: String
+        }
+
+        let response: [GeneralNotificationRow] = try await SupabaseManager.shared.client
+            .from("notifications")
+            .select("id, type, title, message, request_id, is_read, created_at")
+            .eq("user_id", value: userId)
+            .order("created_at", ascending: false)
+            .limit(50)
+            .execute()
+            .value
+
+        return response.map { row in
+            let dateFormatter = ISO8601DateFormatter()
+            let date = dateFormatter.date(from: row.created_at) ?? Date()
+
+            let notifType: NotificationType
+            switch row.type {
+            case "request_accepted":  notifType = .requestAccepted
+            case "request_rejected":  notifType = .requestRejected
+            case "payment_received":  notifType = .paymentReceived
+            case "pickup_confirmed":  notifType = .pickupConfirmed
+            case "new_request":       notifType = .newRequest
+            default:                  notifType = .requestAccepted
+            }
+
+            return NotificationItem(
+                id: row.id,
+                type: notifType,
+                requestId: row.request_id ?? "",
+                itemTitle: row.title,
+                itemImage: nil,
+                borrowerId: "",
+                message: row.message,
+                createdAt: date,
+                isRead: row.is_read ?? false
+            )
+        }
+    }
     
     // MARK: - Mark as Read
     
     private func markAsRead(notification: NotificationItem) async {
         do {
-            let tableName = notification.type == .extensionRequest ? 
-                "extension_requests" : "return_requests"
+            let tableName: String
+            switch notification.type {
+            case .extensionRequest:
+                tableName = "extension_requests"
+            case .returnRequest:
+                tableName = "return_requests"
+            case .requestAccepted, .requestRejected, .paymentReceived, .pickupConfirmed, .newRequest:
+                tableName = "notifications"
+            }
             
             try await SupabaseManager.shared.client
                 .from(tableName)
@@ -288,6 +348,9 @@ extension NotificationViewController: UITableViewDelegate {
         switch notification.type {
         case .extensionRequest, .returnRequest:
             openRequestApprovalScreen(for: notification)
+        case .requestAccepted, .requestRejected, .paymentReceived, .pickupConfirmed, .newRequest:
+            // General notifications are informational — just marking as read is sufficient
+            break
         }
     }
     
@@ -333,13 +396,21 @@ struct NotificationItem {
 enum NotificationType {
     case extensionRequest
     case returnRequest
+    case requestAccepted
+    case requestRejected
+    case paymentReceived
+    case pickupConfirmed
+    case newRequest
     
     var icon: String {
         switch self {
-        case .extensionRequest:
-            return "clock.arrow.circlepath"
-        case .returnRequest:
-            return "checkmark.circle"
+        case .extensionRequest:  return "clock.arrow.circlepath"
+        case .returnRequest:     return "checkmark.circle"
+        case .requestAccepted:   return "hand.thumbsup.fill"
+        case .requestRejected:   return "hand.thumbsdown.fill"
+        case .paymentReceived:   return "indianrupeesign.circle.fill"
+        case .pickupConfirmed:   return "shippingbox.fill"
+        case .newRequest:        return "bell.badge.fill"
         }
     }
     
@@ -349,6 +420,16 @@ enum NotificationType {
             return UIColor(red: 0.36, green: 0.66, blue: 0.71, alpha: 1.0) // Teal
         case .returnRequest:
             return UIColor.systemGreen
+        case .requestAccepted:
+            return UIColor.systemGreen
+        case .requestRejected:
+            return UIColor.systemRed
+        case .paymentReceived:
+            return UIColor.systemOrange
+        case .pickupConfirmed:
+            return UIColor(red: 0.36, green: 0.66, blue: 0.71, alpha: 1.0)
+        case .newRequest:
+            return UIColor.systemBlue
         }
     }
 }

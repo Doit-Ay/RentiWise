@@ -332,6 +332,10 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
         applyGlassToHeaderRoundButtons()
     }
 
+    // MARK: - Verification nudge (session-only)
+    private var verificationNudgeBanner: UIView?
+    private var hasSeenVerificationNudge = false
+
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         navigationController?.setNavigationBarHidden(true, animated: true)
@@ -346,6 +350,81 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
         refreshLocationButtonTitle()
         // Update notification badge
         Task { await updateNotificationBadge() }
+        // Show verification nudge if needed
+        Task { await showVerificationNudgeIfNeeded() }
+    }
+
+    private func showVerificationNudgeIfNeeded() async {
+        guard !hasSeenVerificationNudge, verificationNudgeBanner == nil else { return }
+        do {
+            let session = try await SupabaseManager.shared.client.auth.session
+            let userId = session.user.id.uuidString
+            let isVerified = await CollegeVerificationService.shared.isUserVerified(userId: userId)
+            if !isVerified {
+                await MainActor.run { addVerificationNudgeBanner() }
+            }
+        } catch { /* not logged in — skip */ }
+    }
+
+    private func addVerificationNudgeBanner() {
+        guard verificationNudgeBanner == nil else { return }
+        let brandTeal = UIColor(red: 0x0A/255.0, green: 0x7B/255.0, blue: 0x6C/255.0, alpha: 1.0)
+        let banner = UIView()
+        banner.backgroundColor = brandTeal
+        banner.layer.cornerRadius = 12
+        banner.translatesAutoresizingMaskIntoConstraints = false
+        banner.tag = 9999
+
+        let label = UILabel()
+        label.text = "🎓 Verify your ID to rent items  →"
+        label.font = .systemFont(ofSize: 14, weight: .semibold)
+        label.textColor = .white
+        label.translatesAutoresizingMaskIntoConstraints = false
+        banner.addSubview(label)
+
+        let dismiss = UIButton(type: .system)
+        dismiss.setTitle("✕", for: .normal)
+        dismiss.setTitleColor(.white, for: .normal)
+        dismiss.titleLabel?.font = .systemFont(ofSize: 16, weight: .bold)
+        dismiss.addTarget(self, action: #selector(dismissVerificationNudge), for: .touchUpInside)
+        dismiss.translatesAutoresizingMaskIntoConstraints = false
+        banner.addSubview(dismiss)
+
+        let tap = UITapGestureRecognizer(target: self, action: #selector(verificationNudgeTapped))
+        banner.addGestureRecognizer(tap)
+
+        view.addSubview(banner)
+        NSLayoutConstraint.activate([
+            banner.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
+            banner.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            banner.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -60),
+            banner.heightAnchor.constraint(equalToConstant: 48),
+            label.leadingAnchor.constraint(equalTo: banner.leadingAnchor, constant: 14),
+            label.centerYAnchor.constraint(equalTo: banner.centerYAnchor),
+            dismiss.trailingAnchor.constraint(equalTo: banner.trailingAnchor, constant: -12),
+            dismiss.centerYAnchor.constraint(equalTo: banner.centerYAnchor),
+        ])
+        verificationNudgeBanner = banner
+    }
+
+    @objc private func dismissVerificationNudge() {
+        hasSeenVerificationNudge = true
+        UIView.animate(withDuration: 0.25, animations: { self.verificationNudgeBanner?.alpha = 0 }) { _ in
+            self.verificationNudgeBanner?.removeFromSuperview()
+            self.verificationNudgeBanner = nil
+        }
+    }
+
+    @objc private func verificationNudgeTapped() {
+        let vc = CollegeVerificationViewController()
+        vc.onVerificationComplete = { [weak self] in
+            self?.hasSeenVerificationNudge = true
+            self?.verificationNudgeBanner?.removeFromSuperview()
+            self?.verificationNudgeBanner = nil
+        }
+        vc.hidesBottomBarWhenPushed = true
+        navigationController?.setNavigationBarHidden(false, animated: true)
+        navigationController?.pushViewController(vc, animated: true)
     }
 
     @objc private func handleBlockedUsersChanged() {

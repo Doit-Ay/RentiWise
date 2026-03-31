@@ -34,6 +34,7 @@ struct PaymentRow: Decodable {
     let deposit_amount: Double
     let total_amount: Double
     let pickup_code: String?
+    let pickup_confirmed: Bool?
     let provider_payment_id: String?
     let provider_receipt_url: String?
     let failure_reason: String?
