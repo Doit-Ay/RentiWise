@@ -342,7 +342,7 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
 
         // Repurpose the old deposit card as a TestFlight-safe payment explainer.
         depositTitleLabel?.text = "Direct Payment"
-        depositBodyLabel?.text = "Payment is arranged directly with the lender via UPI after your request is accepted. RentiWise does not process payments or hold deposits."
+        depositBodyLabel?.text = "Payment is arranged directly with the lender via UPI after your request is accepted. Rentiwise does not process payments or hold deposits."
 
         // Owner defaults
         ownerNameLabel?.text = nil
@@ -1255,6 +1255,14 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
 
                 containerStack.addArrangedSubview(card)
             }
+            
+            // Add a flexible spacer to the bottom to absorb any leftover vertical space in the stack view.
+            // This prevents the individual review cards from stretching to fill the screen on the Own Item view.
+            let bottomSpacer = UIView()
+            bottomSpacer.backgroundColor = .clear
+            bottomSpacer.setContentHuggingPriority(.defaultLow, for: .vertical)
+            bottomSpacer.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
+            containerStack.addArrangedSubview(bottomSpacer)
         }
     }
 
@@ -1432,6 +1440,15 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
 
         // Setup bottom button bar
         setupBottomButtonBar()
+
+        // Fix z-ordering: ensure Reviews title and Write a Review button
+        // are above review1Card (which sits above them in XIB subview order)
+        if let label = reviewsTitleLabel, let parent = label.superview {
+            parent.bringSubviewToFront(label)
+        }
+        if let btn = writeAReview, let parent = btn.superview {
+            parent.bringSubviewToFront(btn)
+        }
 
         if selectedItem != nil { bindItemToUI() }
     }

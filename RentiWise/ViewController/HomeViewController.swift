@@ -237,8 +237,8 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
         // Make the surrounding area transparent so only tiles are visible
         collectionView.backgroundColor = .clear
 
-        // Style the search bar for a modern rounded look
-        styleSearchBar()
+        // Style the search bar using the shared native style
+        searchBar?.applyRentiWiseStyle()
 
         // Ensure the location button truncates within its space
         configureLocationButtonAppearance()
@@ -277,7 +277,7 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
         tap.cancelsTouchesInView = false
         view.addGestureRecognizer(tap)
 
-        // Set the bottom tagline "You ❤️ RentiWise" with brand-colored heart
+        // Set the bottom tagline "You ❤️ Rentiwise" with brand-colored heart
         setBottomTagline()
         
         // Set navigation delegate to auto-hide tab bar on push
@@ -309,8 +309,7 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
 
-        // Keep the rounded background sized to the search bar's current bounds
-        layoutSearchBarRounded()
+        // Remove manual layoutSearchBarRounded calls to preserve native height and radii
 
         // After we know bounds, set initial image once (no animation)
         if !didSetInitialHomeImageAfterLayout {
@@ -444,59 +443,9 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
     override func viewSafeAreaInsetsDidChange() {
         super.viewSafeAreaInsetsDidChange()
         collectionView.setCollectionViewLayout(generateHorizontalFourUpLayout(), animated: false)
-        layoutSearchBarRounded()
     }
 
-    // MARK: - Search bar styling
-    private func styleSearchBar() {
-        guard let sb = searchBar else { return }
-
-        sb.searchBarStyle = .minimal
-        sb.isTranslucent = true
-        sb.backgroundColor = .clear
-        sb.setBackgroundImage(UIImage(), for: .any, barMetrics: .default)
-        sb.setSearchFieldBackgroundImage(UIImage(), for: .normal)
-
-        // Access searchTextField for deeper styling (iOS 13+)
-        let tf = sb.searchTextField
-        tf.backgroundColor = UIColor.secondarySystemBackground.withAlphaComponent(0.85)
-        tf.textColor = .label
-        tf.tintColor = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0) // brand teal cursor
-        tf.clearButtonMode = .whileEditing
-        tf.borderStyle = .none
-        tf.layer.masksToBounds = false
-        // Corner radius will be set in layoutSearchBarRounded() so it adapts to height
-        tf.leftView?.tintColor = .tertiaryLabel
-
-        // Placeholder with subtle color
-        let placeholder = tf.placeholder ?? "Search items"
-        tf.attributedPlaceholder = NSAttributedString(
-            string: placeholder,
-            attributes: [.foregroundColor: UIColor.secondaryLabel]
-        )
-
-        // Add subtle shadow to lift the pill
-        tf.layer.shadowColor = UIColor.black.cgColor
-        tf.layer.shadowOpacity = 0.08
-        tf.layer.shadowRadius = 6
-        tf.layer.shadowOffset = CGSize(width: 0, height: 3)
-
-        // The search icon is preserved by default via leftView
-        // Cancel button tint to match brand
-        sb.tintColor = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0)
-    }
-
-    private func layoutSearchBarRounded() {
-        guard let sb = searchBar else { return }
-        let tf = sb.searchTextField
-        // Corner radius based on current height for a pill shape
-        let h = tf.bounds.height > 0 ? tf.bounds.height : 36
-        tf.layer.cornerRadius = h / 2
-
-        // Optional thin border for definition on light backgrounds
-        tf.layer.borderWidth = 0.5
-        tf.layer.borderColor = UIColor.separator.withAlphaComponent(0.5).cgColor
-    }
+    // MARK: - Search bar styling removed (using extension)
 
     // MARK: - Location button text behavior (truncate within given space)
     private func configureLocationButtonAppearance() {

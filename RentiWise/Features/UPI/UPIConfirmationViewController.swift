@@ -159,7 +159,7 @@ final class UPIConfirmationViewController: UIViewController {
 
         // Info banner
         let infoBanner = makeLabel(
-            "⚠️ RentiWise does not process payments. Payments are settled directly between users via UPI.",
+            "⚠️ Rentiwise does not process payments. Payments are settled directly between users via UPI.",
             style: .caption1
         )
         infoBanner.textColor = .secondaryLabel

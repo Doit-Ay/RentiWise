@@ -111,7 +111,7 @@ final class PhoneVerificationViewController: UIViewController, UITextFieldDelega
         contentStack.addArrangedSubview(phoneTitleLabel)
 
         // Subtitle
-        phoneSubLabel.text = "Confirm your Indian mobile number to start using RentiWise."
+        phoneSubLabel.text = "Confirm your Indian mobile number to start using Rentiwise."
         phoneSubLabel.font = .systemFont(ofSize: 16)
         phoneSubLabel.textColor = captionColor
         phoneSubLabel.textAlignment = .center

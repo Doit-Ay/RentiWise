@@ -195,7 +195,7 @@ final class LenderAgreementViewController: UIViewController {
         let terms = [
             "1. The borrower agrees to return the item in the same condition.",
             "2. The deposit is paid directly to the lender and refundable on safe return.",
-            "3. RentiWise is a facilitation platform and is not responsible for disputes.",
+            "3. Rentiwise is a facilitation platform and is not responsible for disputes.",
             "4. Both parties agree to resolve disputes directly.",
             "5. Late returns may incur additional charges.",
             "6. Both parties confirm the rental details above are accurate."

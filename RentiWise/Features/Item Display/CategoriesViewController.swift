@@ -190,10 +190,7 @@ private extension CategoriesViewController {
         // Apply consistent RentiWise styling
         sb.applyRentiWiseStyle()
 
-        // Rounded pill corner radius adjusted after layout
-        DispatchQueue.main.async { [weak self] in
-            self?.layoutSearchBarRounded()
-        }
+        // Let native layout handle radii
 
         // Dismiss keyboard by tapping outside
         let tap = UITapGestureRecognizer(target: self, action: #selector(dismissKeyboardTap))
@@ -202,8 +199,7 @@ private extension CategoriesViewController {
     }
 
     func layoutSearchBarRounded() {
-        guard let sb = categorySearchBar else { return }
-        sb.applyRoundedCorners()
+        // No-op for native style
     }
 
     @objc func dismissKeyboardTap() {

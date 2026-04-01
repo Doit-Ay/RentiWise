@@ -157,7 +157,7 @@ class ManageDataViewController: UITableViewController {
     private func showDeleteConfirmation() {
         let alert = UIAlertController(
             title: "Delete your account?",
-            message: "This permanently deletes your login, profile, listings, requests, messages, support history, and saved data from RentiWise. This action cannot be undone.",
+            message: "This permanently deletes your login, profile, listings, requests, messages, support history, and saved data from Rentiwise. This action cannot be undone.",
             preferredStyle: .actionSheet
         )
         

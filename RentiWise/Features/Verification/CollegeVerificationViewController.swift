@@ -337,7 +337,7 @@ final class CollegeVerificationViewController: UIViewController, UITextFieldDele
         successTitle.alpha = 0
         contentStack.addArrangedSubview(successTitle)
 
-        successSub.text = "You can now rent items on RentiWise."
+        successSub.text = "You can now rent items on Rentiwise."
         successSub.font = .systemFont(ofSize: 16)
         successSub.textColor = captionColor
         successSub.textAlignment = .center

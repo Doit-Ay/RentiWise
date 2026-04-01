@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<document type="com.apple.InterfaceBuilder3.CocoaTouch.XIB" version="3.0" toolsVersion="24128" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES">
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.XIB" version="3.0" toolsVersion="24506" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES">
     <device id="retina6_12" orientation="portrait" appearance="light"/>
     <dependencies>
-        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="24063"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="24504"/>
         <capability name="Safe area layout guides" minToolsVersion="9.0"/>
         <capability name="System colors in document resources" minToolsVersion="11.0"/>
         <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
@@ -155,12 +155,12 @@
                                     <nil key="textColor"/>
                                     <nil key="highlightedColor"/>
                                 </label>
-                                <view contentMode="scaleToFill" ambiguous="YES" translatesAutoresizingMaskIntoConstraints="NO" id="UsS-9e-3NG" userLabel="review1Card">
+                                <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="UsS-9e-3NG" userLabel="review1Card">
                                     <rect key="frame" x="16" y="754" width="361" height="98"/>
                                     <color key="backgroundColor" red="0.94921875" green="0.94921875" blue="0.966796875" alpha="1" colorSpace="custom" customColorSpace="displayP3"/>
                                 </view>
                                 <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="5Pd-cM-hKM" userLabel="ratingview">
-                                    <rect key="frame" x="24" y="341" width="58" height="29"/>
+                                    <rect key="frame" x="24" y="341" width="60" height="29"/>
                                     <subviews>
                                         <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Rating" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="3Mu-TS-J4j">
                                             <rect key="frame" x="5" y="5" width="48" height="20"/>
@@ -173,7 +173,7 @@
                                     <constraints>
                                         <constraint firstAttribute="height" constant="29" id="02L-Ag-XhF"/>
                                         <constraint firstItem="3Mu-TS-J4j" firstAttribute="top" secondItem="5Pd-cM-hKM" secondAttribute="top" constant="5" id="GGS-vw-1JG"/>
-                                        <constraint firstAttribute="trailing" secondItem="3Mu-TS-J4j" secondAttribute="trailing" constant="5" id="Ysn-Mu-Pjl"/>
+                                        <constraint firstAttribute="trailing" secondItem="3Mu-TS-J4j" secondAttribute="trailing" constant="7" id="Ysn-Mu-Pjl"/>
                                         <constraint firstItem="3Mu-TS-J4j" firstAttribute="leading" secondItem="5Pd-cM-hKM" secondAttribute="leading" constant="5" id="c8K-QR-jl1"/>
                                     </constraints>
                                     <userDefinedRuntimeAttributes>
@@ -211,13 +211,19 @@
                                     <nil key="highlightedColor"/>
                                 </label>
                                 <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="cjg-5h-rsV">
-                                    <rect key="frame" x="253.66666666666666" y="718.33333333333337" width="123.33333333333334" height="31"/>
+                                    <rect key="frame" x="253.66666666666666" y="717.66666666666663" width="123.33333333333334" height="31"/>
                                     <color key="backgroundColor" red="0.36470588240000001" green="0.66274509800000003" blue="0.71372549019999998" alpha="1" colorSpace="calibratedRGB"/>
                                     <color key="tintColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                     <state key="normal" title="Button"/>
                                     <buttonConfiguration key="configuration" style="plain" title="Write a Review">
                                         <fontDescription key="titleFontDescription" type="system" weight="semibold" pointSize="14"/>
                                     </buttonConfiguration>
+                                    <userDefinedRuntimeAttributes>
+                                        <userDefinedRuntimeAttribute type="boolean" keyPath="ibMasksToBounds" value="YES"/>
+                                        <userDefinedRuntimeAttribute type="number" keyPath="ibCornerRadius">
+                                            <real key="value" value="15"/>
+                                        </userDefinedRuntimeAttribute>
+                                    </userDefinedRuntimeAttributes>
                                     <connections>
                                         <action selector="didtappreviewbutton:" destination="-1" eventType="touchUpInside" id="LKU-x7-REV"/>
                                     </connections>
@@ -238,7 +244,7 @@
                                     </connections>
                                 </button>
                                 <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="VgB-tA-HB5" userLabel="distview">
-                                    <rect key="frame" x="107" y="341" width="110.33333333333331" height="29"/>
+                                    <rect key="frame" x="106" y="341" width="110.33333333333331" height="29"/>
                                     <subviews>
                                         <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="mappin.and.ellipse" catalog="system" translatesAutoresizingMaskIntoConstraints="NO" id="0qC-Ss-W0P">
                                             <rect key="frame" x="13" y="3.6666666666666643" width="19" height="20.333333333333336"/>
@@ -280,6 +286,7 @@
                                 <constraint firstItem="8j9-OS-B7I" firstAttribute="top" secondItem="h6f-Zu-B6F" secondAttribute="bottom" constant="8" id="6mR-0l-tSO"/>
                                 <constraint firstItem="UsS-9e-3NG" firstAttribute="leading" secondItem="HTq-vE-ojZ" secondAttribute="leading" constant="16" id="8js-qP-bRS"/>
                                 <constraint firstAttribute="trailing" secondItem="mOc-DY-2VR" secondAttribute="trailing" constant="30" id="9WO-8F-2Wh"/>
+                                <constraint firstAttribute="bottom" secondItem="UsS-9e-3NG" secondAttribute="bottom" constant="248" id="CcQ-pf-8PO"/>
                                 <constraint firstAttribute="trailing" secondItem="qbW-Ks-r2M" secondAttribute="trailing" constant="16" id="IBi-mc-28U"/>
                                 <constraint firstAttribute="trailing" secondItem="cjg-5h-rsV" secondAttribute="trailing" constant="16" id="OVE-Av-x71"/>
                                 <constraint firstItem="Ns8-kv-Kze" firstAttribute="top" secondItem="l1f-sV-2T5" secondAttribute="bottom" constant="16" id="Onq-YN-6dV"/>
@@ -303,16 +310,16 @@
                                 <constraint firstItem="XIB-82-ZoD" firstAttribute="leading" secondItem="HTq-vE-ojZ" secondAttribute="leading" constant="16" id="hsX-AQ-Y4E"/>
                                 <constraint firstItem="XIB-82-ZoD" firstAttribute="top" secondItem="5Pd-cM-hKM" secondAttribute="bottom" constant="10" id="jhb-h6-hsh"/>
                                 <constraint firstItem="qtp-0D-nta" firstAttribute="top" secondItem="XIB-82-ZoD" secondAttribute="bottom" constant="10" id="kUH-SE-YbZ"/>
-                                <constraint firstItem="cjg-5h-rsV" firstAttribute="top" secondItem="l1f-sV-2T5" secondAttribute="bottom" constant="12" id="mP5-VI-HVt"/>
+                                <constraint firstItem="cjg-5h-rsV" firstAttribute="centerY" secondItem="Ns8-kv-Kze" secondAttribute="centerY" id="mP5-VI-HVt"/>
                                 <constraint firstItem="qbW-Ks-r2M" firstAttribute="top" secondItem="rKy-5t-NAu" secondAttribute="bottom" constant="15" id="mdo-n8-SBd"/>
                                 <constraint firstItem="j4T-0G-1jd" firstAttribute="top" secondItem="qtp-0D-nta" secondAttribute="bottom" constant="31.333333333333371" id="mgY-hT-jS0"/>
                                 <constraint firstItem="l1f-sV-2T5" firstAttribute="leading" secondItem="HTq-vE-ojZ" secondAttribute="leading" constant="16" id="n4L-9K-nvZ"/>
                                 <constraint firstAttribute="trailing" secondItem="qtp-0D-nta" secondAttribute="trailing" constant="16" id="pMW-h8-uds"/>
                                 <constraint firstAttribute="trailing" secondItem="UI3-I1-ds2" secondAttribute="trailing" constant="16" id="pjV-Qe-3H5"/>
                                 <constraint firstItem="UI3-I1-ds2" firstAttribute="top" secondItem="HTq-vE-ojZ" secondAttribute="top" constant="16" id="rUc-CB-KeY"/>
-                                <constraint firstAttribute="height" constant="1100" id="thG-sE-Jbz"/>
+                                <constraint firstAttribute="height" relation="greaterThanOrEqual" constant="1100" id="thG-sE-Jbz"/>
                                 <constraint firstItem="5Pd-cM-hKM" firstAttribute="leading" secondItem="HTq-vE-ojZ" secondAttribute="leading" constant="24" id="urq-IL-Bkx"/>
-                                <constraint firstItem="VgB-tA-HB5" firstAttribute="leading" secondItem="5Pd-cM-hKM" secondAttribute="trailing" constant="25" id="yo8-9V-DN0"/>
+                                <constraint firstItem="VgB-tA-HB5" firstAttribute="leading" secondItem="5Pd-cM-hKM" secondAttribute="trailing" constant="22" id="yo8-9V-DN0"/>
                             </constraints>
                             <variation key="default">
                                 <mask key="subviews">

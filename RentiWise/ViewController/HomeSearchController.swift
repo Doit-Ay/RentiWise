@@ -61,57 +61,12 @@ final class HomeSearchController: NSObject {
     private func configureSearchBar(_ bar: UISearchBar) {
         bar.delegate = self
         bar.placeholder = "Search items"
-        bar.searchBarStyle = .minimal
         bar.autocapitalizationType = .none
         bar.autocorrectionType = .no
         bar.returnKeyType = .search
-
-        // Remove default background/chrome
-        bar.setBackgroundImage(UIImage(), for: .any, barMetrics: .default)
-        bar.backgroundImage = UIImage()
-        bar.backgroundColor = .clear
-
-        // Make the whole bar allow shadow (if applied)
-        bar.clipsToBounds = false
-        // Optional soft shadow (comment out if you don't want it)
-        bar.layer.shadowColor = UIColor.black.cgColor
-        bar.layer.shadowOpacity = 0.06
-        bar.layer.shadowRadius = 6
-        bar.layer.shadowOffset = CGSize(width: 0, height: 2)
-
-        // Round the inner text field to look like iOS pill search
-        if let tf = bar.value(forKey: "searchField") as? UITextField {
-            tf.borderStyle = .none
-            tf.layer.cornerRadius = 18
-            tf.layer.masksToBounds = true
-            tf.backgroundColor = .secondarySystemBackground
-
-            // Subtle 1pt border like system fields
-            tf.layer.borderWidth = 1
-            tf.layer.borderColor = UIColor.separator.cgColor
-
-            // Text and placeholder styling
-            tf.textColor = .label
-            tf.clearButtonMode = .whileEditing
-            tf.attributedPlaceholder = NSAttributedString(
-                string: bar.placeholder ?? "Search",
-                attributes: [.foregroundColor: UIColor.secondaryLabel]
-            )
-
-            // Ensure the magnifying glass uses a subtle tint
-            if let leftIcon = tf.leftView as? UIImageView {
-                leftIcon.tintColor = .secondaryLabel
-            }
-
-            // Slight horizontal padding by adjusting left/right views if needed
-            // (UISearchBar already provides standard padding via leftView)
-            // You can uncomment below to add a tiny spacer on the right if desired:
-            /*
-            let spacer = UIView(frame: CGRect(x: 0, y: 0, width: 4, height: 1))
-            tf.rightView = spacer
-            tf.rightViewMode = .always
-            */
-        }
+        
+        // Remove custom pill-shaping and use the shared standard native appearance
+        bar.applyRentiWiseStyle()
     }
 
     private func configureTable(in view: UIView) {

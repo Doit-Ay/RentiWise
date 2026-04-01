@@ -727,7 +727,7 @@ class DashboardLenderRequestViewController: UIViewController {
         let rows = try JSONDecoder().decode([ActiveRequestRow].self, from: response.data)
         guard rows.isEmpty else {
             throw NSError(
-                domain: "RentiWise.Requests",
+                domain: "Rentiwise.Requests",
                 code: 409,
                 userInfo: [NSLocalizedDescriptionKey: "This item already has an active rental. Complete or cancel the other booking before accepting another request."]
             )

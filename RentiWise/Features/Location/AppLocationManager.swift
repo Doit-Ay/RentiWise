@@ -56,7 +56,7 @@ extension AppLocationManager.LocationError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .permissionDenied:
-            return "Location access is denied. Enable it in Settings > Privacy > Location Services for RentiWise."
+            return "Location access is denied. Enable it in Settings > Privacy > Location Services for Rentiwise."
         case .servicesDisabled:
             return "Location Services are turned off on this device. Please enable Location Services in Settings."
         case .failed:

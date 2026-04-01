@@ -426,7 +426,7 @@ final class SupportChatViewController: UIViewController {
         let lowercased = query.lowercased()
         
         if lowercased.contains("refund") || lowercased.contains("money back") {
-            return "🔄 Refund Help\n\nRentiWise does not hold payments or issue refunds directly. Payments are arranged between the lender and borrower.\n\nIf you've already paid the lender, please:\n• Check the booking chat for the payment agreement\n• Request the refund directly from the lender\n• Share your booking ID with support if there is a dispute\n\nWe can review account activity and help document the issue, but we do not reverse or settle payments in-app."
+            return "🔄 Refund Help\n\nRentiwise does not hold payments or issue refunds directly. Payments are arranged between the lender and borrower.\n\nIf you've already paid the lender, please:\n• Check the booking chat for the payment agreement\n• Request the refund directly from the lender\n• Share your booking ID with support if there is a dispute\n\nWe can review account activity and help document the issue, but we do not reverse or settle payments in-app."
         } else if lowercased.contains("booking") || lowercased.contains("reservation") {
             return "📅 Booking Assistance\n\nI can help you with:\n• Modifying booking dates\n• Checking item availability\n• Understanding pricing\n• Cancellation policies\n\nPlease tell me your booking ID or describe the specific issue you're facing."
         } else if lowercased.contains("damage") || lowercased.contains("broken") {
@@ -434,13 +434,13 @@ final class SupportChatViewController: UIViewController {
         } else if lowercased.contains("account") || lowercased.contains("profile") || lowercased.contains("password") {
             return "👤 Account Support\n\nI can help you with:\n• Password reset\n• Profile updates\n• Email/phone verification\n• Account security\n\nWhat specific account issue are you experiencing? I'll guide you through the solution."
         } else if lowercased.contains("payment") || lowercased.contains("card") || lowercased.contains("charge") || lowercased.contains("upi") {
-            return "💳 Payment Help\n\nRentiWise does not process card payments or store payment details.\n\nFor rentals:\n• Pay the lender directly via UPI after the request is accepted\n• Confirm the amount and UPI ID inside the booking screen\n• Use the booking chat if you need to confirm receipt or resolve an issue\n\nIf a UPI ID is missing or something looks suspicious, send your booking ID and we will help review it."
+            return "💳 Payment Help\n\nRentiwise does not process card payments or store payment details.\n\nFor rentals:\n• Pay the lender directly via UPI after the request is accepted\n• Confirm the amount and UPI ID inside the booking screen\n• Use the booking chat if you need to confirm receipt or resolve an issue\n\nIf a UPI ID is missing or something looks suspicious, send your booking ID and we will help review it."
         } else if lowercased.contains("cancel") {
-            return "❌ Cancellation Help\n\nYou can cancel a request or rental from the booking screen.\n\nIf you've already paid the lender directly:\n• Coordinate any refund with the lender in chat\n• Keep screenshots of the agreement and payment confirmation\n• Contact support with your booking ID if the cancellation becomes a dispute\n\nRentiWise can help review account activity, but payment settlement still happens directly between users."
+            return "❌ Cancellation Help\n\nYou can cancel a request or rental from the booking screen.\n\nIf you've already paid the lender directly:\n• Coordinate any refund with the lender in chat\n• Keep screenshots of the agreement and payment confirmation\n• Contact support with your booking ID if the cancellation becomes a dispute\n\nRentiwise can help review account activity, but payment settlement still happens directly between users."
         } else if lowercased.contains("hi") || lowercased.contains("hello") || lowercased.contains("hey") {
-            return "👋 Hello! Welcome to RentiWise Support.\n\nHow can I help you today? Common topics:\n\n📦 Bookings & Rentals\n💰 Payments & Refunds\n⚙️ Account Issues\n📞 Report a Problem\n\nFeel free to ask anything or choose a topic above!"
+            return "👋 Hello! Welcome to Rentiwise Support.\n\nHow can I help you today? Common topics:\n\n📦 Bookings & Rentals\n💰 Payments & Refunds\n⚙️ Account Issues\n📞 Report a Problem\n\nFeel free to ask anything or choose a topic above!"
         } else {
-            return "✨ Thank you for contacting RentiWise Support!\n\nA support representative will review your inquiry and respond within 2-4 hours. For faster assistance, please provide:\n\n• Your booking ID (if applicable)\n• Detailed description of the issue\n• Any relevant screenshots\n\nYou can also check our FAQ in the app settings while you wait."
+            return "✨ Thank you for contacting Rentiwise Support!\n\nA support representative will review your inquiry and respond within 2-4 hours. For faster assistance, please provide:\n\n• Your booking ID (if applicable)\n• Detailed description of the issue\n• Any relevant screenshots\n\nYou can also check our FAQ in the app settings while you wait."
         }
     }
     

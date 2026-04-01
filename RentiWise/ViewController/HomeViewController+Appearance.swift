@@ -206,7 +206,7 @@ extension HomeViewController {
         let baseColor = label.textColor ?? .label
         let baseFont = label.font ?? UIFont.systemFont(ofSize: 14)
 
-        let text = "You  RentiWise"
+        let text = "You  Rentiwise"
         let attr = NSMutableAttributedString(string: text, attributes: [
             .foregroundColor: baseColor,
             .font: baseFont
