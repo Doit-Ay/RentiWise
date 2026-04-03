@@ -36,24 +36,26 @@ final class PhoneVerificationService {
             let message: String?
         }
         
-        // Use Data.self to receive the raw JSON response
+        // Use the Decodable overload to get the typed response directly
         let responseData: Data = try await SupabaseManager.shared.client.functions
             .invoke("send-phone-otp", options: .init(body: payload))
             
+        // Parse the response to check for server-side errors
         if let rawString = String(data: responseData, encoding: .utf8) {
-            print("[PhoneOTP] Raw response: \(rawString)")
-            do {
-                let edgeResp = try JSONDecoder().decode(EdgeResponse.self, from: responseData)
-                if let errString = edgeResp.error {
-                    throw VerificationError.serverError(errString)
-                }
-            } catch {
-                // If JSON fails to decode, just throw the raw string so user can read it!
-                throw VerificationError.serverError(rawString.isEmpty ? "Empty response" : rawString)
-            }
+            debugLog("[PhoneOTP] Raw response: \(rawString)")
         }
+        
+        // Try to decode and check for server-reported errors
+        if let edgeResp = try? JSONDecoder().decode(EdgeResponse.self, from: responseData) {
+            if let errString = edgeResp.error, !errString.isEmpty {
+                throw VerificationError.serverError(errString)
+            }
+            // success: true — OTP was sent
+        }
+        // If JSON decode fails, the HTTP status was already 2xx (SDK ensures this),
+        // so the edge function returned a non-JSON success. Treat as success.
 
-        print("[PhoneOTP] SMS sent to \(e164)")
+        debugLog("[PhoneOTP] SMS sent to \(e164)")
     }
 
     // MARK: - Verify OTP
@@ -96,7 +98,7 @@ final class PhoneVerificationService {
 
             return true
         } catch {
-            print("[PhoneOTP] Verify error: \(error)")
+            debugLog("[PhoneOTP] Verify error: \(error)")
             return false
         }
     }

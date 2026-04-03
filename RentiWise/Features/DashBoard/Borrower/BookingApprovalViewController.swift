@@ -577,8 +577,11 @@ class BookingApprovalViewController: UIViewController {
         // Clear any attributed title set in Storyboard so setTitle(_:for:) works
         returnButton?.setAttributedTitle(nil, for: .normal)
         returnButton?.setTitleColor(.white, for: .normal)
-        
-        let fallbackTitle = (self.status == .pending) ? "Cancel Request" : "Return Item"
+        let rentalStatus = request?.rentalStatus ?? .pending
+        let fallbackTitle = rentalStatus.borrowerPrimaryActionTitle ?? "Return Item"
+        let fallbackBackgroundColor: UIColor = rentalStatus.borrowerPrimaryActionIsDestructive
+            ? .systemRed
+            : UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1)
         
         // CROSS-DISABLE: If an extension is pending, you cannot return yet
         // (Once extension is accepted, both buttons re-enable so user can extend again or return)
@@ -613,17 +616,14 @@ class BookingApprovalViewController: UIViewController {
                 returnButton?.alpha = 1.0
             default:
                 returnButton?.setTitle(fallbackTitle, for: .normal)
+                returnButton?.backgroundColor = fallbackBackgroundColor
                 returnButton?.isEnabled = true
                 returnButton?.alpha = 1.0
             }
         } else {
             returnStatusLabel?.isHidden = true
             returnButton?.setTitle(fallbackTitle, for: .normal)
-            if self.status == .pending {
-                returnButton?.backgroundColor = .systemRed
-            } else {
-                returnButton?.backgroundColor = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1)
-            }
+            returnButton?.backgroundColor = fallbackBackgroundColor
             returnButton?.isEnabled = true
             returnButton?.alpha = 1.0
         }
@@ -977,6 +977,7 @@ class BookingApprovalViewController: UIViewController {
     
     @IBAction func returnItemButtonTapped(_ sender: UIButton) {
         guard let req = request else { return }
+        let rentalStatus = req.rentalStatus
 
         // If return is pending → act as "Cancel Return"
         if currentReturnRequestStatus == "pending" {
@@ -984,11 +985,13 @@ class BookingApprovalViewController: UIViewController {
             return
         }
 
-        // If main booking is still pending → it's the "Cancel Request" action
-        if status == .pending {
+        // Before pickup is verified, borrower can only cancel the request.
+        if rentalStatus.borrowerCanCancelBeforePickup {
             cancelRequest()
             return
         }
+
+        guard rentalStatus.borrowerShowsExtendAndReturnActions else { return }
 
         // Approved: open Return Proof flow
         let returnVC = ReturnProofViewController(nibName: "ReturnProofViewController", bundle: nil)
@@ -1055,7 +1058,7 @@ class BookingApprovalViewController: UIViewController {
                     NotificationCenter.default.post(
                         name: BookingApprovalViewController.requestCancelledNotification,
                         object: nil,
-                        userInfo: ["requestId": reqId]
+                        userInfo: ["requestId": reqId, "status": "cancelled"]
                     )
                     NotificationCenter.default.post(name: Notification.Name("requestsShouldRefresh"), object: nil)
 
@@ -1170,14 +1173,7 @@ class BookingApprovalViewController: UIViewController {
         
         // Determine the current rental phase from DB status
         let dbStatus = request?.rentalStatus ?? .pending
-        
-        // isPending: borrower submitted request, lender hasn't decided
-        let isPending = (dbStatus == .pending)
-        // isAccepted: lender accepted, awaiting OTP pickup verification
-        let isAccepted = (dbStatus == .accepted)
-        // isActive: pickup verified, item is with borrower
-        let isActive = (dbStatus == .approved || dbStatus == .returned)
-        
+
         let attrs: [NSAttributedString.Key: Any] = [
             .font: UIFont.systemFont(ofSize: 18, weight: .semibold)
         ]
@@ -1191,22 +1187,14 @@ class BookingApprovalViewController: UIViewController {
             b.titleLabel?.font = .systemFont(ofSize: 18, weight: .semibold)
         }
         
-        if isPending {
-            // Borrower can cancel their pending request
+        if dbStatus.borrowerCanCancelBeforePickup {
+            // Borrower can cancel while the request is pending or accepted, until pickup is verified.
             returnButton?.setAttributedTitle(NSAttributedString(string: "Cancel Request", attributes: attrs), for: .normal)
             returnButton?.backgroundColor = .systemRed
             returnButton?.isHidden = false
             extendButton?.isHidden = true
             extendReturnButtonsStack?.isHidden = false
-        } else if isAccepted {
-            // Lender accepted but pickup OTP not verified yet
-            // Borrower can still cancel, but cannot extend/return (item not picked up yet)
-            returnButton?.setAttributedTitle(NSAttributedString(string: "Cancel Request", attributes: attrs), for: .normal)
-            returnButton?.backgroundColor = .systemRed
-            returnButton?.isHidden = false
-            extendButton?.isHidden = true
-            extendReturnButtonsStack?.isHidden = false
-        } else if isActive {
+        } else if dbStatus.borrowerShowsExtendAndReturnActions {
             // Active rental — borrower can extend or return
             returnButton?.setAttributedTitle(NSAttributedString(string: "Return Item", attributes: attrs), for: .normal)
             returnButton?.backgroundColor = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1)

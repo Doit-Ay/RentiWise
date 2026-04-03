@@ -166,22 +166,16 @@ final class MyRentalsViewController: UIViewController {
     // MARK: - Cancel request handler
     private func handleRequestCancelled(_ notification: Notification) {
         guard let requestId = notification.userInfo?["requestId"] as? String else { return }
+        let updatedStatus = (notification.userInfo?["status"] as? String) ?? "cancelled"
 
         // Update in allRequests
         if let index = allRequests.firstIndex(where: { $0.id == requestId }) {
             var updatedRequest = allRequests[index]
-            updatedRequest.status = "cancelled"
+            updatedRequest.status = updatedStatus
             allRequests[index] = updatedRequest
         }
 
-        // Update in visibleRequests and reload section
-        if let sectionIndex = visibleRequests.firstIndex(where: { $0.id == requestId }) {
-            var updatedVisibleRequest = visibleRequests[sectionIndex]
-            updatedVisibleRequest.status = "cancelled"
-            visibleRequests[sectionIndex] = updatedVisibleRequest
-            
-            tableView.reloadSections(IndexSet(integer: sectionIndex), with: .automatic)
-        }
+        applySearchAndFilters()
     }
 
     override func viewWillDisappear(_ animated: Bool) {

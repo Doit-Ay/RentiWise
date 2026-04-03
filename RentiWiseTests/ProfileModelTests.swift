@@ -3,10 +3,39 @@ import XCTest
 
 final class ProfileModelTests: XCTestCase {
 
+    private func makeProfile(
+        id: String,
+        fullName: String,
+        email: String,
+        phone: String,
+        upiId: String
+    ) -> UserProfile {
+        UserProfile(
+            id: id,
+            fullName: fullName,
+            email: email,
+            phone: phone,
+            phoneVerified: true,
+            kycStatus: "approved",
+            upiId: upiId,
+            collegeEmail: "",
+            isCollegeVerified: false,
+            averageRating: 4.6,
+            totalRentalsAsBorrower: 2,
+            borrowFreezeUntil: nil
+        )
+    }
+
     // MARK: - UserProfile
 
     func testUserProfileInitialization() {
-        let profile = UserProfile(id: "u1", fullName: "John Doe", email: "john@example.com", phone: "+911234567890", upiId: "john@upi")
+        let profile = makeProfile(
+            id: "u1",
+            fullName: "John Doe",
+            email: "john@example.com",
+            phone: "+911234567890",
+            upiId: "john@upi"
+        )
         XCTAssertEqual(profile.id, "u1")
         XCTAssertEqual(profile.fullName, "John Doe")
         XCTAssertEqual(profile.email, "john@example.com")
@@ -14,7 +43,7 @@ final class ProfileModelTests: XCTestCase {
     }
 
     func testUserProfileEmptyFields() {
-        let profile = UserProfile(id: "u2", fullName: "", email: "", phone: "", upiId: "")
+        let profile = makeProfile(id: "u2", fullName: "", email: "", phone: "", upiId: "")
         XCTAssertTrue(profile.fullName.isEmpty)
         XCTAssertTrue(profile.email.isEmpty)
         XCTAssertTrue(profile.phone.isEmpty)
@@ -29,8 +58,7 @@ final class ProfileModelTests: XCTestCase {
             "email": "user@test.com",
             "full_name": "Test User",
             "phone": "123456",
-            "profile_photo_url": "https://photo.com/img.jpg",
-            "upi_id": "user@upi"
+            "profile_photo_url": "https://photo.com/img.jpg"
         }
         """.data(using: .utf8)!
 
@@ -49,8 +77,7 @@ final class ProfileModelTests: XCTestCase {
             "email": null,
             "full_name": null,
             "phone": null,
-            "profile_photo_url": null,
-            "upi_id": null
+            "profile_photo_url": null
         }
         """.data(using: .utf8)!
 

@@ -47,6 +47,45 @@
 			);
 			target = 3FE49D5E2EA2FA5C00C11A8F /* RentiWise */;
 		};
+		4A41F9E231A9F52F00112233 /* Exceptions for "RentiWiseTests" folder in "RentiWiseTests" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				"AddressModelTests 2.swift",
+				"AuthModelTests 2.swift",
+				"AuthValidationTests 2.swift",
+				"ChatModelTests 2.swift",
+				"ChatServiceErrorTests 2.swift",
+				"DashboardViewControllerTests 2.swift",
+				"DistanceFormattingTests 2.swift",
+				"DuplicateRequestTests 2.swift",
+				"E2E_AddItemFlowTests 2.swift",
+				"E2E_BrowseAndRequestFlowTests 2.swift",
+				"E2E_ChatAndSupportFlowTests 2.swift",
+				"E2E_ExtendRentalFlowTests 2.swift",
+				"E2E_LenderAcceptRejectFlowTests 2.swift",
+				"E2E_PaymentAndPickupFlowTests 2.swift",
+				"E2E_ReturnItemFlowTests 2.swift",
+				"HomeViewControllerTests 2.swift",
+				"ItemModelTests 2.swift",
+				"ManualQAChecklist 2.swift",
+				"NetworkMonitorTests 2.swift",
+				"OTPSystemTests 2.swift",
+				"PaymentModelTests 2.swift",
+				"Phase2FeatureTests 2.swift",
+				"Phase3FeatureTests 2.swift",
+				"PricingLogicTests 2.swift",
+				"ProfileModelTests 2.swift",
+				"RequestModelTests 2.swift",
+				"RequestStatusFlowTests 2.swift",
+				"ReviewGateTests 2.swift",
+				"ReviewModelTests 2.swift",
+				"StorageURLBuilderTests 2.swift",
+				"UPIConfirmationTests 2.swift",
+				"UPIProfileTests 2.swift",
+				"VerificationTests 2.swift",
+			);
+			target = 3FE49D742EA2FA5D00C11A8F /* RentiWiseTests */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -60,6 +99,9 @@
 		};
 		3FE49D782EA2FA5D00C11A8F /* RentiWiseTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				4A41F9E231A9F52F00112233 /* Exceptions for "RentiWiseTests" folder in "RentiWiseTests" target */,
+			);
 			path = RentiWiseTests;
 			sourceTree = "<group>";
 		};
@@ -341,7 +383,7 @@
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UIUserInterfaceStyle = Light;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -384,7 +426,7 @@
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UIUserInterfaceStyle = Light;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -456,7 +498,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
@@ -513,7 +555,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
@@ -530,7 +572,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = aditya.RentiWiseTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -551,7 +593,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = aditya.RentiWiseTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";

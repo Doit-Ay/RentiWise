@@ -43,9 +43,9 @@ final class IAPManager {
                 Self.verifiedBadgeProductId
             ]
             products = try await Product.products(for: productIds)
-            print("[IAP] Fetched \(products.count) products")
+            debugLog("[IAP] Fetched \(products.count) products")
         } catch {
-            print("[IAP] Failed to fetch products: \(error)")
+            debugLog("[IAP] Failed to fetch products: \(error)")
         }
     }
 
@@ -63,15 +63,15 @@ final class IAPManager {
                 transactionId: String(transaction.id)
             )
             await transaction.finish()
-            print("[IAP] Purchase successful: \(product.id)")
+            debugLog("[IAP] Purchase successful: \(product.id)")
             return true
 
         case .userCancelled:
-            print("[IAP] User cancelled purchase")
+            debugLog("[IAP] User cancelled purchase")
             return false
 
         case .pending:
-            print("[IAP] Purchase pending (Ask to Buy, etc.)")
+            debugLog("[IAP] Purchase pending (Ask to Buy, etc.)")
             return false
 
         @unknown default:
@@ -97,7 +97,7 @@ final class IAPManager {
             let rows = try JSONDecoder().decode([EntRow].self, from: resp.data)
             return !rows.isEmpty
         } catch {
-            print("[IAP] Error checking pro status: \(error)")
+            debugLog("[IAP] Error checking pro status: \(error)")
             return false
         }
     }
@@ -160,7 +160,7 @@ final class IAPManager {
                 )
                 await transaction.finish()
             } catch {
-                print("[IAP] Transaction update error: \(error)")
+                debugLog("[IAP] Transaction update error: \(error)")
             }
         }
     }
@@ -186,13 +186,22 @@ final class IAPManager {
                 "validate-iap-receipt",
                 options: .init(body: body)
             )
-            print("[IAP] Server validation complete for \(productId)")
+            debugLog("[IAP] Server validation complete for \(productId)")
         } catch {
-            print("[IAP] Server validation failed: \(error)")
+            debugLog("[IAP] Server validation failed: \(error)")
         }
     }
 
     private func currentUserId() async -> String? {
         return await SupabaseManager.shared.currentUserId()
+    }
+
+    // MARK: - Restore Purchases (TC-P03)
+
+    /// Syncs with the App Store to restore previously purchased subscriptions
+    /// and non-consumables. Must be accessible in the UI per App Store guidelines.
+    func restorePurchases() async throws {
+        try await AppStore.sync()
+        debugLog("[IAP] Restore purchases completed (AppStore.sync)")
     }
 }

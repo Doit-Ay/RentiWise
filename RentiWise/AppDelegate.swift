@@ -14,8 +14,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         // Start preloading immediately (while launch screen is still showing)
         PreloadManager.shared.startPreloading()
-        // Request local notification permission for rental reminders
-        NotificationService.shared.requestPermissionIfNeeded()
+        // Notification permission is requested lazily when the first rental
+        // reminder needs to be scheduled (Apple Guideline 5.1.2 — TC-PR03).
         return true
     }
 

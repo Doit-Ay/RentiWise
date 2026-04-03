@@ -163,6 +163,23 @@ final class UpgradeProViewController: UIViewController {
         laterButton.setTitleColor(.secondaryLabel, for: .normal)
         laterButton.addTarget(self, action: #selector(laterTapped), for: .touchUpInside)
         contentStack.addArrangedSubview(laterButton)
+
+        // Restore Purchases (mandatory per App Store Guidelines — TC-P03)
+        let restoreButton = UIButton(type: .system)
+        restoreButton.setTitle("Restore Purchases", for: .normal)
+        restoreButton.titleLabel?.font = .systemFont(ofSize: 15)
+        restoreButton.setTitleColor(.secondaryLabel, for: .normal)
+        restoreButton.addTarget(self, action: #selector(restoreTapped), for: .touchUpInside)
+        contentStack.addArrangedSubview(restoreButton)
+
+        // Auto-renewal disclosure (required by Apple before showing StoreKit sheet)
+        let disclosureLabel = UILabel()
+        disclosureLabel.text = "Subscription auto-renews monthly. Cancel anytime in Settings → Subscriptions."
+        disclosureLabel.font = .systemFont(ofSize: 12)
+        disclosureLabel.textColor = .tertiaryLabel
+        disclosureLabel.textAlignment = .center
+        disclosureLabel.numberOfLines = 0
+        contentStack.addArrangedSubview(disclosureLabel)
     }
 
     // MARK: - Actions
@@ -199,6 +216,29 @@ final class UpgradeProViewController: UIViewController {
 
     @objc private func laterTapped() {
         navigationController?.popViewController(animated: true)
+    }
+
+    @objc private func restoreTapped() {
+        Task {
+            do {
+                try await IAPManager.shared.restorePurchases()
+                let isPro = await IAPManager.shared.isProUser()
+                await MainActor.run {
+                    if isPro {
+                        showAlert(title: "Purchases Restored", message: "Your Pro subscription has been restored.") { [weak self] in
+                            self?.onSubscribed?()
+                            self?.navigationController?.popViewController(animated: true)
+                        }
+                    } else {
+                        showAlert(title: "No Purchases Found", message: "No previous purchases were found for this Apple ID.")
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    showAlert(title: "Restore Failed", message: error.localizedDescription)
+                }
+            }
+        }
     }
 
     private func showAlert(title: String, message: String, completion: (() -> Void)? = nil) {

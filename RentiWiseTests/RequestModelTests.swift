@@ -120,4 +120,20 @@ final class RequestModelTests: XCTestCase {
         XCTAssertNil(itemLite.category)
         XCTAssertTrue(itemLite.images.isEmpty)
     }
+
+    func testItemLiteDecodingMissingImagesDefaultsToEmptyArray() throws {
+        let json = """
+        {
+            "id": "il-3",
+            "title": "Projector",
+            "price_per_day": 150.0,
+            "category": "Electronics"
+        }
+        """.data(using: .utf8)!
+
+        let itemLite = try JSONDecoder().decode(ItemLite.self, from: json)
+        XCTAssertEqual(itemLite.id, "il-3")
+        XCTAssertTrue(itemLite.images.isEmpty)
+        XCTAssertEqual(itemLite.category, "Electronics")
+    }
 }

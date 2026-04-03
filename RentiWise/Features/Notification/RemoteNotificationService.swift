@@ -103,10 +103,10 @@ enum RemoteNotificationService {
                     .from("notifications")
                     .insert(payload)
                     .execute()
-                print("[NotificationService] Sent \(type) to user \(userId)")
+                debugLog("[NotificationService] Sent \(type) to user \(userId)")
             } catch {
                 // Fire-and-forget: log but don't crash
-                print("[NotificationService] Failed to send \(type): \(error.localizedDescription)")
+                debugLog("[NotificationService] Failed to send \(type): \(error.localizedDescription)")
             }
         }
     }

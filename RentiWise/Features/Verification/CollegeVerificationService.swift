@@ -40,12 +40,30 @@ final class CollegeVerificationService {
             throw VerificationError.notLoggedIn
         }
 
+        struct EdgeResponse: Decodable {
+            let success: Bool?
+            let error: String?
+            let message: String?
+        }
+
         // Call edge function — it generates OTP, stores hash, sends email
         let payload: [String: String] = ["email": email, "user_id": userId]
-        try await SupabaseManager.shared.client.functions
+        let responseData: Data = try await SupabaseManager.shared.client.functions
             .invoke("send-email-otp", options: .init(body: payload))
 
-        print("[EmailOTP] Email sent to \(email)")
+        // Parse the response to check for server-side errors
+        if let rawString = String(data: responseData, encoding: .utf8) {
+            debugLog("[EmailOTP] Raw response: \(rawString)")
+        }
+
+        // Check for server-reported errors
+        if let edgeResp = try? JSONDecoder().decode(EdgeResponse.self, from: responseData) {
+            if let errString = edgeResp.error, !errString.isEmpty {
+                throw VerificationError.serverError(errString)
+            }
+        }
+
+        debugLog("[EmailOTP] Email sent to \(email)")
     }
 
     // MARK: - Verify OTP
@@ -88,7 +106,7 @@ final class CollegeVerificationService {
 
             return true
         } catch {
-            print("[EmailOTP] Verify error: \(error)")
+            debugLog("[EmailOTP] Verify error: \(error)")
             return false
         }
     }

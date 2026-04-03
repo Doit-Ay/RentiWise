@@ -66,6 +66,37 @@ public enum RentalStatus: String, CaseIterable, Codable {
         }
     }
 
+    /// Borrower can still cancel before pickup is verified.
+    var borrowerCanCancelBeforePickup: Bool {
+        switch self {
+        case .pending, .accepted:
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// Borrower can use extend/return actions only once the rental is active.
+    var borrowerShowsExtendAndReturnActions: Bool {
+        switch self {
+        case .approved, .returned:
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// Main borrower CTA used in the booking detail screen.
+    var borrowerPrimaryActionTitle: String? {
+        if borrowerCanCancelBeforePickup { return "Cancel Request" }
+        if borrowerShowsExtendAndReturnActions { return "Return Item" }
+        return nil
+    }
+
+    var borrowerPrimaryActionIsDestructive: Bool {
+        borrowerCanCancelBeforePickup
+    }
+
     /// Lender can accept or deny (only while pending).
     public var canLenderDecide: Bool {
         self == .pending
@@ -155,4 +186,24 @@ public struct ItemLite: Codable {
     public let images: [String]
     public let price_per_day: Double
     public let category: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case images
+        case price_per_day
+        case category
+    }
+}
+
+public extension ItemLite {
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        id = try container.decode(String.self, forKey: .id)
+        title = try container.decode(String.self, forKey: .title)
+        images = try container.decodeIfPresent([String].self, forKey: .images) ?? []
+        price_per_day = try container.decode(Double.self, forKey: .price_per_day)
+        category = try container.decodeIfPresent(String.self, forKey: .category)
+    }
 }

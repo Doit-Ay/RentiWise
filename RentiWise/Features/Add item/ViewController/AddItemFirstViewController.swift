@@ -100,17 +100,11 @@ class AddItemFirstViewController: UIViewController,
     // MARK: - UPI Warning Banner
 
     private func checkUpiIdAndShowBanner() async {
-        guard let userId = await SupabaseManager.shared.currentUserId() else { return }
         do {
-            struct UpiRow: Decodable { let upi_id: String? }
-            let resp = try await SupabaseManager.shared.client
-                .from("users")
-                .select("upi_id")
-                .eq("id", value: userId)
-                .single()
-                .execute()
-            let row = try JSONDecoder().decode(UpiRow.self, from: resp.data)
-            if let upi = row.upi_id, !upi.isEmpty { return } // UPI ID is set, do nothing
+            let profile = try await ProfileService().fetchCurrentUserProfile()
+            if !profile.upiId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return
+            }
         } catch {
             // If fetch fails, still show the banner to be safe
         }

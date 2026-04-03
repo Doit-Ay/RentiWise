@@ -10,14 +10,33 @@ import XCTest
 
 final class UPIProfileTests: XCTestCase {
 
+    private func makeProfile(
+        upiId: String = "",
+        collegeEmail: String = "",
+        isCollegeVerified: Bool = false
+    ) -> UserProfile {
+        UserProfile(
+            id: "user-1",
+            fullName: "Test User",
+            email: "test@test.com",
+            phone: "1234567890",
+            phoneVerified: true,
+            kycStatus: "approved",
+            upiId: upiId,
+            collegeEmail: collegeEmail,
+            isCollegeVerified: isCollegeVerified,
+            averageRating: 4.8,
+            totalRentalsAsBorrower: 3,
+            borrowFreezeUntil: nil
+        )
+    }
+
     // MARK: - TC-24: UPI Field Present in Edit Profile
     /// Expected: A "UPI ID" text field is visible under a "UPI" section
     func testTC24_UPIFieldPresent() {
-        let vc = EditProfileViewController(fullName: "Test", email: "test@test.com", phone: "1234567890", upiId: "")
+        let vc = EditProfileViewController(profile: makeProfile())
         vc.loadViewIfNeeded()
 
-        // Verify the VC has 4 sections (Name, Contact, UPI, empty footer)
-        // Section index 2 should be the UPI section
         let sectionCount = vc.numberOfSections(in: vc.tableView)
         XCTAssertGreaterThanOrEqual(sectionCount, 3, "Should have at least 3 sections including UPI")
     }
@@ -25,13 +44,15 @@ final class UPIProfileTests: XCTestCase {
     // MARK: - TC-25: UPI ID Saves and Persists (Manual QA — requires Supabase)
     func testTC25_UPIIDSavesAndPersists_MANUAL_QA() {
         // Requires live Supabase.
-        // Stub: verify the onSaved closure returns 3 parameters including upiId
-        let vc = EditProfileViewController(fullName: "Test", email: "test@test.com", phone: "1234567890", upiId: "old@upi")
+        // Stub: verify the onSaved closure surfaces the saved profile including upiId.
+        let vc = EditProfileViewController(profile: makeProfile(upiId: "old@upi"))
         var receivedUpiId = ""
-        vc.onSaved = { _, _, upiId in
-            receivedUpiId = upiId
+        vc.onSaved = { savedProfile in
+            receivedUpiId = savedProfile.upiId
         }
-        XCTAssertNotNil(vc.onSaved, "onSaved should accept 3 parameters (name, phone, upiId)")
+        XCTAssertNotNil(vc.onSaved, "onSaved should provide the saved UserProfile")
+        vc.onSaved?(makeProfile(upiId: "new@upi"))
+        XCTAssertEqual(receivedUpiId, "new@upi")
     }
 
     // MARK: - TC-26: UPI ID Validation — No @ Symbol
@@ -74,12 +95,38 @@ final class UPIProfileTests: XCTestCase {
 final class UserProfileModelTests: XCTestCase {
 
     func testUserProfileIncludesUPIId() {
-        let profile = UserProfile(id: "user-1", fullName: "Test User", email: "test@test.com", phone: "1234567890", upiId: "test@upi")
+        let profile = UserProfile(
+            id: "user-1",
+            fullName: "Test User",
+            email: "test@test.com",
+            phone: "1234567890",
+            phoneVerified: true,
+            kycStatus: "approved",
+            upiId: "test@upi",
+            collegeEmail: "",
+            isCollegeVerified: false,
+            averageRating: 4.9,
+            totalRentalsAsBorrower: 1,
+            borrowFreezeUntil: nil
+        )
         XCTAssertEqual(profile.upiId, "test@upi", "UserProfile should store upiId")
     }
 
     func testUserProfileEmptyUPIId() {
-        let profile = UserProfile(id: "user-1", fullName: "Test User", email: "test@test.com", phone: "1234567890", upiId: "")
+        let profile = UserProfile(
+            id: "user-1",
+            fullName: "Test User",
+            email: "test@test.com",
+            phone: "1234567890",
+            phoneVerified: false,
+            kycStatus: "pending",
+            upiId: "",
+            collegeEmail: "",
+            isCollegeVerified: false,
+            averageRating: 0,
+            totalRentalsAsBorrower: 0,
+            borrowFreezeUntil: nil
+        )
         XCTAssertEqual(profile.upiId, "", "Empty UPI ID should be allowed")
     }
 
@@ -88,13 +135,11 @@ final class UserProfileModelTests: XCTestCase {
         {
             "id": "user-1",
             "full_name": "Test User",
-            "email": "test@test.com",
-            "phone": "1234567890",
             "upi_id": "test@ybl"
         }
         """.data(using: .utf8)!
 
-        let row = try JSONDecoder().decode(DBUserRow.self, from: json)
+        let row = try JSONDecoder().decode(DBUserProfileRow.self, from: json)
         XCTAssertEqual(row.upi_id, "test@ybl", "DBUserRow should decode upi_id")
     }
 
@@ -103,13 +148,11 @@ final class UserProfileModelTests: XCTestCase {
         {
             "id": "user-2",
             "full_name": "No UPI User",
-            "email": "no@upi.com",
-            "phone": "0000000000",
             "upi_id": null
         }
         """.data(using: .utf8)!
 
-        let row = try JSONDecoder().decode(DBUserRow.self, from: json)
+        let row = try JSONDecoder().decode(DBUserProfileRow.self, from: json)
         XCTAssertNil(row.upi_id, "DBUserRow should handle null upi_id")
     }
 }

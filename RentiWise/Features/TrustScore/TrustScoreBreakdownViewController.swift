@@ -144,7 +144,7 @@ final class TrustScoreBreakdownViewController: UIViewController {
             completedRentals = (lenderResp.count ?? 0) + (borrowerResp.count ?? 0)
 
         } catch {
-            print("[TrustScore] Error fetching data: \(error)")
+            debugLog("[TrustScore] Error fetching data: \(error)")
         }
 
         await MainActor.run {

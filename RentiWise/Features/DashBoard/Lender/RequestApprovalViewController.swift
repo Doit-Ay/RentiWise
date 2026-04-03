@@ -482,7 +482,7 @@ class RequestApprovalViewController: UIViewController {
                     NotificationCenter.default.post(
                         name: BookingApprovalViewController.requestCancelledNotification,
                         object: nil,
-                        userInfo: ["requestId": self.bookingId]
+                        userInfo: ["requestId": self.bookingId, "status": "completed"]
                     )
                 }
 

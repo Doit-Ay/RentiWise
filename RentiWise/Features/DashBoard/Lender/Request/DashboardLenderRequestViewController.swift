@@ -638,6 +638,21 @@ class DashboardLenderRequestViewController: UIViewController {
         navigationItem.rightBarButtonItem?.isEnabled = enabled
     }
 
+    private func assertCurrentLenderCanAcceptRequest() async throws {
+        let profile = try await ProfileService().fetchCurrentUserProfile()
+        let upiId = profile.upiId.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !upiId.isEmpty else {
+            throw NSError(
+                domain: "Rentiwise.Requests",
+                code: 422,
+                userInfo: [
+                    NSLocalizedDescriptionKey: "Add your UPI ID in Profile before accepting a request so the borrower can pay you directly."
+                ]
+            )
+        }
+    }
+
     private func updateStatus(to newStatus: String) async {
         guard var current = request else { return }
         await MainActor.run { self.setButtonsEnabled(false) }
@@ -646,6 +661,7 @@ class DashboardLenderRequestViewController: UIViewController {
             let nextPickupCode: String?
             switch newStatus {
             case "accepted":
+                try await assertCurrentLenderCanAcceptRequest()
                 try await assertNoActiveRentalConflict(for: current)
                 nextPickupCode = current.pickup_code?.isEmpty == false ? current.pickup_code : generatePickupCode()
             case "denied":

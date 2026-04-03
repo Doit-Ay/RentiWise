@@ -163,13 +163,22 @@ enum LegalDocument {
             - Users can report listings, conversations, and profiles, and can block other users inside the app.
             - RentiWise may remove content, suspend accounts, or restrict activity to protect the community.
 
-            Disputes and support:
+            Damage and returns:
+            - Borrowers must return items by the agreed return date and in substantially the same condition shown at handoff, allowing for normal disclosed wear.
+            - If an item is damaged, the lender should file an in-app damage report with photos and a description as soon as the item is returned.
+            - If an item is not returned, the lender should open an in-app dispute immediately so the platform can review the record and account activity.
+
+            Refunds and dispute resolution:
             - Users should first document and discuss issues in the in-app chat.
-            - Damage, return, refund, or conduct issues should also be reported through the in-app Support screen.
+            - Damage, non-return, refund, or conduct issues should also be reported through the in-app Support screen.
+            - Approved rental refunds are generally processed within the timeline shown in the relevant in-app payment or support status, and may vary based on the payment rail used between users.
+            - RentiWise may review listing data, chat history, timestamps, return proof, and safety reports to help resolve disputes.
             - You can contact the team at support@rentiwise.com for escalations or account help.
 
-            Platform limits:
+            Liability and platform limits:
             - RentiWise is not a party to the final lending agreement between users.
+            - Users remain responsible for item damage, loss, non-return, fraudulent conduct, and any payment dispute they create.
+            - To the extent permitted by law, RentiWise’s liability is limited to the platform services it directly provides and does not extend to independent agreements or off-platform conduct between users.
             - We may review platform activity, listing data, support tickets, and safety reports to investigate abuse or policy violations.
             - By using the app, you accept responsibility for the lending decisions you make with other users.
             """

@@ -147,15 +147,12 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
             // In ownItem mode we show the ellipsis; no Share button.
             return
         }
-        let shareImage = UIImage(systemName: "square.and.arrow.up")
-        let shareBtn = UIBarButtonItem(image: shareImage, style: .plain, target: self, action: #selector(didTapShare))
-        shareBtn.tintColor = brandTeal
-        let safetyImage = UIImage(systemName: "ellipsis.circle")
-        let safetyBtn = UIBarButtonItem(image: safetyImage, style: .plain, target: self, action: #selector(didTapSafetyMenu))
-        safetyBtn.tintColor = brandTeal
-        self.shareButton = shareBtn
-        self.safetyButton = safetyBtn
-        navigationItem.rightBarButtonItems = [shareBtn, safetyBtn]
+        // Single ellipsis button that combines Share + Safety tools
+        let menuImage = UIImage(systemName: "ellipsis.circle")
+        let menuBtn = UIBarButtonItem(image: menuImage, style: .plain, target: self, action: #selector(didTapNormalModeMenu))
+        menuBtn.tintColor = brandTeal
+        self.safetyButton = menuBtn
+        navigationItem.rightBarButtonItems = [menuBtn]
     }
 
     @objc private func didTapShare() {
@@ -1455,7 +1452,10 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
     
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        if selectedItem != nil { bindItemToUI() }
+        // Refresh wishlist state only; avoid re-calling bindItemToUI to prevent duplicate nav buttons
+        Task { [weak self] in
+            await self?.refreshWishlistState()
+        }
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -1584,6 +1584,45 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
     @objc private func didTapOwnerCard() {
         guard let item = selectedItem else { return }
         UserProfileViewController.open(from: self, userId: item.owner_id, displayName: ownerDisplayName)
+    }
+
+    @objc private func didTapNormalModeMenu(_ sender: UIBarButtonItem) {
+        guard let item = selectedItem else { return }
+
+        let actionSheet = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
+
+        // Share action
+        actionSheet.addAction(UIAlertAction(title: "Share", style: .default) { [weak self] _ in
+            self?.didTapShare()
+        })
+
+        // Safety tools (only if signed in)
+        if SupabaseManager.shared.currentUserIdSync() != nil {
+            actionSheet.addAction(UIAlertAction(title: "Report Listing", style: .default) { [weak self] _ in
+                self?.presentListingReportReasons(anchor: sender)
+            })
+            actionSheet.addAction(UIAlertAction(title: "Report User", style: .default) { [weak self] _ in
+                self?.presentUserReportReasons(anchor: sender)
+            })
+
+            let isBlocked = safetyService.isBlocked(item.owner_id)
+            let blockTitle = isBlocked ? "Unblock User" : "Block User"
+            actionSheet.addAction(UIAlertAction(title: blockTitle, style: .destructive) { [weak self] _ in
+                guard let self else { return }
+                if isBlocked {
+                    self.safetyService.unblock(userId: item.owner_id)
+                    self.presentInfoAlert(title: "User Unblocked", message: "Their listings and chat will be visible again.")
+                } else {
+                    self.confirmBlockOwner()
+                }
+            })
+        }
+
+        actionSheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        if let popover = actionSheet.popoverPresentationController {
+            popover.barButtonItem = sender
+        }
+        present(actionSheet, animated: true)
     }
 
     @objc private func didTapSafetyMenu(_ sender: UIBarButtonItem) {

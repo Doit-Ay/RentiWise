@@ -159,7 +159,7 @@ class AddItemPublishViewController: UIViewController {
                 }
             }
         } catch {
-            print("[AddItem] Free tier check error: \(error)")
+            debugLog("[AddItem] Free tier check error: \(error)")
         }
         await publish()
     }
