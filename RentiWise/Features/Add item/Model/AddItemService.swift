@@ -75,31 +75,14 @@ final class AddItemService: AddItemServicing {
             throw wrap(error, category: "Storage", hint: "Image upload failed (network/bucket/policy).")
         }
 
-        // 3) Build payload
-        let payload = ItemInsertPayload(
-            owner_id: ownerId,
-            title: draft.title,
-            description: draft.description.isEmpty ? nil : draft.description,
-            category: draft.category.isEmpty ? nil : draft.category,
-            condition: draft.condition.isEmpty ? nil : draft.condition,
-            price_per_day: draft.pricePerDay,
-            deposit_amount: draft.depositAmount,
-            images: imagePaths,
-            is_active: draft.isActive
-        )
-
-        // 4) Insert into public.items and return the created row
+        // 3) Insert into public.items and return the created row
         status?("Saving item…")
         do {
-            let response = try await client
-                .from("items")
-                .insert(payload)
-                .select()
-                .single()
-                .execute()
-
-            let decoder = JSONDecoder()
-            let item = try decoder.decode(ItemRow.self, from: response.data)
+            let item = try await insertItemRecord(
+                ownerId: ownerId,
+                draft: draft,
+                imagePaths: imagePaths
+            )
             status?("Done")
             return item
         } catch {
@@ -117,19 +100,19 @@ final class AddItemService: AddItemServicing {
 
         status?("Preparing update…")
 
+        let ownerId: String
+        do {
+            let session = try await client.auth.session
+            ownerId = session.user.id.uuidString
+        } catch {
+            throw wrap(error, category: "Auth", hint: "Not signed in or session invalid.")
+        }
+
         // Optional: if user provided new images (draft.images contains data), upload and decide how to merge.
         // Strategy: if draft.images is empty, keep existingImagePaths. If not empty, upload new and REPLACE images with new uploads.
         var finalImagePaths = draft.existingImagePaths
         if !draft.images.isEmpty {
             status?("Uploading new images…")
-            let ownerId: String
-            do {
-                let session = try await client.auth.session
-                ownerId = session.user.id.uuidString
-            } catch {
-                throw wrap(error, category: "Auth", hint: "Not signed in or session invalid.")
-            }
-
             do {
                 let uploaded = try await uploadImagesResilient(ownerId: ownerId, imagesData: draft.images, status: status)
                 finalImagePaths = uploaded
@@ -138,45 +121,124 @@ final class AddItemService: AddItemServicing {
             }
         }
 
-        struct ItemUpdatePayload: Encodable {
-            let title: String
-            let description: String?
-            let category: String?
-            let condition: String?
-            let price_per_day: Double
-            let deposit_amount: Double
-            let images: [String]
-            let is_active: Bool
+        status?("Updating item…")
+        do {
+            let declaredValue = try await updateItemRecord(
+                itemId: itemId,
+                ownerId: ownerId,
+                draft: draft,
+                imagePaths: finalImagePaths
+            )
+            status?("Updated")
+            return makeLocalItemRow(
+                itemId: itemId,
+                ownerId: ownerId,
+                draft: draft,
+                imagePaths: finalImagePaths,
+                declaredValue: declaredValue
+            )
+        } catch {
+            throw wrap(error, category: "DB", hint: "Update failed (RLS/policy/constraint).")
+        }
+    }
+
+    private func insertItemRecord(ownerId: String, draft: AddItemDraft, imagePaths: [String]) async throws -> ItemRow {
+        if ItemSchemaSupport.supportsDeclaredValue {
+            do {
+                let payload = ItemInsertPayload(
+                    owner_id: ownerId,
+                    title: draft.title,
+                    description: draft.description.isEmpty ? nil : draft.description,
+                    category: draft.category.isEmpty ? nil : draft.category,
+                    condition: draft.condition.isEmpty ? nil : draft.condition,
+                    price_per_day: draft.pricePerDay,
+                    deposit_amount: draft.depositAmount,
+                    declared_value: draft.declaredValue,
+                    images: imagePaths,
+                    is_active: draft.isActive
+                )
+                return try await executeInsert(payload)
+            } catch {
+                if ItemSchemaSupport.isMissingDeclaredValueError(error) {
+                    ItemSchemaSupport.markDeclaredValueUnavailable()
+                } else {
+                    throw error
+                }
+            }
         }
 
-        let payload = ItemUpdatePayload(
+        let legacyPayload = LegacyItemInsertPayload(
+            owner_id: ownerId,
             title: draft.title,
             description: draft.description.isEmpty ? nil : draft.description,
             category: draft.category.isEmpty ? nil : draft.category,
             condition: draft.condition.isEmpty ? nil : draft.condition,
             price_per_day: draft.pricePerDay,
             deposit_amount: draft.depositAmount,
-            images: finalImagePaths,
+            images: imagePaths,
             is_active: draft.isActive
         )
+        return try await executeInsert(legacyPayload)
+    }
 
-        status?("Updating item…")
-        do {
-            let response = try await client
-                .from("items")
-                .update(payload)
-                .eq("id", value: itemId)
-                .select()
-                .single()
-                .execute()
-
-            let decoder = JSONDecoder()
-            let updated = try decoder.decode(ItemRow.self, from: response.data)
-            status?("Updated")
-            return updated
-        } catch {
-            throw wrap(error, category: "DB", hint: "Update failed (RLS/policy/constraint).")
+    private func updateItemRecord(itemId: String, ownerId: String, draft: AddItemDraft, imagePaths: [String]) async throws -> Int? {
+        if ItemSchemaSupport.supportsDeclaredValue {
+            do {
+                let payload = ItemUpdatePayload(
+                    title: draft.title,
+                    description: draft.description.isEmpty ? nil : draft.description,
+                    category: draft.category.isEmpty ? nil : draft.category,
+                    condition: draft.condition.isEmpty ? nil : draft.condition,
+                    price_per_day: draft.pricePerDay,
+                    deposit_amount: draft.depositAmount,
+                    declared_value: draft.declaredValue,
+                    images: imagePaths,
+                    is_active: draft.isActive
+                )
+                try await executeUpdate(payload, itemId: itemId, ownerId: ownerId)
+                return draft.declaredValue
+            } catch {
+                if ItemSchemaSupport.isMissingDeclaredValueError(error) {
+                    ItemSchemaSupport.markDeclaredValueUnavailable()
+                } else {
+                    throw error
+                }
+            }
         }
+
+        let legacyPayload = LegacyItemUpdatePayload(
+            title: draft.title,
+            description: draft.description.isEmpty ? nil : draft.description,
+            category: draft.category.isEmpty ? nil : draft.category,
+            condition: draft.condition.isEmpty ? nil : draft.condition,
+            price_per_day: draft.pricePerDay,
+            deposit_amount: draft.depositAmount,
+            images: imagePaths,
+            is_active: draft.isActive
+        )
+        try await executeUpdate(legacyPayload, itemId: itemId, ownerId: ownerId)
+        return nil
+    }
+
+    private func executeInsert<Payload: Encodable>(_ payload: Payload) async throws -> ItemRow {
+        let response = try await client
+            .from("items")
+            .insert(payload)
+            .select()
+            .single()
+            .execute()
+
+        let decoder = JSONDecoder()
+        return try decoder.decode(ItemRow.self, from: response.data)
+    }
+
+    private func executeUpdate<Payload: Encodable>(_ payload: Payload, itemId: String, ownerId: String) async throws {
+        try await client
+            .from("items")
+            .update(payload)
+            .eq("id", value: itemId)
+            .eq("owner_id", value: ownerId)
+            .execute()
     }
 
     // MARK: - Resilient upload orchestration
@@ -199,11 +261,10 @@ final class AddItemService: AddItemServicing {
     // MARK: - Strategy A: direct upload via SDK (primary path)
     private func uploadImagesIfNeeded(ownerId: String, imagesData: [Data]) async throws -> [String] {
         var paths: [String] = []
+        let batchId = UUID().uuidString.lowercased()
         for (index, originalData) in imagesData.enumerated() {
             let preparedData = await prepareImageDataForUpload(originalData)
-            let filename = "item_\(Int(Date().timeIntervalSince1970))_\(index).jpg"
-            let folder = ownerId
-            let path = "\(folder)/\(filename)"
+            let path = makeUniqueStoragePath(ownerId: ownerId, batchId: batchId, index: index)
 
             do {
                 try await uploadWithRetry(path: path, data: preparedData)
@@ -232,6 +293,10 @@ final class AddItemService: AddItemServicing {
                     )
                 return
             } catch {
+                if isStorageConflict(error) {
+                    // The first attempt may have already created the object successfully.
+                    return
+                }
                 if isStorageRLS403(error) { throw error }
                 let nsError = error as NSError
                 let isTransient = (nsError.domain == NSURLErrorDomain) && (nsError.code == -1001 || nsError.code == -1005 || nsError.code == -1017)
@@ -253,16 +318,24 @@ final class AddItemService: AddItemServicing {
         return false
     }
 
+    private func isStorageConflict(_ error: Error) -> Bool {
+        if let storageError = error as? StorageError, storageError.statusCode == "409" {
+            return true
+        }
+
+        let message = (error as NSError).localizedDescription.lowercased()
+        return message.contains("already exists") || message.contains("resource already exists")
+    }
+
     // MARK: - Strategy B: Signed upload URL flow (REST)
     private func signedUploadImages(ownerId: String, imagesData: [Data], status: ((String) -> Void)?) async throws -> [String] {
         var paths: [String] = []
-        let folder = ownerId
+        let batchId = UUID().uuidString.lowercased()
 
         for (index, originalData) in imagesData.enumerated() {
             status?("Preparing signed upload (\(index+1)/\(imagesData.count))…")
             let preparedData = await prepareImageDataForUpload(originalData)
-            let filename = "item_\(Int(Date().timeIntervalSince1970))_\(index).jpg"
-            let path = "\(folder)/\(filename)"
+            let path = makeUniqueStoragePath(ownerId: ownerId, batchId: batchId, index: index)
 
             let signedURL = try await createSignedUploadURL(bucketId: storageBucket, objectPath: path, expiresIn: 120)
             try await putData(to: signedURL, data: preparedData, contentType: "image/jpeg")
@@ -354,6 +427,31 @@ final class AddItemService: AddItemServicing {
         return data
     }
 
+    private func makeUniqueStoragePath(ownerId: String, batchId: String, index: Int) -> String {
+        let milliseconds = Int(Date().timeIntervalSince1970 * 1000)
+        let objectId = UUID().uuidString.lowercased()
+        return "\(ownerId)/item_\(batchId)_\(milliseconds)_\(index)_\(objectId).jpg"
+    }
+
+    private func makeLocalItemRow(itemId: String, ownerId: String, draft: AddItemDraft, imagePaths: [String], declaredValue: Int?) -> ItemRow {
+        let timestamp = ISO8601DateFormatter().string(from: Date())
+        return ItemRow(
+            id: itemId,
+            owner_id: ownerId,
+            title: draft.title,
+            description: draft.description.isEmpty ? nil : draft.description,
+            category: draft.category.isEmpty ? nil : draft.category,
+            condition: draft.condition.isEmpty ? nil : draft.condition,
+            price_per_day: draft.pricePerDay,
+            deposit_amount: draft.depositAmount,
+            declared_value: declaredValue,
+            images: imagePaths,
+            is_active: draft.isActive,
+            created_at: timestamp,
+            updated_at: timestamp
+        )
+    }
+
     // MARK: - Error wrapping for clearer UI
     private func wrap(_ error: Error, category: String, hint: String) -> NSError {
         let ns = error as NSError
@@ -361,5 +459,64 @@ final class AddItemService: AddItemServicing {
         return NSError(domain: "AddItem.Publish", code: ns.code, userInfo: [
             NSLocalizedDescriptionKey: composed
         ])
+    }
+}
+
+private struct ItemUpdatePayload: Encodable {
+    let title: String
+    let description: String?
+    let category: String?
+    let condition: String?
+    let price_per_day: Double
+    let deposit_amount: Double
+    let declared_value: Int
+    let images: [String]
+    let is_active: Bool
+}
+
+private struct LegacyItemInsertPayload: Encodable {
+    let owner_id: String
+    let title: String
+    let description: String?
+    let category: String?
+    let condition: String?
+    let price_per_day: Double
+    let deposit_amount: Double
+    let images: [String]
+    let is_active: Bool
+}
+
+private struct LegacyItemUpdatePayload: Encodable {
+    let title: String
+    let description: String?
+    let category: String?
+    let condition: String?
+    let price_per_day: Double
+    let deposit_amount: Double
+    let images: [String]
+    let is_active: Bool
+}
+
+private enum ItemSchemaSupport {
+    static var supportsDeclaredValue: Bool {
+        get {
+            if UserDefaults.standard.object(forKey: "RW_supportsDeclaredValue") == nil {
+                return true
+            }
+            return UserDefaults.standard.bool(forKey: "RW_supportsDeclaredValue")
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: "RW_supportsDeclaredValue")
+        }
+    }
+
+    static func isMissingDeclaredValueError(_ error: Error) -> Bool {
+        let message = (error as NSError).localizedDescription.lowercased()
+        return message.contains("declared_value") &&
+            (message.contains("schema cache") || message.contains("column") || message.contains("items"))
+    }
+
+    static func markDeclaredValueUnavailable() {
+        supportsDeclaredValue = false
     }
 }

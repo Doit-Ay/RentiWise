@@ -136,15 +136,20 @@ final class CardsViewController: UIViewController {
 
     @objc private func handleRentNow(_ sender: UIButton) {
         guard let id = sender.accessibilityValue, let selected = itemMap[id] else { return }
-        let vc = RequestViewController(nibName: "RequestViewController", bundle: nil)
-        vc.hidesBottomBarWhenPushed = true
-        vc.configure(with: selected)
-        if let nav = navigationController {
-            nav.pushViewController(vc, animated: true)
-        } else {
-            let nav = UINavigationController(rootViewController: vc)
-            nav.modalPresentationStyle = .fullScreen
-            present(nav, animated: true)
+        Task { [weak self] in
+            guard let self else { return }
+            guard await self.ensureAuthenticated(orOpen: .signUp) else { return }
+
+            let vc = RequestViewController(nibName: "RequestViewController", bundle: nil)
+            vc.hidesBottomBarWhenPushed = true
+            vc.configure(with: selected)
+            if let nav = self.navigationController {
+                nav.pushViewController(vc, animated: true)
+            } else {
+                let nav = UINavigationController(rootViewController: vc)
+                nav.modalPresentationStyle = .fullScreen
+                self.present(nav, animated: true)
+            }
         }
     }
 }

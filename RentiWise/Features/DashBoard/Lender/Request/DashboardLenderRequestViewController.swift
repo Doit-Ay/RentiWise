@@ -56,7 +56,7 @@ class DashboardLenderRequestViewController: UIViewController {
     // White background bar behind the status row
     private var statusBackgroundView: UIView?
     private var statusBackgroundBottomConstraint: NSLayoutConstraint?
-    private var isEnsuringPickupCode = false
+    private var rentalPaymentState = RentalPaymentState.empty
 
     /// Timestamp when the most recent accept/deny decision was made.
     /// Used to enforce the 24-hour change window on the client side.
@@ -260,12 +260,26 @@ class DashboardLenderRequestViewController: UIViewController {
         let startDate = sqlDateFormatter.date(from: req.start_date)
         let endDate = sqlDateFormatter.date(from: req.end_date)
 
-        var days: Int?
+        var durationUnits: Int?
         if let s = startDate, let e = endDate {
             datelabel?.text = "\(displayDateFormatter.string(from: s)) — \(displayDateFormatter.string(from: e))"
-            let d = max(1, Int(ceil(e.timeIntervalSince(s) / 86400.0)))
-            days = d
-            numberodDaysLabel?.text = "\(d) day\(d == 1 ? "" : "s")"
+            
+            if req.rental_unit == "hour" {
+                // Calculate hours between pickup and return
+                var hours = 1
+                if let rawPickup = req.pickup_time, let rawReturn = req.return_time,
+                   let pickup = sqlTimeParser.date(from: rawPickup) ?? displayTimeFormatter.date(from: rawPickup),
+                   let returnT = sqlTimeParser.date(from: rawReturn) ?? displayTimeFormatter.date(from: rawReturn) {
+                    let diff = max(1, Int(ceil(returnT.timeIntervalSince(pickup) / 3600.0)))
+                    hours = diff
+                }
+                durationUnits = hours
+                numberodDaysLabel?.text = "\(hours) hour\(hours == 1 ? "" : "s")"
+            } else {
+                let d = max(1, Int(ceil(e.timeIntervalSince(s) / 86400.0)))
+                durationUnits = d
+                numberodDaysLabel?.text = "\(d) day\(d == 1 ? "" : "s")"
+            }
         } else {
             datelabel?.text = "—"
             numberodDaysLabel?.text = "—"
@@ -295,20 +309,48 @@ class DashboardLenderRequestViewController: UIViewController {
                     pickuptimeLabel?.text = raw
                 }
             }
+            // If it's hourly, we show pickup -> return_time
+            if req.rental_unit == "hour", let rawReturn = req.return_time, !rawReturn.isEmpty {
+                var returnStr = rawReturn
+                if let rDate = sqlTimeParser.date(from: rawReturn) {
+                    returnStr = displayTimeFormatter.string(from: rDate)
+                } else if let rDate = DateFormatter().date(from: rawReturn) { // fallback
+                    returnStr = displayTimeFormatter.string(from: rDate)
+                } else {
+                    let fallbacks = ["HH:mm:ss", "HH:mm"]
+                    for fmt in fallbacks {
+                        let df = DateFormatter()
+                        df.calendar = Calendar(identifier: .gregorian)
+                        df.timeZone = .current
+                        df.dateFormat = fmt
+                        if let d = df.date(from: rawReturn) {
+                            returnStr = displayTimeFormatter.string(from: d)
+                            break
+                        }
+                    }
+                }
+                pickuptimeLabel?.text = "\(pickuptimeLabel?.text ?? "") — \(returnStr)"
+            }
         } else {
             pickuptimeLabel?.text = "—"
         }
 
-        // Price per day from joined item
+        // Price per day/hour from joined item
         if let p = req.items?.price_per_day {
-            let text = (currencyFormatter.string(from: NSNumber(value: p)) ?? "\(p)") + " / day"
-            feerentLabel?.text = text
+            if req.rental_unit == "hour" {
+                let hourly = p / 8.0
+                let text = (currencyFormatter.string(from: NSNumber(value: hourly)) ?? "\(hourly)") + " / hr"
+                feerentLabel?.text = text
+            } else {
+                let text = (currencyFormatter.string(from: NSNumber(value: p)) ?? "\(p)") + " / day"
+                feerentLabel?.text = text
+            }
         } else {
             feerentLabel?.text = ""
         }
 
-        // Owner name: fetch from users, fallback to profiles
-        resolveOwnerName(for: req.owner_id)
+        // Owner name: fetch from users, fallback to profiles. NOW fetching borrower name!
+        resolveBorrowerName(for: req.borrower_id)
 
         // Image from joined item
         if let path = req.items?.images.first,
@@ -340,13 +382,15 @@ class DashboardLenderRequestViewController: UIViewController {
             }
         }
 
-        // Pricing: rental fee only for the TestFlight flow
-        computeAndDisplayTotals(days: days, pricePerDay: req.items?.price_per_day, itemId: req.item_id)
+        // Pricing
+        computeAndDisplayTotals(durationUnits: durationUnits, pricePerDay: req.items?.price_per_day, rentalUnit: req.rental_unit)
 
         // Buttons vs status row
         updateButtonsAndStatusUI(status: req.status)
         updateVerificationAction()
-        ensurePickupCodeIfNeeded(for: req)
+        Task { [weak self] in
+            await self?.refreshRentalPaymentState()
+        }
     }
 
     private func updateButtonsAndStatusUI(status: String?) {
@@ -367,7 +411,13 @@ class DashboardLenderRequestViewController: UIViewController {
         let display: String
         switch current {
         case "accepted":
-            display = "Accepted • Awaiting OTP"
+            if rentalPaymentState.lenderConfirmedReceived {
+                display = "Accepted • OTP Ready"
+            } else if rentalPaymentState.borrowerMarkedPaid {
+                display = "Accepted • Confirm Payment"
+            } else {
+                display = "Accepted • Awaiting Payment"
+            }
         case "approved":
             display = "Pickup Verified"
         default:
@@ -411,42 +461,141 @@ class DashboardLenderRequestViewController: UIViewController {
         }
 
         let current = req.status.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        let hasPickupCode = !(req.pickup_code?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+        guard current == "accepted" else {
+            navigationItem.rightBarButtonItem = nil
+            return
+        }
 
-        if current == "accepted", hasPickupCode {
+        if rentalPaymentState.borrowerMarkedPaid && !rentalPaymentState.lenderConfirmedReceived {
+            navigationItem.rightBarButtonItem = UIBarButtonItem(
+                title: "Confirm Payment",
+                style: .plain,
+                target: self,
+                action: #selector(confirmPaymentReceivedTapped)
+            )
+            return
+        }
+
+        if rentalPaymentState.lenderConfirmedReceived {
             navigationItem.rightBarButtonItem = UIBarButtonItem(
                 title: "Verify OTP",
                 style: .plain,
                 target: self,
-                action: #selector(verifyPickupCodeTapped)
+                action: #selector(openPickupOTPVerification)
             )
-        } else {
-            navigationItem.rightBarButtonItem = nil
+            return
+        }
+
+        navigationItem.rightBarButtonItem = nil
+    }
+
+    private func refreshRentalPaymentState() async {
+        guard let requestId = request?.id else { return }
+        do {
+            let state = try await RentalPaymentStateService.shared.fetch(requestId: requestId)
+            await MainActor.run {
+                self.rentalPaymentState = state
+                self.updateButtonsAndStatusUI(status: self.request?.status)
+                self.updateVerificationAction()
+            }
+        } catch {
+            debugLog("[LenderRequest] Failed to refresh payment state: \(error.localizedDescription)")
         }
     }
 
-    private func ensurePickupCodeIfNeeded(for req: RequestWithItem) {
-        let current = req.status.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        let hasPickupCode = !(req.pickup_code?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
-        guard current == "accepted", !hasPickupCode, !isEnsuringPickupCode else { return }
+    private func refreshRequestFromServer() async {
+        guard let requestId = request?.id else { return }
 
-        isEnsuringPickupCode = true
-        Task { [weak self] in
-            guard let self else { return }
-            defer { self.isEnsuringPickupCode = false }
-            do {
-                let generatedCode = self.generatePickupCode()
-                try await self.persistRequest(status: "accepted", pickupCode: generatedCode)
-                try await self.setItemAvailability(itemId: req.item_id, isActive: false)
-                await MainActor.run {
-                    self.request?.pickup_code = generatedCode
-                    self.updateButtonsAndStatusUI(status: self.request?.status)
-                    self.updateVerificationAction()
-                }
-            } catch {
-                debugLog("[LenderRequest] Failed to backfill pickup code: \(error)")
+        let select: String
+        if RequestSchemaSupport.supportsPickupCode {
+            select = "id,item_id,owner_id,borrower_id,start_date,end_date,pickup_time,return_time,rental_unit,pickup_code,status,created_at,items(id,title,images,price_per_day,category)"
+        } else {
+            select = "id,item_id,owner_id,borrower_id,start_date,end_date,pickup_time,return_time,rental_unit,status,created_at,items(id,title,images,price_per_day,category)"
+        }
+
+        do {
+            let response = try await SupabaseManager.shared.client
+                .from("requests")
+                .select(select)
+                .eq("id", value: requestId)
+                .single()
+                .execute()
+
+            let refreshed = try JSONDecoder().decode(RequestWithItem.self, from: response.data)
+            await MainActor.run {
+                self.request = refreshed
+            }
+        } catch {
+            if RequestSchemaSupport.isMissingPickupCodeError(error), RequestSchemaSupport.supportsPickupCode {
+                RequestSchemaSupport.markPickupCodeUnavailable()
+                await refreshRequestFromServer()
+            } else {
+                debugLog("[LenderRequest] Failed to refresh request: \(error.localizedDescription)")
             }
         }
+    }
+
+    @objc private func confirmPaymentReceivedTapped() {
+        let alert = UIAlertController(
+            title: "Confirm Payment",
+            message: "Mark this booking as paid by the borrower? OTP verification will unlock right after this.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Confirm", style: .default) { [weak self] _ in
+            guard let self else { return }
+            Task { await self.confirmPaymentReceived() }
+        })
+        present(alert, animated: true)
+    }
+
+    private func confirmPaymentReceived() async {
+        guard let req = request else { return }
+
+        await MainActor.run { self.setButtonsEnabled(false) }
+        defer { Task { await MainActor.run { self.setButtonsEnabled(true) } } }
+
+        do {
+            let updatedState = try await RentalPaymentStateService.shared.confirmPaymentReceived(requestId: req.id)
+            await MainActor.run {
+                self.rentalPaymentState = updatedState
+                self.updateButtonsAndStatusUI(status: self.request?.status)
+                self.updateVerificationAction()
+                let success = UIAlertController(
+                    title: "Payment Confirmed",
+                    message: "The borrower can now open the pickup OTP, and you can verify it from this screen.",
+                    preferredStyle: .alert
+                )
+                success.addAction(UIAlertAction(title: "OK", style: .default))
+                self.present(success, animated: true)
+            }
+            RemoteNotificationService.sendPaymentConfirmed(
+                requestId: req.id,
+                borrowerId: req.borrower_id,
+                itemTitle: req.items?.title ?? "Item"
+            )
+            NotificationCenter.default.post(name: Notification.Name("requestsShouldRefresh"), object: nil)
+        } catch {
+            await MainActor.run {
+                let alert = UIAlertController(title: "Payment Confirmation Failed", message: error.localizedDescription, preferredStyle: .alert)
+                alert.addAction(UIAlertAction(title: "OK", style: .default))
+                self.present(alert, animated: true)
+            }
+        }
+    }
+
+    @objc private func openPickupOTPVerification() {
+        guard let req = request else { return }
+        let otpVC = LenderOTPInputViewController()
+        otpVC.requestId = req.id
+        otpVC.onVerified = { [weak self] in
+            guard let self else { return }
+            Task {
+                await self.refreshRequestFromServer()
+                await self.refreshRentalPaymentState()
+            }
+        }
+        navigationController?.pushViewController(otpVC, animated: true)
     }
 
     /// Returns true if the decision was recorded less than 24 hours ago.
@@ -481,16 +630,16 @@ class DashboardLenderRequestViewController: UIViewController {
         return date
     }
 
-    // MARK: - Owner name resolution
+    // MARK: - Borrower name resolution
 
-    private func resolveOwnerName(for ownerId: String) {
+    private func resolveBorrowerName(for borrowerId: String) {
         Task {
             // Try users table
-            if let name = try? await fetchName(from: "users", ownerId: ownerId), !name.isEmpty {
+            if let name = try? await fetchName(from: "users", ownerId: borrowerId), !name.isEmpty {
                 await MainActor.run { self.ownNameLabel?.text = capitalizingFirstLetter(name) }
                 return
             }
-            await MainActor.run { self.ownNameLabel?.text = "Owner" }
+            await MainActor.run { self.ownNameLabel?.text = "Borrower" }
         }
     }
 
@@ -569,18 +718,24 @@ class DashboardLenderRequestViewController: UIViewController {
 
     // MARK: - Pricing
 
-    private func computeAndDisplayTotals(days: Int?, pricePerDay: Double?, itemId: String) {
-        _ = itemId
+    private func computeAndDisplayTotals(durationUnits: Int?, pricePerDay: Double?, rentalUnit: String?) {
         secRateLabel?.text = "Direct via UPI"
 
-        guard let d = days, let p = pricePerDay else {
+        guard let units = durationUnits, let p = pricePerDay else {
             if totalLabel?.text?.isEmpty ?? true {
                 totalLabel?.text = nil
             }
             return
         }
 
-        let rentalFee = Double(d) * p
+        let rentalFee: Double
+        if rentalUnit == "hour" {
+            let hourly = p / 8.0
+            rentalFee = Double(units) * hourly
+        } else {
+            rentalFee = Double(units) * p
+        }
+        
         totalLabel?.text = currencyFormatter.string(from: NSNumber(value: rentalFee))
     }
 
@@ -658,29 +813,29 @@ class DashboardLenderRequestViewController: UIViewController {
         await MainActor.run { self.setButtonsEnabled(false) }
         do {
             let previousStatus = current.status.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            let nextPickupCode: String?
+            let requestedPickupCode: String?
             switch newStatus {
             case "accepted":
                 try await assertCurrentLenderCanAcceptRequest()
                 try await assertNoActiveRentalConflict(for: current)
-                nextPickupCode = current.pickup_code?.isEmpty == false ? current.pickup_code : generatePickupCode()
+                requestedPickupCode = nil
             case "denied":
-                nextPickupCode = nil
+                requestedPickupCode = nil
             default:
-                nextPickupCode = current.pickup_code
+                requestedPickupCode = current.pickup_code
             }
 
-            try await persistRequest(status: newStatus, pickupCode: nextPickupCode)
+            let persistedPickupCode = try await persistRequest(status: newStatus, pickupCode: requestedPickupCode)
 
             if newStatus == "accepted" {
-                try await setItemAvailability(itemId: current.item_id, isActive: false)
+                try await syncItemAvailabilityIfPossible(itemId: current.item_id, ownerId: current.owner_id, isActive: false)
             } else if newStatus == "denied", previousStatus == "accepted" || previousStatus == "approved" {
-                try await setItemAvailability(itemId: current.item_id, isActive: true)
+                try await syncItemAvailabilityIfPossible(itemId: current.item_id, ownerId: current.owner_id, isActive: true)
             }
 
             // Update local model and UI
             current.status = newStatus
-            current.pickup_code = nextPickupCode
+            current.pickup_code = persistedPickupCode
             self.request = current
 
             // Record when the decision was made and persist it across restarts
@@ -700,11 +855,22 @@ class DashboardLenderRequestViewController: UIViewController {
             NotificationCenter.default.post(name: Notification.Name("requestsShouldRefresh"), object: nil)
             if newStatus == "accepted" {
                 NotificationCenter.default.post(name: BookingApprovalViewController.requestApprovedNotification, object: nil)
+                RemoteNotificationService.sendRequestAccepted(
+                    requestId: current.id,
+                    borrowerId: current.borrower_id,
+                    itemTitle: current.items?.title ?? "Item"
+                )
                 // Schedule a due-date reminder local notification for the borrower
                 NotificationService.shared.scheduleRentalDueReminder(
                     requestId: current.id,
                     itemTitle: current.items?.title ?? "Item",
                     endDateString: current.end_date
+                )
+            } else if newStatus == "denied" {
+                RemoteNotificationService.sendRequestRejected(
+                    requestId: current.id,
+                    borrowerId: current.borrower_id,
+                    itemTitle: current.items?.title ?? "Item"
                 )
             }
             // Send local push notification for status change
@@ -754,28 +920,78 @@ class DashboardLenderRequestViewController: UIViewController {
         String(format: "%06d", Int.random(in: 0...999_999))
     }
 
-    private func persistRequest(status: String, pickupCode: String?) async throws {
+    private func persistRequest(status: String, pickupCode: String?) async throws -> String? {
         struct Patch: Encodable {
             let status: String
             let pickup_code: String?
         }
+        struct StatusOnlyPatch: Encodable {
+            let status: String
+        }
 
-        guard let requestId = request?.id else { return }
+        guard let requestId = request?.id else { return pickupCode }
+
+        if RequestSchemaSupport.supportsPickupCode {
+            do {
+                _ = try await SupabaseManager.shared.client
+                    .from("requests")
+                    .update(Patch(status: status, pickup_code: pickupCode))
+                    .eq("id", value: requestId)
+                    .execute()
+                return pickupCode
+            } catch {
+                if RequestSchemaSupport.isMissingPickupCodeError(error) {
+                    RequestSchemaSupport.markPickupCodeUnavailable()
+                    _ = try await SupabaseManager.shared.client
+                        .from("requests")
+                        .update(StatusOnlyPatch(status: status))
+                        .eq("id", value: requestId)
+                        .execute()
+                    return nil
+                }
+                throw error
+            }
+        }
+
         _ = try await SupabaseManager.shared.client
             .from("requests")
-            .update(Patch(status: status, pickup_code: pickupCode))
+            .update(StatusOnlyPatch(status: status))
             .eq("id", value: requestId)
             .execute()
+        return nil
     }
 
-    private func setItemAvailability(itemId: String, isActive: Bool) async throws {
+    private func syncItemAvailabilityIfPossible(itemId: String, ownerId: String, isActive: Bool) async throws {
+        guard let currentUserId = await SupabaseManager.shared.currentUserId(),
+              currentUserId == ownerId else {
+            return
+        }
+
+        do {
+            try await setItemAvailability(itemId: itemId, ownerId: ownerId, isActive: isActive)
+        } catch {
+            if isItemsAvailabilityPermissionError(error) {
+                debugLog("[DashboardLenderRequest] Skipping item availability sync due to items RLS: \(error)")
+                return
+            }
+            throw error
+        }
+    }
+
+    private func setItemAvailability(itemId: String, ownerId: String, isActive: Bool) async throws {
         struct ItemPatch: Encodable { let is_active: Bool }
 
         _ = try await SupabaseManager.shared.client
             .from("items")
             .update(ItemPatch(is_active: isActive))
             .eq("id", value: itemId)
+            .eq("owner_id", value: ownerId)
             .execute()
+    }
+
+    private func isItemsAvailabilityPermissionError(_ error: Error) -> Bool {
+        let message = (error as NSError).localizedDescription.lowercased()
+        return message.contains("row-level security") && message.contains("items")
     }
 
     @objc private func verifyPickupCodeTapped() {
@@ -816,11 +1032,25 @@ class DashboardLenderRequestViewController: UIViewController {
         present(alert, animated: true)
     }
 
+    @objc private func confirmPickupWithoutOTPTapped() {
+        let alert = UIAlertController(
+            title: "Confirm Pickup",
+            message: "Pickup-code support is not available on this backend yet. Mark this handoff as completed and start the rental?",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Confirm", style: .default) { [weak self] _ in
+            guard let self else { return }
+            Task { await self.updateStatus(to: "approved") }
+        })
+        present(alert, animated: true)
+    }
+
     private func completePickupVerification() async {
         guard var current = request else { return }
         await MainActor.run { self.setButtonsEnabled(false) }
         do {
-            try await persistRequest(status: "approved", pickupCode: nil)
+            _ = try await persistRequest(status: "approved", pickupCode: nil)
             current.status = "approved"
             current.pickup_code = nil
             request = current
@@ -926,6 +1156,7 @@ class DashboardLenderRequestViewController: UIViewController {
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        Task { await refreshRentalPaymentState() }
         // Load pending return/extension requests for this booking
         if let req = request {
             let status = req.status.lowercased()

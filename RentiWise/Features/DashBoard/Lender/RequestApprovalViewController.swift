@@ -397,6 +397,7 @@ class RequestApprovalViewController: UIViewController {
             if requestType == .returnRequest && status == "accepted" {
                 struct BookingItemRow: Decodable {
                     let item_id: String
+                    let owner_id: String
                 }
 
                 let _ = try await SupabaseManager.shared.client
@@ -407,16 +408,12 @@ class RequestApprovalViewController: UIViewController {
 
                 if let bookingData = try? await SupabaseManager.shared.client
                     .from("requests")
-                    .select("item_id")
+                    .select("item_id,owner_id")
                     .eq("id", value: bookingId)
                     .single()
                     .execute(),
                    let booking = try? JSONDecoder().decode(BookingItemRow.self, from: bookingData.data) {
-                    let _ = try await SupabaseManager.shared.client
-                        .from("items")
-                        .update(["is_active": true])
-                        .eq("id", value: booking.item_id)
-                        .execute()
+                    try await syncItemAvailabilityIfPossible(itemId: booking.item_id, ownerId: booking.owner_id, isActive: true)
                 }
                 debugLog("[RequestApproval] Main request \(bookingId) marked as completed.")
             }
@@ -499,6 +496,33 @@ class RequestApprovalViewController: UIViewController {
     }
     
     // MARK: - Helpers
+
+    private func syncItemAvailabilityIfPossible(itemId: String, ownerId: String, isActive: Bool) async throws {
+        guard let currentUserId = await SupabaseManager.shared.currentUserId(),
+              currentUserId == ownerId else {
+            return
+        }
+
+        do {
+            _ = try await SupabaseManager.shared.client
+                .from("items")
+                .update(["is_active": isActive])
+                .eq("id", value: itemId)
+                .eq("owner_id", value: ownerId)
+                .execute()
+        } catch {
+            if isItemsAvailabilityPermissionError(error) {
+                debugLog("[RequestApproval] Skipping item availability sync due to items RLS: \(error)")
+                return
+            }
+            throw error
+        }
+    }
+
+    private func isItemsAvailabilityPermissionError(_ error: Error) -> Bool {
+        let message = (error as NSError).localizedDescription.lowercased()
+        return message.contains("row-level security") && message.contains("items")
+    }
     
     private func showAlert(title: String, message: String, completion: (() -> Void)? = nil) {
         let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)

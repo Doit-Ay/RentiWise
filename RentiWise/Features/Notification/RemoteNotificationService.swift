@@ -41,7 +41,18 @@ enum RemoteNotificationService {
             userId: ownerId,
             type: "payment_received",
             title: "Payment Received 💰",
-            message: "The borrower has completed payment for \"\(itemTitle)\". You can now confirm the pickup using the OTP code.",
+            message: "The borrower marked payment as sent for \"\(itemTitle)\". Confirm receipt to unlock pickup OTP verification.",
+            requestId: requestId
+        )
+    }
+
+    /// Notify the borrower that the lender confirmed the UPI payment and OTP is now available.
+    static func sendPaymentConfirmed(requestId: String, borrowerId: String, itemTitle: String) {
+        insert(
+            userId: borrowerId,
+            type: "payment_confirmed",
+            title: "Payment Confirmed ✅",
+            message: "The lender confirmed payment for \"\(itemTitle)\". Your pickup OTP is now ready.",
             requestId: requestId
         )
     }

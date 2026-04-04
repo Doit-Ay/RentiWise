@@ -18,10 +18,7 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
         debugLog("[Dashboard] Additem tapped") // DEBUG
         Task { [weak self] in
             guard let self else { return }
-            do {
-                let session = try await SupabaseManager.shared.client.auth.session
-                _ = session.user
-
+            if await self.ensureAuthenticated(orOpen: .signUp) {
                 debugLog("[Dashboard] Logged in, pushing AddItemFirst") // DEBUG
                 let vc = AddItemFirstViewController(nibName: "AddItemFirstViewController", bundle: nil)
                 vc.title = "Add item"
@@ -32,28 +29,6 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
                     nav.pushViewController(vc, animated: true)
                 } else {
                     let nav = UINavigationController(rootViewController: vc)
-                    nav.modalPresentationStyle = .fullScreen
-                    self.present(nav, animated: true)
-                }
-            } catch {
-                debugLog("[Dashboard] Not logged in, pushing SignIn") // DEBUG
-                let nibName = "SignViewController"
-                let signInVC: SignViewController
-                if Bundle.main.path(forResource: nibName, ofType: "nib") != nil ||
-                    Bundle.main.path(forResource: "SignViewController", ofType: "xib") != nil {
-                    signInVC = SignViewController(nibName: nibName, bundle: nil)
-                } else {
-                    signInVC = SignViewController(service: SignInService())
-                }
-                signInVC.routeContext = .default
-                signInVC.title = "Sign in"
-                signInVC.hidesBottomBarWhenPushed = true
-
-                if let nav = self.navigationController {
-                    nav.setNavigationBarHidden(false, animated: true)
-                    nav.pushViewController(signInVC, animated: true)
-                } else {
-                    let nav = UINavigationController(rootViewController: signInVC)
                     nav.modalPresentationStyle = .fullScreen
                     self.present(nav, animated: true)
                 }
@@ -112,7 +87,13 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
             roleSegmented.selectedSegmentIndex = Segment.listing.rawValue
         }
 
+        NotificationCenter.default.addObserver(self, selector: #selector(handleItemsShouldRefresh), name: Notification.Name("itemsShouldRefresh"), object: nil)
+
         reloadForSelectedSegment()
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
 
     @objc private func didTapHome() {
@@ -159,6 +140,11 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
+    }
+
+    @objc private func handleItemsShouldRefresh() {
+        guard Segment(rawValue: roleSegmented.selectedSegmentIndex) == .listing else { return }
+        Task { await loadMyItems() }
     }
 
     // MARK: - Navigation bar button (Filter on right)
@@ -364,10 +350,11 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
             let ownerItems = allItems
                 .filter { $0.owner_id.lowercased() == userId.lowercased() }
                 .sorted { ($0.created_at ?? Date.distantPast) > ($1.created_at ?? Date.distantPast) }
+            let visibleItems = collapseAccidentalDuplicateListings(ownerItems)
 
             await MainActor.run {
                 self.isLoading = false
-                self.items = ownerItems
+                self.items = visibleItems
                 self.tableView.reloadData()
                 self.loadEmptyStateIfNeeded()
             }
@@ -379,6 +366,30 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
                 self.loadEmptyStateIfNeeded()
             }
         }
+    }
+
+    private func collapseAccidentalDuplicateListings(_ source: [Item]) -> [Item] {
+        var seenIds = Set<String>()
+        var latestCreatedBySignature: [ListingDedupKey: Date] = [:]
+        var deduped: [Item] = []
+
+        for item in source {
+            let normalizedId = item.id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            guard seenIds.insert(normalizedId).inserted else { continue }
+
+            let key = ListingDedupKey(item: item)
+            let createdAt = item.created_at ?? .distantPast
+
+            if let latestCreated = latestCreatedBySignature[key],
+               abs(latestCreated.timeIntervalSince(createdAt)) <= 30 {
+                continue
+            }
+
+            latestCreatedBySignature[key] = createdAt
+            deduped.append(item)
+        }
+
+        return deduped
     }
 
     private func loadOwnerHistoryFromDB() async {
@@ -421,6 +432,28 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
                 self.loadEmptyStateIfNeeded()
             }
         }
+    }
+}
+
+private struct ListingDedupKey: Hashable {
+    let ownerId: String
+    let title: String
+    let category: String
+    let condition: String
+    let pricePerDayCents: Int
+    let depositCents: Int
+    let firstImagePath: String
+    let isActive: Bool
+
+    init(item: Item) {
+        ownerId = item.owner_id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        title = item.title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        category = item.category?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
+        condition = item.condition?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
+        pricePerDayCents = Int((item.price_per_day * 100).rounded())
+        depositCents = Int((item.deposit_amount * 100).rounded())
+        firstImagePath = item.images.first?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
+        isActive = item.is_active
     }
 }
 

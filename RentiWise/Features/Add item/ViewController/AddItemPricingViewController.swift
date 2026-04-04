@@ -14,18 +14,10 @@ class AddItemPricingViewController: UIViewController, UITextFieldDelegate {
 
     @IBOutlet weak var pricePerDay: UITextField!
     @IBOutlet weak var refundableDeposit: UITextField!
+    @IBOutlet private weak var declaredValueHintLabel: UILabel!
 
-    // Feature 3: High-value deposit warning
-    private let depositWarningLabel: UILabel = {
-        let label = UILabel()
-        label.text = "⚠️ High-value items may need extra trust coordination with your borrower."
-        label.font = .systemFont(ofSize: 13)
-        label.textColor = .systemOrange
-        label.numberOfLines = 0
-        label.isHidden = true
-        label.translatesAutoresizingMaskIntoConstraints = false
-        return label
-    }()
+    private let defaultDeclaredValueHint = "Used for trust checks and borrowing limits during the beta."
+    private let warningDeclaredValueHint = "⚠️ High-value items may need extra trust coordination with your borrower."
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -48,18 +40,9 @@ class AddItemPricingViewController: UIViewController, UITextFieldDelegate {
         pricePerDay?.inputAccessoryView = doneToolbar
         refundableDeposit?.inputAccessoryView = doneToolbar
 
-        // Feature 3: Wire deposit field delegate and add warning label
+        // Feature 3: Wire deposit field delegate and configure helper copy
         refundableDeposit?.delegate = self
-        if let depositField = refundableDeposit {
-            if let sv = depositField.superview {
-                sv.addSubview(depositWarningLabel)
-                NSLayoutConstraint.activate([
-                    depositWarningLabel.topAnchor.constraint(equalTo: depositField.bottomAnchor, constant: 4),
-                    depositWarningLabel.leadingAnchor.constraint(equalTo: depositField.leadingAnchor),
-                    depositWarningLabel.trailingAnchor.constraint(equalTo: depositField.trailingAnchor),
-                ])
-            }
-        }
+        configureDeclaredValueHint(for: Double(draft.declaredValue))
     }
 
     // Dismiss keyboard utility
@@ -158,8 +141,15 @@ class AddItemPricingViewController: UIViewController, UITextFieldDelegate {
             guard let stringRange = Range(range, in: currentText) else { return true }
             let updatedText = currentText.replacingCharacters(in: stringRange, with: string)
             let value = Double(updatedText) ?? 0
-            depositWarningLabel.isHidden = (value <= 10000)
+            configureDeclaredValueHint(for: value)
         }
         return true
+    }
+
+    private func configureDeclaredValueHint(for value: Double) {
+        let isHighValue = value > 10000
+        declaredValueHintLabel.text = isHighValue ? warningDeclaredValueHint : defaultDeclaredValueHint
+        declaredValueHintLabel.textColor = isHighValue ? .systemOrange : .opaqueSeparator
+        declaredValueHintLabel.numberOfLines = 0
     }
 }

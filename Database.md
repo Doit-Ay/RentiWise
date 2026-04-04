@@ -36,6 +36,39 @@ create index IF not exists items_owner_id_idx on public.items using btree (owner
 
 create index IF not exists items_is_active_idx on public.items using btree (is_active) TABLESPACE pg_default;
 
+alter table public.items enable row level security;
+
+drop policy if exists "items_select_active_or_own" on public.items;
+create policy "items_select_active_or_own"
+on public.items
+for select
+to public
+using (
+  coalesce(is_active, true) = true
+  or owner_id = auth.uid()
+);
+
+drop policy if exists "items_insert_own" on public.items;
+create policy "items_insert_own"
+on public.items
+for insert
+to authenticated
+with check (
+  owner_id = auth.uid()
+);
+
+drop policy if exists "items_update_own" on public.items;
+create policy "items_update_own"
+on public.items
+for update
+to authenticated
+using (
+  owner_id = auth.uid()
+)
+with check (
+  owner_id = auth.uid()
+);
+
 
 //request
 

@@ -112,6 +112,7 @@ final class LenderView: UIView {
 
         // Listen for refresh notifications after Accept/Deny
         NotificationCenter.default.addObserver(self, selector: #selector(handleRequestsShouldRefresh), name: Notification.Name("requestsShouldRefresh"), object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(handleItemsShouldRefresh), name: Notification.Name("itemsShouldRefresh"), object: nil)
 
         // Initial load for the current segment
         reloadForSelectedSegment()
@@ -259,11 +260,7 @@ final class LenderView: UIView {
         }
 
         // Base fields + items(...) via FK requests_item_id_fkey
-        let select =
-        """
-        id,item_id,owner_id,borrower_id,start_date,end_date,pickup_time,pickup_code,status,created_at,
-        items(id,title,images,price_per_day,category)
-        """
+        let select = requestsSelectWithItems()
 
         do {
             let response = try await SupabaseManager.shared.client
@@ -284,11 +281,17 @@ final class LenderView: UIView {
             // Fetch pending sub-request counts in the background for badge indicators
             await fetchPendingSubRequestCounts(for: rows)
         } catch {
+            if RequestSchemaSupport.isMissingPickupCodeError(error), RequestSchemaSupport.supportsPickupCode {
+                RequestSchemaSupport.markPickupCodeUnavailable()
+                await loadMyRequests()
+                return
+            }
+
             // If join fails due to RLS or missing FK inference, fall back to base select so the list still shows.
             do {
                 let response = try await SupabaseManager.shared.client
                     .from("requests")
-                    .select("id,item_id,owner_id,borrower_id,start_date,end_date,pickup_time,pickup_code,status,created_at")
+                    .select(requestsBaseSelect())
                     .eq("owner_id", value: userId)
                     .order("created_at", ascending: false)
                     .execute()
@@ -309,6 +312,8 @@ final class LenderView: UIView {
                             pickup_code: base.pickup_code,
                             status: base.status,
                             created_at: base.created_at,
+                            rental_unit: base.rental_unit,
+                            return_time: base.return_time,
                             items: nil
                         )
                     }
@@ -316,6 +321,11 @@ final class LenderView: UIView {
                     self.updateEmptyStateIfNeeded()
                 }
             } catch {
+                if RequestSchemaSupport.isMissingPickupCodeError(error), RequestSchemaSupport.supportsPickupCode {
+                    RequestSchemaSupport.markPickupCodeUnavailable()
+                    await loadMyRequests()
+                    return
+                }
                 await MainActor.run {
                     self.myRequests = []
                     self.tableView.reloadData()
@@ -323,6 +333,28 @@ final class LenderView: UIView {
                 }
             }
         }
+    }
+
+    private func requestsSelectWithItems() -> String {
+        if RequestSchemaSupport.supportsPickupCode {
+            return """
+            id,item_id,owner_id,borrower_id,start_date,end_date,pickup_time,return_time,rental_unit,pickup_code,status,created_at,
+            items(id,title,images,price_per_day,category)
+            """
+        }
+
+        return """
+        id,item_id,owner_id,borrower_id,start_date,end_date,pickup_time,return_time,rental_unit,status,created_at,
+        items(id,title,images,price_per_day,category)
+        """
+    }
+
+    private func requestsBaseSelect() -> String {
+        if RequestSchemaSupport.supportsPickupCode {
+            return "id,item_id,owner_id,borrower_id,start_date,end_date,pickup_time,return_time,rental_unit,pickup_code,status,created_at"
+        }
+
+        return "id,item_id,owner_id,borrower_id,start_date,end_date,pickup_time,return_time,rental_unit,status,created_at"
     }
 
     // MARK: - Pending sub-request counts (badge indicators)
@@ -415,6 +447,11 @@ final class LenderView: UIView {
         refreshRequests()
     }
 
+    @objc private func handleItemsShouldRefresh() {
+        guard selectedInnerIndex == 0 else { return }
+        Task { await loadMyItems() }
+    }
+
     // MARK: - History from database (rentals_history) showing same item details as Requests
     private func loadHistoryFromDB() async {
         await MainActor.run { self.myHistory = [] }
@@ -491,6 +528,8 @@ private struct RequestBase: Decodable {
     let pickup_code: String?
     let status: String
     let created_at: String?
+    let rental_unit: String?
+    let return_time: String?
 }
 
 // History model used for the table
@@ -544,8 +583,14 @@ extension LenderView: UITableViewDataSource {
 
             // Rate: from items.price_per_day if available; else show date range
             if let p = req.items?.price_per_day {
-                let text = (currencyFormatter.string(from: NSNumber(value: p)) ?? "\(p)") + " / day"
-                cell.itemRateRequest.text = text
+                if req.rental_unit == "hour" {
+                    let hourly = p / 8.0
+                    let text = (currencyFormatter.string(from: NSNumber(value: hourly)) ?? "\(hourly)") + " / hr"
+                    cell.itemRateRequest.text = text
+                } else {
+                    let text = (currencyFormatter.string(from: NSNumber(value: p)) ?? "\(p)") + " / day"
+                    cell.itemRateRequest.text = text
+                }
             } else {
                 let sql = DateFormatter()
                 sql.calendar = Calendar(identifier: .gregorian)
@@ -555,11 +600,36 @@ extension LenderView: UITableViewDataSource {
                 display.calendar = Calendar(identifier: .gregorian)
                 display.timeZone = .current
                 display.dateFormat = "d MMM yyyy"
-                if let s = sql.date(from: req.start_date),
-                   let e = sql.date(from: req.end_date) {
-                    cell.itemRateRequest.text = "\(display.string(from: s)) — \(display.string(from: e))"
+                
+                if req.rental_unit == "hour" {
+                    if let rawPickup = req.pickup_time, let rawReturn = req.return_time {
+                        let timeFormat = DateFormatter()
+                        timeFormat.calendar = Calendar(identifier: .gregorian)
+                        timeFormat.timeZone = .current
+                        timeFormat.dateFormat = "HH:mm:ssXXXXX"
+                        
+                        let shortTime = DateFormatter()
+                        shortTime.dateStyle = .none
+                        shortTime.timeStyle = .short
+                        
+                        if let pickup = timeFormat.date(from: rawPickup) ?? shortTime.date(from: rawPickup),
+                           let returnT = timeFormat.date(from: rawReturn) ?? shortTime.date(from: rawReturn),
+                           let s = sql.date(from: req.start_date) {
+                            let dayString = display.string(from: s)
+                            cell.itemRateRequest.text = "\(dayString), \(shortTime.string(from: pickup)) — \(shortTime.string(from: returnT))"
+                        } else {
+                            cell.itemRateRequest.text = "Hourly"
+                        }
+                    } else {
+                        cell.itemRateRequest.text = "Hourly"
+                    }
                 } else {
-                    cell.itemRateRequest.text = "—"
+                    if let s = sql.date(from: req.start_date),
+                       let e = sql.date(from: req.end_date) {
+                        cell.itemRateRequest.text = "\(display.string(from: s)) — \(display.string(from: e))"
+                    } else {
+                        cell.itemRateRequest.text = "—"
+                    }
                 }
             }
 

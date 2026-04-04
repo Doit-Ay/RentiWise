@@ -146,11 +146,11 @@ enum LegalDocument {
         switch self {
         case .termsOfService:
             return """
-            RentiWise helps people discover, request, lend, and borrow real-world items from each other.
+            Rentiwise helps people discover, request, lend, and borrow real-world items from each other.
 
             Payments and transactions:
             - Rental fees are arranged directly between users, typically through UPI or another method both users agree on.
-            - RentiWise does not store card numbers, hold funds, issue credit, or act as a bank or escrow service.
+            - Rentiwise does not store card numbers, hold funds, issue credit, or act as a bank or escrow service.
             - Lenders and borrowers must review the item details, pricing, duration, pickup plan, and payment terms before completing a handoff.
 
             User responsibilities:
@@ -161,7 +161,7 @@ enum LegalDocument {
             Safety rules:
             - Illegal, hazardous, counterfeit, stolen, or otherwise prohibited items may not be listed.
             - Users can report listings, conversations, and profiles, and can block other users inside the app.
-            - RentiWise may remove content, suspend accounts, or restrict activity to protect the community.
+            - Rentiwise may remove content, suspend accounts, or restrict activity to protect the community.
 
             Damage and returns:
             - Borrowers must return items by the agreed return date and in substantially the same condition shown at handoff, allowing for normal disclosed wear.
@@ -172,19 +172,19 @@ enum LegalDocument {
             - Users should first document and discuss issues in the in-app chat.
             - Damage, non-return, refund, or conduct issues should also be reported through the in-app Support screen.
             - Approved rental refunds are generally processed within the timeline shown in the relevant in-app payment or support status, and may vary based on the payment rail used between users.
-            - RentiWise may review listing data, chat history, timestamps, return proof, and safety reports to help resolve disputes.
+            - Rentiwise may review listing data, chat history, timestamps, return proof, and safety reports to help resolve disputes.
             - You can contact the team at support@rentiwise.com for escalations or account help.
 
             Liability and platform limits:
-            - RentiWise is not a party to the final lending agreement between users.
+            - Rentiwise is not a party to the final lending agreement between users.
             - Users remain responsible for item damage, loss, non-return, fraudulent conduct, and any payment dispute they create.
-            - To the extent permitted by law, RentiWise’s liability is limited to the platform services it directly provides and does not extend to independent agreements or off-platform conduct between users.
+            - To the extent permitted by law, Rentiwise’s liability is limited to the platform services it directly provides and does not extend to independent agreements or off-platform conduct between users.
             - We may review platform activity, listing data, support tickets, and safety reports to investigate abuse or policy violations.
             - By using the app, you accept responsibility for the lending decisions you make with other users.
             """
         case .privacyPolicy:
             return """
-            RentiWise collects the information needed to operate the marketplace, keep users safer, and support lending transactions.
+            Rentiwise collects the information needed to operate the marketplace, keep users safer, and support lending transactions.
 
             Data we collect:
             - Account information such as your name, email address, phone number, and profile details
@@ -200,11 +200,11 @@ enum LegalDocument {
             - To provide support and resolve disputes, returns, or account issues
 
             Payments:
-            - RentiWise does not collect raw card numbers or store card credentials.
+            - Rentiwise does not collect raw card numbers or store card credentials.
             - Rental payments are arranged directly between users, so the app only stores the payment identifiers you choose to share, such as a UPI ID.
 
             Storage and sharing:
-            - RentiWise uses Supabase services to store app data and operate backend features.
+            - Rentiwise uses Supabase services to store app data and operate backend features.
             - If you start identity verification, verification data may also be processed by our verification providers for that flow.
             - We do not sell your personal data.
             - We may disclose information when required for legal compliance, safety investigations, fraud prevention, or dispute handling.
@@ -212,7 +212,7 @@ enum LegalDocument {
             Your choices:
             - You can update profile information inside the app.
             - You can review blocked users and app permissions from Privacy & Security.
-            - You can delete your account from Manage Data. That flow is designed to remove your login, profile, listings, requests, messages, support history, and saved data from RentiWise.
+            - You can delete your account from Manage Data. That flow is designed to remove your login, profile, listings, requests, messages, support history, and saved data from Rentiwise.
             - For privacy questions or deletion help, contact support@rentiwise.com.
             """
         }

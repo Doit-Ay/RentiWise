@@ -13,7 +13,7 @@ import Foundation
 /// Maps to the `status` column in the `requests` table.
 public enum RentalStatus: String, CaseIterable, Codable {
     case pending    = "pending"     // Borrower sent request; awaiting lender decision
-    case accepted   = "accepted"   // Lender accepted; awaiting OTP pickup verification
+    case accepted   = "accepted"   // Lender accepted; awaiting payment and pickup verification
     case denied     = "denied"     // Lender denied the request
     case approved   = "approved"   // Pickup OTP verified; rental is active
     case completed  = "completed"  // Item returned and accepted by lender
@@ -169,6 +169,8 @@ public struct RequestWithItem: Codable {
     public var pickup_code: String?
     public var status: String
     public let created_at: String?
+    public let rental_unit: String? // "hour" or "day"
+    public let return_time: String?
 
     public let items: ItemLite? // joined item
 
@@ -177,6 +179,23 @@ public struct RequestWithItem: Codable {
     /// Parsed `RentalStatus` from the raw status string.
     public var rentalStatus: RentalStatus {
         RentalStatus(rawDBValue: status)
+    }
+}
+
+public enum RequestSchemaSupport {
+    private static var cachedPickupCodeSupport = true
+
+    public static var supportsPickupCode: Bool {
+        cachedPickupCodeSupport
+    }
+
+    public static func markPickupCodeUnavailable() {
+        cachedPickupCodeSupport = false
+    }
+
+    public static func isMissingPickupCodeError(_ error: Error) -> Bool {
+        let message = (error as NSError).localizedDescription.lowercased()
+        return message.contains("pickup_code") && (message.contains("schema cache") || message.contains("column"))
     }
 }
 

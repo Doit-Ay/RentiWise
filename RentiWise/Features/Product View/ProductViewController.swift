@@ -165,7 +165,7 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         // Include URL in text - iOS will auto-detect and make it clickable
         let deepLink = "rentiwise://item/\(item.id)"
         let shareText = """
-        Check out this item on RentiWise!
+        Check out this item on Rentiwise!
         
         \(item.title)
         \(priceText)
@@ -649,9 +649,13 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
 
     private func confirmDeleteAndDelete() async {
         await MainActor.run {
-            let ac = UIAlertController(title: "Delete Item", message: "This action cannot be undone.", preferredStyle: .alert)
+            let ac = UIAlertController(
+                title: "Remove Item",
+                message: "This will remove the item from active listings.",
+                preferredStyle: .alert
+            )
             ac.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-            ac.addAction(UIAlertAction(title: "Delete", style: .destructive, handler: { [weak self] _ in
+            ac.addAction(UIAlertAction(title: "Remove", style: .destructive, handler: { [weak self] _ in
                 Task { await self?.deleteItem() }
             }))
             self.present(ac, animated: true)
@@ -675,14 +679,28 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
 
     private func deleteItem() async {
         guard let item = selectedItem else { return }
+        guard let userId = await SupabaseManager.shared.currentUserId(),
+              userId.lowercased() == item.owner_id.lowercased() else {
+            await MainActor.run {
+                self.presentError("Only the owner can remove this item.")
+            }
+            return
+        }
+
+        struct ItemArchivePatch: Encodable {
+            let is_active: Bool
+        }
+
         do {
             try await SupabaseManager.shared.client
                 .from("items")
-                .delete()
+                .update(ItemArchivePatch(is_active: false))
                 .eq("id", value: item.id)
+                .eq("owner_id", value: userId)
                 .execute()
             await MainActor.run {
-                self.presentInfo("Item deleted.")
+                NotificationCenter.default.post(name: Notification.Name("itemsShouldRefresh"), object: nil)
+                self.presentInfo("Item removed from listings.")
             }
         } catch {
             await MainActor.run {
@@ -1558,6 +1576,14 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         // Prevent if already requested
         guard sender.isEnabled else { return }
 
+        Task { [weak self] in
+            guard let self else { return }
+            guard await self.ensureAuthenticated(orOpen: .signUp) else { return }
+            self.openRequestView(for: item)
+        }
+    }
+
+    private func openRequestView(for item: Item) {
         let nibName = "RequestViewController"
         let requestVC: RequestViewController
         if Bundle.main.path(forResource: nibName, ofType: "nib") != nil ||
@@ -1571,7 +1597,7 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         requestVC.title = "Request"
         requestVC.hidesBottomBarWhenPushed = true
 
-        if let nav = self.navigationController {
+        if let nav = navigationController {
             nav.setNavigationBarHidden(false, animated: true)
             nav.pushViewController(requestVC, animated: true)
         } else {

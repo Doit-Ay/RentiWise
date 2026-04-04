@@ -27,13 +27,15 @@ final class ProfileService: ProfileServicing {
         let userId = authUser.id.uuidString
 
         async let privateRowTask = fetchPrivateUserRow(userId: userId)
-        async let publicRowTask = fetchPublicUserProfileRow(userId: userId)
+        async let publicCoreTask = fetchPublicUserProfileCoreRow(userId: userId)
+        async let publicStatsTask = fetchPublicUserProfileStatsRow(userId: userId)
 
         let privateRow = await privateRowTask
-        let publicRow = await publicRowTask
+        let publicCore = await publicCoreTask
+        let publicStats = await publicStatsTask
 
         let email = privateRow?.email ?? authUser.email ?? ""
-        let fullName = publicRow?.full_name ?? privateRow?.full_name ?? ""
+        let fullName = publicCore?.full_name ?? privateRow?.full_name ?? ""
         let phone = privateRow?.phone ?? ""
         let phoneVerified = privateRow?.is_phone_verified ?? false
         let kycStatus = privateRow?.kyc_status ?? "none"
@@ -45,12 +47,12 @@ final class ProfileService: ProfileServicing {
             phone: phone,
             phoneVerified: phoneVerified,
             kycStatus: kycStatus,
-            upiId: publicRow?.upi_id ?? "",
-            collegeEmail: publicRow?.college_email ?? "",
-            isCollegeVerified: publicRow?.is_college_verified ?? false,
-            averageRating: publicRow?.average_rating ?? 0,
-            totalRentalsAsBorrower: publicRow?.total_rentals_as_borrower ?? 0,
-            borrowFreezeUntil: publicRow?.borrow_freeze_until
+            upiId: publicCore?.upi_id ?? privateRow?.upi_id ?? "",
+            collegeEmail: publicCore?.college_email ?? privateRow?.college_email ?? "",
+            isCollegeVerified: publicCore?.is_college_verified ?? privateRow?.is_college_verified ?? false,
+            averageRating: publicStats?.average_rating ?? 0,
+            totalRentalsAsBorrower: publicStats?.total_rentals_as_borrower ?? 0,
+            borrowFreezeUntil: publicStats?.borrow_freeze_until
         )
     }
 
@@ -123,18 +125,47 @@ final class ProfileService: ProfileServicing {
         }
     }
 
-    private func fetchPublicUserProfileRow(userId: String) async -> DBUserProfileRow? {
+    private func fetchPublicUserProfileCoreRow(userId: String) async -> PublicUserProfileCoreRow? {
         do {
             let response = try await client
                 .from("user_profiles")
-                .select("id,full_name,upi_id,college_email,is_college_verified,average_rating,total_rentals_as_borrower,borrow_freeze_until")
+                .select("id,full_name,upi_id,college_email,is_college_verified")
                 .eq("id", value: userId)
                 .single()
                 .execute()
 
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .iso8601
-            return try decoder.decode(DBUserProfileRow.self, from: response.data)
+            return try JSONDecoder().decode(PublicUserProfileCoreRow.self, from: response.data)
+        } catch {
+            return nil
+        }
+    }
+
+    private func fetchPublicUserProfileStatsRow(userId: String) async -> PublicUserProfileStatsRow? {
+        do {
+            let response = try await client
+                .from("user_profiles")
+                .select("average_rating,total_rentals_as_borrower,borrow_freeze_until")
+                .eq("id", value: userId)
+                .single()
+                .execute()
+
+            guard
+                let object = try JSONSerialization.jsonObject(with: response.data) as? [String: Any]
+            else {
+                return nil
+            }
+
+            let averageRating = object["average_rating"] as? Double
+                ?? (object["average_rating"] as? NSNumber)?.doubleValue
+            let totalRentals = object["total_rentals_as_borrower"] as? Int
+                ?? (object["total_rentals_as_borrower"] as? NSNumber)?.intValue
+            let freezeUntil = parseFlexibleISODate(object["borrow_freeze_until"])
+
+            return PublicUserProfileStatsRow(
+                average_rating: averageRating,
+                total_rentals_as_borrower: totalRentals,
+                borrow_freeze_until: freezeUntil
+            )
         } catch {
             return nil
         }
@@ -163,4 +194,32 @@ final class ProfileService: ProfileServicing {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         return trimmed.isEmpty ? nil : trimmed
     }
+
+    private func parseFlexibleISODate(_ value: Any?) -> Date? {
+        guard let raw = value as? String, !raw.isEmpty else { return nil }
+
+        let formatterWithFractional = ISO8601DateFormatter()
+        formatterWithFractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = formatterWithFractional.date(from: raw) {
+            return date
+        }
+
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter.date(from: raw)
+    }
+}
+
+private struct PublicUserProfileCoreRow: Decodable {
+    let id: String
+    let full_name: String?
+    let upi_id: String?
+    let college_email: String?
+    let is_college_verified: Bool?
+}
+
+private struct PublicUserProfileStatsRow {
+    let average_rating: Double?
+    let total_rentals_as_borrower: Int?
+    let borrow_freeze_until: Date?
 }

@@ -13,6 +13,7 @@ final class PhoneVerificationViewController: UIViewController, UITextFieldDelega
 
     // MARK: - Callback
     var onVerificationComplete: (() -> Void)?
+    var prefillPhone: String = ""
 
     // MARK: - Colors
     private let brandTeal = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0)
@@ -58,6 +59,7 @@ final class PhoneVerificationViewController: UIViewController, UITextFieldDelega
         view.backgroundColor = bgColor
         navigationItem.hidesBackButton = true // No skipping
         navigationController?.navigationBar.tintColor = brandTeal
+        enteredPhone = normalizedPhoneDigits(prefillPhone)
         setupScrollView()
         showPhoneEntry()
     }
@@ -502,6 +504,12 @@ final class PhoneVerificationViewController: UIViewController, UITextFieldDelega
         guard digits.count == 10 else { return digits }
         let d = Array(digits)
         return "\(String(d[0..<5])) \(String(d[5..<10]))"
+    }
+
+    private func normalizedPhoneDigits(_ phone: String) -> String {
+        let digits = phone.filter { $0.isNumber }
+        guard !digits.isEmpty else { return "" }
+        return digits.count > 10 ? String(digits.suffix(10)) : digits
     }
 
     private func shakeOTPFields() {

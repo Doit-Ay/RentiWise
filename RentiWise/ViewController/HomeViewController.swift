@@ -105,11 +105,7 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
     @IBAction func additemHomeTapped(_ sender: UIButton) {
         Task { [weak self] in
             guard let self else { return }
-            do {
-                // Check if the user is logged in
-                let session = try await SupabaseManager.shared.client.auth.session
-                _ = session.user // throws if not logged in
-
+            if await self.ensureAuthenticated(orOpen: .signUp) {
                 // Logged in -> start Add Item flow
                 let vc = AddItemFirstViewController(nibName: "AddItemFirstViewController", bundle: nil)
                 vc.title = "Add item"
@@ -121,29 +117,6 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
                 } else {
                     vc.modalPresentationStyle = .fullScreen
                     self.present(vc, animated: true)
-                }
-            } catch {
-                // Not logged in -> open Sign In
-                let nibName = "SignViewController"
-                let signInVC: SignViewController
-                if Bundle.main.path(forResource: nibName, ofType: "nib") != nil ||
-                    Bundle.main.path(forResource: "SignViewController", ofType: "xib") != nil {
-                    signInVC = SignViewController(nibName: nibName, bundle: nil)
-                } else {
-                    signInVC = SignViewController(service: SignInService())
-                }
-                // If you later want to resume Add Item after login, add a new routeContext case and handle it in SignViewController.
-                signInVC.routeContext = .default
-                signInVC.title = "Sign in"
-                signInVC.hidesBottomBarWhenPushed = true
-
-                if let nav = self.navigationController {
-                    nav.setNavigationBarHidden(false, animated: true)
-                    nav.pushViewController(signInVC, animated: true)
-                } else {
-                    let nav = UINavigationController(rootViewController: signInVC)
-                    nav.modalPresentationStyle = .fullScreen
-                    self.present(nav, animated: true)
                 }
             }
         }
@@ -375,7 +348,7 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
         banner.tag = 9999
 
         let label = UILabel()
-        label.text = "🎓 Verify your ID to rent items  →"
+        label.text = "🎓 Verify an email for extra trust points  →"
         label.font = .systemFont(ofSize: 14, weight: .semibold)
         label.textColor = .white
         label.translatesAutoresizingMaskIntoConstraints = false
@@ -569,25 +542,30 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
     // Helper to open RequestViewController directly from rent button
     func openRequestView(for item: Item) {
         guard ensureItemVisible(item) else { return }
-        let nibName = "RequestViewController"
-        let requestVC: RequestViewController
-        if Bundle.main.path(forResource: nibName, ofType: "nib") != nil ||
-            Bundle.main.path(forResource: nibName, ofType: "xib") != nil {
-            requestVC = RequestViewController(nibName: nibName, bundle: nil)
-        } else {
-            requestVC = RequestViewController()
-        }
-        requestVC.configure(with: item)
-        requestVC.title = "Request"
-        requestVC.hidesBottomBarWhenPushed = true
+        Task { [weak self] in
+            guard let self else { return }
+            guard await self.ensureAuthenticated(orOpen: .signUp) else { return }
 
-        if let nav = navigationController {
-            nav.setNavigationBarHidden(false, animated: true)
-            nav.pushViewController(requestVC, animated: true)
-        } else {
-            let nav = UINavigationController(rootViewController: requestVC)
-            nav.modalPresentationStyle = .fullScreen
-            present(nav, animated: true)
+            let nibName = "RequestViewController"
+            let requestVC: RequestViewController
+            if Bundle.main.path(forResource: nibName, ofType: "nib") != nil ||
+                Bundle.main.path(forResource: nibName, ofType: "xib") != nil {
+                requestVC = RequestViewController(nibName: nibName, bundle: nil)
+            } else {
+                requestVC = RequestViewController()
+            }
+            requestVC.configure(with: item)
+            requestVC.title = "Request"
+            requestVC.hidesBottomBarWhenPushed = true
+
+            if let nav = self.navigationController {
+                nav.setNavigationBarHidden(false, animated: true)
+                nav.pushViewController(requestVC, animated: true)
+            } else {
+                let nav = UINavigationController(rootViewController: requestVC)
+                nav.modalPresentationStyle = .fullScreen
+                self.present(nav, animated: true)
+            }
         }
     }
 

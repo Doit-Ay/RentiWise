@@ -264,6 +264,7 @@ class NotificationViewController: UIViewController {
             case "request_accepted":  notifType = .requestAccepted
             case "request_rejected":  notifType = .requestRejected
             case "payment_received":  notifType = .paymentReceived
+            case "payment_confirmed": notifType = .paymentConfirmed
             case "pickup_confirmed":  notifType = .pickupConfirmed
             case "new_request":       notifType = .newRequest
             default:                  notifType = .requestAccepted
@@ -293,7 +294,7 @@ class NotificationViewController: UIViewController {
                 tableName = "extension_requests"
             case .returnRequest:
                 tableName = "return_requests"
-            case .requestAccepted, .requestRejected, .paymentReceived, .pickupConfirmed, .newRequest:
+            case .requestAccepted, .requestRejected, .paymentReceived, .paymentConfirmed, .pickupConfirmed, .newRequest:
                 tableName = "notifications"
             }
             
@@ -348,7 +349,7 @@ extension NotificationViewController: UITableViewDelegate {
         switch notification.type {
         case .extensionRequest, .returnRequest:
             openRequestApprovalScreen(for: notification)
-        case .requestAccepted, .requestRejected, .paymentReceived, .pickupConfirmed, .newRequest:
+        case .requestAccepted, .requestRejected, .paymentReceived, .paymentConfirmed, .pickupConfirmed, .newRequest:
             // General notifications are informational — just marking as read is sufficient
             break
         }
@@ -399,6 +400,7 @@ enum NotificationType {
     case requestAccepted
     case requestRejected
     case paymentReceived
+    case paymentConfirmed
     case pickupConfirmed
     case newRequest
     
@@ -409,6 +411,7 @@ enum NotificationType {
         case .requestAccepted:   return "hand.thumbsup.fill"
         case .requestRejected:   return "hand.thumbsdown.fill"
         case .paymentReceived:   return "indianrupeesign.circle.fill"
+        case .paymentConfirmed:  return "checkmark.seal.fill"
         case .pickupConfirmed:   return "shippingbox.fill"
         case .newRequest:        return "bell.badge.fill"
         }
@@ -426,6 +429,8 @@ enum NotificationType {
             return UIColor.systemRed
         case .paymentReceived:
             return UIColor.systemOrange
+        case .paymentConfirmed:
+            return UIColor.systemGreen
         case .pickupConfirmed:
             return UIColor(red: 0.36, green: 0.66, blue: 0.71, alpha: 1.0)
         case .newRequest:

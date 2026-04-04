@@ -164,14 +164,14 @@ class EditProfileViewController: UITableViewController {
     private func makeSuccessMessage(for profile: UserProfile) -> String {
         if profile.isCollegeVerified {
             if profile.upiId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                return "Your college email was saved and verified. Add your UPI ID next to finish your borrowing setup."
+                return "Your college email was verified and now adds trust points to your profile. Add your UPI ID too if you want borrowers to pay you directly."
             }
 
-            return "Your profile changes were saved and your borrowing profile is ready."
+            return "Your profile changes were saved and your verified college email now boosts your trust profile."
         }
 
         if !profile.collegeEmail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return "Your profile changes were saved. Your college email is now on your account."
+            return "Your profile changes were saved. Your college email is on your account as an optional trust feature."
         }
 
         return "Your profile changes were saved successfully."
@@ -196,14 +196,14 @@ class EditProfileViewController: UITableViewController {
         switch section {
         case 0: return "Name"
         case 1: return "Contact"
-        case 2: return "Borrowing"
+        case 2: return "Optional College Email"
         default: return nil
         }
     }
     
     override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
         if section == 2 {
-            return "Educational email domains are marked as verified automatically in this beta build."
+            return "College email is optional. Educational domains are marked as verified automatically in this beta build and add extra trust points."
         }
         return nil
     }

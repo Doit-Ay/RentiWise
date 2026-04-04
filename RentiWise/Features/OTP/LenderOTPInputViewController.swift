@@ -2,13 +2,11 @@
 //  LenderOTPInputViewController.swift
 //  RentiWise
 //
-//  Shown to the lender when they tap "Verify Borrower" on an approved request.
-//  Provides 4 OTP input boxes; calls `verify-pickup-otp` Edge Function.
+//  Shown to the lender when they tap "Verify Borrower" on an accepted request.
+//  Verifies the request-backed 6-digit pickup OTP shown by the borrower.
 //
 
 import UIKit
-import Supabase
-
 final class LenderOTPInputViewController: UIViewController, UITextFieldDelegate {
 
     // MARK: - Inputs (set before push)
@@ -17,7 +15,7 @@ final class LenderOTPInputViewController: UIViewController, UITextFieldDelegate 
 
     // MARK: - UI
     private let titleLabel = UILabel()
-    private let otpFields: [UITextField] = (0..<4).map { _ in UITextField() }
+    private let otpFields: [UITextField] = (0..<6).map { _ in UITextField() }
     private let confirmButton = UIButton(type: .system)
     private let errorLabel = UILabel()
     private let spinner = UIActivityIndicatorView(style: .medium)
@@ -36,7 +34,7 @@ final class LenderOTPInputViewController: UIViewController, UITextFieldDelegate 
 
     // MARK: - UI Setup
     private func setupUI() {
-        titleLabel.text = "Enter the 4-digit code shown by the borrower"
+        titleLabel.text = "Enter the 6-digit code shown by the borrower"
         titleLabel.font = .systemFont(ofSize: 16, weight: .medium)
         titleLabel.textColor = .secondaryLabel
         titleLabel.textAlignment = .center
@@ -136,8 +134,8 @@ final class LenderOTPInputViewController: UIViewController, UITextFieldDelegate 
     // MARK: - Verify OTP
     @objc private func confirmTapped() {
         let otp = otpFields.map { $0.text ?? "" }.joined()
-        guard otp.count == 4 else {
-            showError("Please enter all 4 digits")
+        guard otp.count == 6 else {
+            showError("Please enter all 6 digits")
             shakeInputFields()
             return
         }
@@ -153,28 +151,28 @@ final class LenderOTPInputViewController: UIViewController, UITextFieldDelegate 
 
         Task {
             do {
-                let result: VerifyOTPResponse = try await SupabaseManager.shared.client.functions
-                    .invoke("verify-pickup-otp", options: .init(body: VerifyOTPRequest(request_id: requestId, otp: otp)))
+                try await PickupOTPService.shared.verifyPickupCode(requestId: requestId, otp: otp)
 
                 await MainActor.run {
                     self.spinner.stopAnimating()
                     self.confirmButton.isEnabled = true
-                    if result.success {
-                        self.showSuccess()
-                    } else {
-                        self.attemptCount += 1
-                        self.showError(result.error ?? "Incorrect code. \(self.maxAttempts - self.attemptCount) attempts remaining.")
-                        self.shakeInputFields()
-                        if self.attemptCount >= self.maxAttempts {
-                            self.disableInput()
-                        }
-                    }
+                    self.showSuccess()
                 }
             } catch {
                 await MainActor.run {
                     self.spinner.stopAnimating()
                     self.confirmButton.isEnabled = true
-                    self.showError("Network error: \(error.localizedDescription)")
+                    let message = error.localizedDescription
+                    let countsAsFailedAttempt = message.localizedCaseInsensitiveContains("doesn't match")
+
+                    self.showError(message)
+                    if countsAsFailedAttempt {
+                        self.attemptCount += 1
+                        self.shakeInputFields()
+                        if self.attemptCount >= self.maxAttempts {
+                            self.disableInput()
+                        }
+                    }
                 }
             }
         }
@@ -228,15 +226,4 @@ final class LenderOTPInputViewController: UIViewController, UITextFieldDelegate 
             }
         }
     }
-}
-
-// MARK: - Models
-private struct VerifyOTPRequest: Encodable {
-    let request_id: String
-    let otp: String
-}
-
-private struct VerifyOTPResponse: Decodable {
-    let success: Bool
-    let error: String?
 }

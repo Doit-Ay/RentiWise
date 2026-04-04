@@ -6,6 +6,9 @@
 //
 
 import UIKit
+#if canImport(GoogleSignIn)
+import GoogleSignIn
+#endif
 
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -32,11 +35,14 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // Release any resources that were specific to the discarded scenes.
     }
 
-    // IMPORTANT: With UIScene, let SceneDelegate handle URLs.
-    // Returning false ensures we don't double-handle the Google redirect and crash AppAuth.
     func application(_ app: UIApplication,
                      open url: URL,
                      options: [UIApplication.OpenURLOptionsKey : Any] = [:]) -> Bool {
+#if canImport(GoogleSignIn)
+        if GIDSignIn.sharedInstance.handle(url) {
+            return true
+        }
+#endif
         return false
     }
 }

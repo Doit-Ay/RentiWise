@@ -21,7 +21,7 @@ final class PhoneVerificationService {
     // MARK: - Send OTP (real SMS via Twilio)
 
     func sendOTP(phone: String) async throws {
-        let e164 = phone.hasPrefix("+91") ? phone : "+91\(phone)"
+        let e164 = normalizedE164Phone(phone)
 
         guard let userId = await SupabaseManager.shared.currentUserId() else {
             throw VerificationError.notLoggedIn
@@ -106,7 +106,7 @@ final class PhoneVerificationService {
     // MARK: - Mark Phone Verified
 
     func markPhoneVerified(userId: String, phone: String) async throws {
-        let e164 = phone.hasPrefix("+91") ? phone : "+91\(phone)"
+        let e164 = normalizedE164Phone(phone)
 
         struct PhoneUpdate: Encodable {
             let phone: String
@@ -156,5 +156,11 @@ final class PhoneVerificationService {
 
     func clearCache() {
         cachedVerificationStatus.removeAll()
+    }
+
+    private func normalizedE164Phone(_ phone: String) -> String {
+        let digits = phone.filter { $0.isNumber }
+        let localDigits = digits.count > 10 ? String(digits.suffix(10)) : digits
+        return "+91\(localDigits)"
     }
 }

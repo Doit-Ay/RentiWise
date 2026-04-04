@@ -345,7 +345,7 @@ final class ProfileViewController: UITableViewController {
                 openSignUp()
             } else if isLoggedIn {
                 if showsPhoneVerificationRow && indexPath.row == 1 {
-                    presentPhoneOTP()
+                    presentPhoneVerification()
                 } else if indexPath.row == borrowingSetupRowIndex {
                     editProfileTapped()
                 } else if let kycRowIndex, indexPath.row == kycRowIndex {
@@ -412,20 +412,18 @@ final class ProfileViewController: UITableViewController {
         }
     }
 
-    // MARK: - Phone OTP Verification
+    // MARK: - Phone Verification
 
-    private func presentPhoneOTP() {
-        let otpVC = PhoneOTPViewController()
-        otpVC.prefillPhone = userPhone
-        otpVC.onComplete = { [weak self] verified in
+    private func presentPhoneVerification() {
+        let phoneVC = PhoneVerificationViewController()
+        phoneVC.prefillPhone = userPhone
+        phoneVC.onVerificationComplete = { [weak self] in
             self?.dismiss(animated: true) {
-                if verified {
-                    self?.phoneVerified = true
-                    self?.tableView.reloadData()
-                }
+                guard let self else { return }
+                Task { await self.refreshAuthState() }
             }
         }
-        let nav = UINavigationController(rootViewController: otpVC)
+        let nav = UINavigationController(rootViewController: phoneVC)
         nav.modalPresentationStyle = .fullScreen
         present(nav, animated: true)
     }
@@ -510,27 +508,9 @@ final class ProfileViewController: UITableViewController {
         cell.textLabel?.numberOfLines = 2
 
         guard let profile = currentProfile else {
-            cell.textLabel?.text = "Complete borrowing profile"
+            cell.textLabel?.text = "Complete your profile details"
             cell.textLabel?.textColor = brandTeal
-            cell.imageView?.image = UIImage(systemName: "graduationcap")
-            cell.imageView?.tintColor = brandTeal
-            return
-        }
-
-        if !profile.isCollegeVerified {
-            cell.textLabel?.text = profile.collegeEmail.isEmpty
-                ? "Add your college email to unlock borrowing"
-                : "College email saved. Use a supported educational domain to unlock borrowing"
-            cell.textLabel?.textColor = .systemOrange
-            cell.imageView?.image = UIImage(systemName: "graduationcap.circle")
-            cell.imageView?.tintColor = .systemOrange
-            return
-        }
-
-        if profile.upiId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            cell.textLabel?.text = "College email verified. Add your UPI ID to finish borrowing setup"
-            cell.textLabel?.textColor = brandTeal
-            cell.imageView?.image = UIImage(systemName: "indianrupeesign.circle")
+            cell.imageView?.image = UIImage(systemName: "person.text.rectangle")
             cell.imageView?.tintColor = brandTeal
             return
         }
@@ -546,7 +526,25 @@ final class ProfileViewController: UITableViewController {
             return
         }
 
-        cell.textLabel?.text = "Borrowing profile ready"
+        if profile.upiId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            cell.textLabel?.text = "Add your UPI ID so borrowers can pay you directly"
+            cell.textLabel?.textColor = brandTeal
+            cell.imageView?.image = UIImage(systemName: "indianrupeesign.circle")
+            cell.imageView?.tintColor = brandTeal
+            return
+        }
+
+        if !profile.isCollegeVerified {
+            cell.textLabel?.text = profile.collegeEmail.isEmpty
+                ? "Add a college email for extra trust points (optional)"
+                : "College email saved. Use a supported educational domain to earn extra trust points"
+            cell.textLabel?.textColor = brandTeal
+            cell.imageView?.image = UIImage(systemName: "graduationcap.circle")
+            cell.imageView?.tintColor = brandTeal
+            return
+        }
+
+        cell.textLabel?.text = "Borrowing and lending profile ready"
         cell.textLabel?.textColor = .systemGreen
         cell.imageView?.image = UIImage(systemName: "checkmark.seal.fill")
         cell.imageView?.tintColor = .systemGreen

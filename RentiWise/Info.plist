@@ -14,17 +14,31 @@
 				<string>rentiwise</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>google-sign-in</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.1077911784517-bdqkvofusmbagv4nrdlbk8bessohh8fj</string>
+			</array>
+		</dict>
 	</array>
+	<key>CFBundleDisplayName</key>
+	<string>Rentiwise</string>
+	<key>GIDClientID</key>
+	<string>1077911784517-bdqkvofusmbagv4nrdlbk8bessohh8fj.apps.googleusercontent.com</string>
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>upi</string>
 	</array>
 	<key>NSCameraUsageDescription</key>
-	<string>RentiWise uses the camera so you can photograph items you’re listing and record return or damage evidence.</string>
+	<string>Rentiwise uses the camera so you can photograph items you’re listing and record return or damage evidence.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>RentiWise uses your location while the app is open to show nearby rentals and pickup-relevant results.</string>
+	<string>Rentiwise uses your location while the app is open to show nearby rentals and pickup-relevant results.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>RentiWise uses your photo library so you can attach listing photos and return or damage evidence.</string>
+	<string>Rentiwise uses your photo library so you can attach listing photos and return or damage evidence.</string>
 	<key>SUPABASE_ANON_KEY</key>
 	<string>eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFzc3NobWNjZGtrdGZ4cXljdWZ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMyMjc4NDEsImV4cCI6MjA3ODgwMzg0MX0.x_WZdOdzs3F6juZBJx9tl3e7cM4ycCt__qadpqpxmaI</string>
 	<key>SUPABASE_URL</key>

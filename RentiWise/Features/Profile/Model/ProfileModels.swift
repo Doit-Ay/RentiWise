@@ -29,20 +29,12 @@ struct DBUserRow: Decodable {
     let email: String?
     let full_name: String?
     let phone: String?
-    let profile_photo_url: String?
-    let is_phone_verified: Bool?
-    let kyc_status: String?
-}
-
-struct DBUserProfileRow: Decodable {
-    let id: String
-    let full_name: String?
     let upi_id: String?
     let college_email: String?
     let is_college_verified: Bool?
-    let average_rating: Double?
-    let total_rentals_as_borrower: Int?
-    let borrow_freeze_until: Date?
+    let profile_photo_url: String?
+    let is_phone_verified: Bool?
+    let kyc_status: String?
 }
 
 struct ProfileSaveInput {

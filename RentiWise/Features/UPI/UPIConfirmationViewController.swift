@@ -2,8 +2,8 @@
 //  UPIConfirmationViewController.swift
 //  RentiWise
 //
-//  Shown after lender approves a request, before the OTP screen.
-//  Displays rental summary, lender UPI ID, and "I have paid" confirmation.
+//  Shown after the lender accepts a request.
+//  Lets the borrower pay via UPI and mark the payment as sent to the lender.
 //
 
 import UIKit
@@ -146,7 +146,7 @@ final class UPIConfirmationViewController: UIViewController {
         contentStack.addArrangedSubview(confirmRow)
 
         // --- Proceed Button ---
-        proceedButton.setTitle("Proceed to Pickup Code", for: .normal)
+        proceedButton.setTitle("I Have Paid", for: .normal)
         proceedButton.titleLabel?.font = .systemFont(ofSize: 18, weight: .bold)
         proceedButton.backgroundColor = .systemGray4
         proceedButton.setTitleColor(.white, for: .normal)
@@ -194,32 +194,25 @@ final class UPIConfirmationViewController: UIViewController {
 
         Task {
             do {
-                // Update request: payment_confirmed_by_borrower = true
-                struct ConfirmUpdate: Encodable { let payment_confirmed_by_borrower: Bool }
-                _ = try await SupabaseManager.shared.client
-                    .from("requests")
-                    .update(ConfirmUpdate(payment_confirmed_by_borrower: true))
-                    .eq("id", value: requestId)
-                    .execute()
+                let context = RentalPaymentContext(
+                    requestId: requestId,
+                    itemId: itemId,
+                    ownerId: lenderId,
+                    borrowerId: borrowerId,
+                    rentalFee: totalAmount,
+                    depositAmount: depositAmount
+                )
+
+                _ = try await RentalPaymentStateService.shared.markBorrowerPaid(context: context)
+                RemoteNotificationService.sendPaymentReceived(
+                    requestId: requestId,
+                    ownerId: lenderId,
+                    itemTitle: itemName
+                )
 
                 await MainActor.run {
                     self.onPaymentConfirmed?()
-                    // Navigate to Rental Agreement flow
-                    let agreementVC = RentalAgreementViewController()
-                    agreementVC.requestId = self.requestId
-                    agreementVC.itemName = self.itemName
-                    agreementVC.itemId = self.itemId
-                    agreementVC.lenderId = self.lenderId
-                    agreementVC.borrowerId = self.borrowerId
-                    agreementVC.lenderName = self.lenderName
-                    agreementVC.borrowerName = self.borrowerName
-                    agreementVC.startDate = self.startDate
-                    agreementVC.endDate = self.endDate
-                    agreementVC.durationDays = self.durationDays
-                    agreementVC.pricePerDay = self.pricePerDay
-                    agreementVC.totalRentalPrice = self.totalAmount
-                    agreementVC.depositAmount = self.depositAmount
-                    self.navigationController?.pushViewController(agreementVC, animated: true)
+                    self.navigationController?.popViewController(animated: true)
                 }
             } catch {
                 await MainActor.run {

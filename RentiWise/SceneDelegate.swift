@@ -1,5 +1,8 @@
 import UIKit
 import Supabase
+#if canImport(GoogleSignIn)
+import GoogleSignIn
+#endif
 
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
@@ -19,6 +22,12 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // so root VC has time to load
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
             self?.checkPhoneVerificationForExistingUser()
+        }
+    }
+
+    func sceneDidBecomeActive(_ scene: UIScene) {
+        Task {
+            await PendingItemRemovalSync.shared.syncIfNeeded()
         }
     }
 
@@ -129,6 +138,12 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
         // Handle exactly one URL, once.
         guard let url = URLContexts.first?.url else { return }
+
+#if canImport(GoogleSignIn)
+        if GIDSignIn.sharedInstance.handle(url) {
+            return
+        }
+#endif
 
         // Handle deep links for item sharing (rentiwise://item/{id})
         handleDeepLink(url)

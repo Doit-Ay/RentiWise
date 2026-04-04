@@ -369,26 +369,30 @@ extension CategoriesViewController: CategoryItemCellDelegate {
         let data = isFiltering ? filteredItems : items
         let item = data[indexPath.row]
         debugLog("📦 Opening RequestVC for item: \(item.title)")
+        Task { [weak self] in
+            guard let self else { return }
+            guard await self.ensureAuthenticated(orOpen: .signUp) else { return }
 
-        let nibName = "RequestViewController"
-        let requestVC: RequestViewController
-        if Bundle.main.path(forResource: nibName, ofType: "nib") != nil ||
-            Bundle.main.path(forResource: nibName, ofType: "xib") != nil {
-            requestVC = RequestViewController(nibName: nibName, bundle: nil)
-        } else {
-            requestVC = RequestViewController()
-        }
-        requestVC.configure(with: item)
-        requestVC.title = "Request"
-        requestVC.hidesBottomBarWhenPushed = true
+            let nibName = "RequestViewController"
+            let requestVC: RequestViewController
+            if Bundle.main.path(forResource: nibName, ofType: "nib") != nil ||
+                Bundle.main.path(forResource: nibName, ofType: "xib") != nil {
+                requestVC = RequestViewController(nibName: nibName, bundle: nil)
+            } else {
+                requestVC = RequestViewController()
+            }
+            requestVC.configure(with: item)
+            requestVC.title = "Request"
+            requestVC.hidesBottomBarWhenPushed = true
 
-        if let nav = navigationController {
-            nav.setNavigationBarHidden(false, animated: true)
-            nav.pushViewController(requestVC, animated: true)
-        } else {
-            let nav = UINavigationController(rootViewController: requestVC)
-            nav.modalPresentationStyle = .fullScreen
-            present(nav, animated: true)
+            if let nav = self.navigationController {
+                nav.setNavigationBarHidden(false, animated: true)
+                nav.pushViewController(requestVC, animated: true)
+            } else {
+                let nav = UINavigationController(rootViewController: requestVC)
+                nav.modalPresentationStyle = .fullScreen
+                self.present(nav, animated: true)
+            }
         }
     }
 }

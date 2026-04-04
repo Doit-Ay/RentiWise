@@ -92,7 +92,7 @@ final class AgreementViewerViewController: UIViewController {
 
                 // Build plain text for sharing
                 agreementText = """
-                RentiWise Rental Agreement
+                Rentiwise Rental Agreement
                 ──────────────────────────
                 Item: \(data.item_name)
                 Period: \(data.start_date) to \(data.end_date)

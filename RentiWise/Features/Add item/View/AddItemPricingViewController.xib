@@ -10,6 +10,7 @@
     <objects>
         <placeholder placeholderIdentifier="IBFilesOwner" id="-1" userLabel="File's Owner" customClass="AddItemPricingViewController" customModule="RentiWise" customModuleProvider="target">
             <connections>
+                <outlet property="declaredValueHintLabel" destination="TlY-kZ-o5a" id="F2T-Zi-f6v"/>
                 <outlet property="pricePerDay" destination="WRa-L9-bWT" id="Ybk-GO-Yyw"/>
                 <outlet property="refundableDeposit" destination="dOc-PF-fB6" id="bfk-Z9-kee"/>
                 <outlet property="view" destination="i5M-Pr-FkT" id="sfx-zR-JGt"/>
@@ -256,10 +257,9 @@
                                         </userDefinedRuntimeAttribute>
                                     </userDefinedRuntimeAttributes>
                                 </textField>
-                                <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Used for trust checks and borrowing limits during the beta." textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="TlY-kZ-o5a">
-                                    <rect key="frame" x="0.0" y="216.66666666666669" width="353" height="20.333333333333343"/>
+                                <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Used for trust checks and borrowing limits during the beta." textAlignment="natural" lineBreakMode="wordWrap" numberOfLines="0" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="TlY-kZ-o5a">
+                                    <rect key="frame" x="0.0" y="216.66666666666669" width="353" height="36"/>
                                     <constraints>
-                                        <constraint firstAttribute="height" constant="20.329999999999998" id="0kh-uF-7Im"/>
                                         <constraint firstAttribute="height" relation="greaterThanOrEqual" constant="20.329999999999998" id="3t7-VW-mUn"/>
                                     </constraints>
                                     <fontDescription key="fontDescription" type="system" pointSize="13"/>

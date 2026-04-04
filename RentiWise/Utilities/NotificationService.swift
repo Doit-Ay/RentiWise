@@ -126,7 +126,7 @@ final class NotificationService {
             case .accepted:
                 content.title = "Request Accepted"
                 content.body = role == "borrower"
-                    ? "Your request for \"\(itemTitle)\" was accepted! Verify pickup with OTP."
+                    ? "Your request for \"\(itemTitle)\" was accepted. Pay the lender via UPI to continue."
                     : "You accepted the request for \"\(itemTitle)\"."
             case .denied, .rejected:
                 content.title = "Request Denied"

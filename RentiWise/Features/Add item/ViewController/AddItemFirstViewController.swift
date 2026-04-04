@@ -242,14 +242,22 @@ class AddItemFirstViewController: UIViewController,
                 cv.bottomAnchor.constraint(equalTo: container.bottomAnchor)
             ])
         } else {
+            let bottomConstraint: NSLayoutConstraint
+            if let photoTipsLabel = container.subviews.compactMap({ $0 as? UILabel }).first(where: { $0.text == "Photo Tips" }) {
+                bottomConstraint = cv.bottomAnchor.constraint(equalTo: photoTipsLabel.topAnchor, constant: -16)
+            } else {
+                bottomConstraint = cv.bottomAnchor.constraint(equalTo: container.bottomAnchor)
+            }
+
             NSLayoutConstraint.activate([
                 cv.topAnchor.constraint(equalTo: container.topAnchor),
                 cv.leadingAnchor.constraint(equalTo: container.leadingAnchor),
                 cv.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-                cv.bottomAnchor.constraint(equalTo: container.bottomAnchor)
+                bottomConstraint
             ])
         }
 
+        container.sendSubviewToBack(cv)
         collectionView = cv
     }
 

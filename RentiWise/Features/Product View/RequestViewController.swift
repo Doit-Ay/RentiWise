@@ -728,6 +728,8 @@ class RequestViewController: UIViewController {
             let borrower_lat: Double?
             let borrower_lng: Double?
             let borrower_location_captured_at: String?
+            let rental_unit: String?
+            let return_time: String?
         }
         
         guard let itemObj = self.item else { return }
@@ -747,7 +749,9 @@ class RequestViewController: UIViewController {
             message: nil,
             borrower_lat: coordinates?.latitude,
             borrower_lng: coordinates?.longitude,
-            borrower_location_captured_at: locationTimestamp
+            borrower_location_captured_at: locationTimestamp,
+            rental_unit: rentalUnit == .hour ? "hour" : "day",
+            return_time: sqlTimeFormatter.string(from: rentalUnit == .hour ? returnPicker : returnPicker) // returnPicker has the time
         )
         
         do {
@@ -850,12 +854,8 @@ class RequestViewController: UIViewController {
         let rows = try JSONDecoder().decode([ActiveRequestRow].self, from: response.data)
         return !rows.isEmpty
     }
-    
-    private func borrowingBlockerMessage(for profile: UserProfile, item: Item) -> String? {
-        if !profile.isCollegeVerified {
-            return "Add a college email in Profile to unlock borrowing in the beta."
-        }
 
+    private func borrowingBlockerMessage(for profile: UserProfile, item: Item) -> String? {
         if let freezeUntil = profile.borrowFreezeUntil, freezeUntil > Date() {
             let formatter = DateFormatter()
             formatter.dateStyle = .medium

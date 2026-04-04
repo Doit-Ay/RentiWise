@@ -276,37 +276,27 @@ extension HomeViewController {
     }
     
     func fetchUnreadExtensionCount(for ownerId: String) async throws -> Int {
-        struct CountResponse: Decodable {
-            let count: Int
-        }
-        
-        let response: [CountResponse] = try await SupabaseManager.shared.client
+        let response = try await SupabaseManager.shared.client
             .from("extension_requests")
-            .select("count", head: false, count: .exact)
+            .select("id, requests!inner(id)", head: true, count: .exact)
             .eq("requests.owner_id", value: ownerId)
             .eq("status", value: "pending")
             .or("is_read.is.null,is_read.eq.false")
             .execute()
-            .value
-        
-        return response.first?.count ?? 0
+
+        return response.count ?? 0
     }
     
     func fetchUnreadReturnCount(for ownerId: String) async throws -> Int {
-        struct CountResponse: Decodable {
-            let count: Int
-        }
-        
-        let response: [CountResponse] = try await SupabaseManager.shared.client
+        let response = try await SupabaseManager.shared.client
             .from("return_requests")
-            .select("count", head: false, count: .exact)
+            .select("id, requests!inner(id)", head: true, count: .exact)
             .eq("requests.owner_id", value: ownerId)
             .eq("status", value: "pending")
             .or("is_read.is.null,is_read.eq.false")
             .execute()
-            .value
-        
-        return response.first?.count ?? 0
+
+        return response.count ?? 0
     }
     
     func updateBadgeVisibility() {

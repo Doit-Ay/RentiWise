@@ -76,34 +76,13 @@ class AddItemPublishViewController: UIViewController {
     }
 
     @IBAction func PublishTapped(_ sender: UIButton) {
-        // Phone verification gate — must be verified to list items
         Task {
-            guard let userId = await SupabaseManager.shared.currentUserId() else {
-                await self.runPublishFlow(sender)
-                return
-            }
-            let isPhoneVerified = await PhoneVerificationService.shared.isPhoneVerified(userId: userId)
-            if !isPhoneVerified {
-                await MainActor.run {
-                    let phoneVC = PhoneVerificationViewController()
-                    phoneVC.onVerificationComplete = { [weak self] in
-                        self?.dismiss(animated: true) {
-                            guard let self else { return }
-                            self.PublishTapped(sender)
-                        }
-                    }
-                    let nav = UINavigationController(rootViewController: phoneVC)
-                    nav.modalPresentationStyle = .fullScreen
-                    self.present(nav, animated: true)
-                }
-                return
-            }
             await self.runPublishFlow(sender)
         }
     }
 
     private func runPublishFlow(_ sender: UIButton) async {
-        await MainActor.run {
+        let isValid = await MainActor.run { () -> Bool in
             // VALIDATION: ensure required fields are filled before submitting
             let trimmedTitle = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmedTitle.isEmpty {
@@ -112,7 +91,7 @@ class AddItemPublishViewController: UIViewController {
                                               preferredStyle: .alert)
                 alert.addAction(UIAlertAction(title: "OK", style: .default))
                 present(alert, animated: true)
-                return
+                return false
             }
             if draft.pricePerDay <= 0 {
                 let alert = UIAlertController(title: "Invalid Price",
@@ -120,15 +99,25 @@ class AddItemPublishViewController: UIViewController {
                                               preferredStyle: .alert)
                 alert.addAction(UIAlertAction(title: "OK", style: .default))
                 present(alert, animated: true)
-                return
+                return false
             }
-            Task {
-                if self.draft.isEditing {
-                    await self.update()
-                } else {
-                    await self.checkFreeTierAndPublish()
-                }
+            sender.isEnabled = false
+            sender.alpha = 0.7
+            return true
+        }
+
+        guard isValid else { return }
+        defer {
+            Task { @MainActor in
+                sender.isEnabled = true
+                sender.alpha = 1.0
             }
+        }
+
+        if self.draft.isEditing {
+            await self.update()
+        } else {
+            await self.checkFreeTierAndPublish()
         }
     }
 
@@ -258,4 +247,3 @@ class AddItemPublishViewController: UIViewController {
         dismiss(animated: true)
     }
 }
-

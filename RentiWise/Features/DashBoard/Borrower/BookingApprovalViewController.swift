@@ -121,6 +121,7 @@ class BookingApprovalViewController: UIViewController {
     private var currentExtensionRequestStatus: String?
     private var currentReturnRequestId: String?
     private var currentExtensionRequestId: String?
+    private var rentalPaymentState = RentalPaymentState.empty
 
     
     @IBOutlet weak var dateperiodLabel: UILabel!
@@ -145,9 +146,6 @@ class BookingApprovalViewController: UIViewController {
     @IBOutlet weak var statusToViewCodeTop: NSLayoutConstraint!
     // Height constraint for the new "View Code" container
     @IBOutlet weak var viewCodeHeight: NSLayoutConstraint!
-
-    // Collapse/expand helpers
-    private var codeStackCollapseConstraint: NSLayoutConstraint?
 
     // Heights
     private let collapsedViewCodeHeight: CGFloat = 56
@@ -225,14 +223,8 @@ class BookingApprovalViewController: UIViewController {
             v?.layer.masksToBounds = true
         }
 
-        // Prepare a reusable collapse constraint for the code stack
-        if codeStackCollapseConstraint == nil {
-            codeStackCollapseConstraint = codestack.heightAnchor.constraint(equalToConstant: 0)
-        }
-
         // Start collapsed: show only the button, hide the stack
         codestack.isHidden = true
-        codeStackCollapseConstraint?.isActive = true
         // Hide code view initially and collapse its height/spacing
         viewCodeUIView.isHidden = true
         viewCodeHeight?.constant = 0
@@ -246,6 +238,11 @@ class BookingApprovalViewController: UIViewController {
             $0?.layer.cornerRadius = 8
             $0?.layer.masksToBounds = true
         }
+        paymentButton.configuration = nil
+        paymentButton.titleLabel?.font = .systemFont(ofSize: 18, weight: .semibold)
+        paymentButton.contentHorizontalAlignment = .center
+        paymentStatus?.numberOfLines = 2
+        paymentStatus?.lineBreakMode = .byWordWrapping
 
         // Style Extend & Return buttons: no SF symbols, height 44, 18pt semibold
         for btn in [extendButton, returnButton] {
@@ -334,6 +331,7 @@ class BookingApprovalViewController: UIViewController {
                 debugLog("[BookingApproval] Notification received: requestApprovedNotification")
                 Task {
                     await self.refreshRequestFromDBIfPossible()
+                    await self.refreshRentalPaymentState()
                     await self.fetchRequestStatuses()
                 }
             }
@@ -358,6 +356,7 @@ class BookingApprovalViewController: UIViewController {
         debugLog("[BookingApproval] Notification received: requestsShouldRefresh -> refreshing request")
         Task {
             await refreshRequestFromDBIfPossible()
+            await refreshRentalPaymentState()
             await fetchRequestStatuses()
         }
     }
@@ -376,6 +375,7 @@ class BookingApprovalViewController: UIViewController {
         guard !hasLoadedInitialData else {
             Task { [weak self] in
                 await self?.refreshRequestFromDBIfPossible()
+                await self?.refreshRentalPaymentState()
                 await self?.fetchRequestStatuses()
             }
             startRefreshTimer() // Restart polling when returning from a modal/child VC
@@ -392,6 +392,7 @@ class BookingApprovalViewController: UIViewController {
 
             // Refresh the request row itself first
             await refreshRequestFromDBIfPossible()
+            await refreshRentalPaymentState()
 
             // Load owner name/avatar and address in parallel
             async let ownerTask: Void = {
@@ -463,7 +464,7 @@ class BookingApprovalViewController: UIViewController {
         Task { [weak self] in
             guard let self else { return }
             await self.refreshRequestFromDBIfPossible()
-            // Removed payment refresh calls
+            await self.refreshRentalPaymentState()
             await self.fetchRequestStatuses()
         }
     }
@@ -828,6 +829,16 @@ class BookingApprovalViewController: UIViewController {
     }
     
     @IBAction func ViewHideCodeButton(_ sender: UIButton) {
+        if shouldShowPickupOTPCTA && !showsLegacyInlinePickupCode {
+            let otpVC = BorrowerOTPViewController()
+            otpVC.requestId = request?.id ?? ""
+            otpVC.lenderName = ownNameLabel?.text?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+                ? (ownNameLabel?.text ?? "Lender")
+                : "Lender"
+            navigationController?.pushViewController(otpVC, animated: true)
+            return
+        }
+
         // Toggle the code stack visibility with animation
         UIView.animate(withDuration: 0.3) {
             let isCurrentlyHidden = self.codestack.isHidden
@@ -835,13 +846,11 @@ class BookingApprovalViewController: UIViewController {
             if isCurrentlyHidden {
                 // Expand: show the code stack
                 self.codestack.isHidden = false
-                self.codeStackCollapseConstraint?.isActive = false
                 self.viewCodeHeight?.constant = self.expandedViewCodeHeight
                 sender.setTitle("Hide Code", for: .normal)
             } else {
                 // Collapse: hide the code stack
                 self.codestack.isHidden = true
-                self.codeStackCollapseConstraint?.isActive = true
                 self.viewCodeHeight?.constant = self.collapsedViewCodeHeight
                 sender.setTitle("View Code", for: .normal)
             }
@@ -856,10 +865,9 @@ class BookingApprovalViewController: UIViewController {
         guard let req = request else { return }
         Task { [weak self] in
             guard let self else { return }
-            // Fetch lender UPI and name
             struct Profile: Decodable { let full_name: String?; let upi_id: String? }
-            var upi: String? = nil
-            var name: String = "Lender"
+            var upi = ""
+            var lenderName = ownNameLabel?.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "Lender"
             do {
                 let resp = try await SupabaseManager.shared.client
                     .from("user_profiles")
@@ -867,15 +875,39 @@ class BookingApprovalViewController: UIViewController {
                     .eq("id", value: req.owner_id)
                     .single()
                     .execute()
-                if let data = resp.data as? Data, let dto = try? JSONDecoder().decode(Profile.self, from: data) {
-                    upi = dto.upi_id
-                    if let n = dto.full_name, !n.isEmpty { name = n }
+                if let dto = try? JSONDecoder().decode(Profile.self, from: resp.data) {
+                    upi = dto.upi_id?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                    if let n = dto.full_name, !n.isEmpty { lenderName = n }
                 }
             } catch { }
-            // Compute total amount (rental fee only for TestFlight)
+
             let total = await self.computeAmountsForUPI(for: req)
+            let durationDays = self.durationDays(for: req)
+            let borrowerName = await self.currentUserDisplayName()
+
             await MainActor.run {
-                self.openUPILink(payee: upi, payeeName: name, amount: total)
+                let vc = UPIConfirmationViewController()
+                vc.requestId = req.id
+                vc.itemName = req.items?.title ?? "Item"
+                vc.itemId = req.item_id
+                vc.totalAmount = total
+                vc.depositAmount = 0
+                vc.lenderUpiId = upi
+                vc.lenderName = lenderName
+                vc.lenderId = req.owner_id
+                vc.borrowerId = req.borrower_id
+                vc.borrowerName = borrowerName
+                vc.startDate = self.sqlDateFormatter.date(from: req.start_date) ?? Date()
+                vc.endDate = self.sqlDateFormatter.date(from: req.end_date) ?? Date()
+                vc.durationDays = durationDays
+                vc.pricePerDay = req.items?.price_per_day ?? 0
+                vc.onPaymentConfirmed = { [weak self] in
+                    guard let self else { return }
+                    self.showToast(message: "Payment marked as sent", fromBottom: false)
+                    NotificationCenter.default.post(name: Notification.Name("requestsShouldRefresh"), object: nil)
+                    Task { await self.refreshRentalPaymentState() }
+                }
+                self.navigationController?.pushViewController(vc, animated: true)
             }
         }
     }
@@ -1217,17 +1249,13 @@ class BookingApprovalViewController: UIViewController {
     // MARK: - Private helpers
 
     private func applyModeUI() {
-        // Hide payment button in history mode (owner doesn't pay)
-        let hidePayment = (mode == .history)
-
-        paymentButton.isHidden = hidePayment
-        paymentButton.isEnabled = hidePayment ? false : paymentButton.isEnabled
-
-        // Payment status label visibility — repurposed to show rental status
-        if mode == .myRentals {
-            paymentStatus?.isHidden = false
-        } else {
-            paymentStatus?.isHidden = false
+        if mode == .history {
+            paymentButton.isHidden = true
+            paymentButton.isEnabled = false
+            paymentStatus?.isHidden = true
+            viewCodeUIView.isHidden = true
+            viewCodeHeight?.constant = 0
+            statusToViewCodeTop?.constant = 0
         }
 
         // Hide Extend and Return buttons for owners (only show to borrowers)
@@ -1253,14 +1281,29 @@ class BookingApprovalViewController: UIViewController {
         }
 
         if let p = pickupTime {
-            picktimeLabel.text = timeFormatter.string(from: p)
+            if request?.rental_unit == "hour", let rawReturn = request?.return_time,
+               let returnT = sqlTimeParser.date(from: rawReturn) ?? timeFormatter.date(from: rawReturn) {
+                picktimeLabel.text = "\(timeFormatter.string(from: p)) — \(timeFormatter.string(from: returnT))"
+            } else {
+                picktimeLabel.text = timeFormatter.string(from: p)
+            }
         } else {
             picktimeLabel.text = ""
         }
 
-        if let s = startDate, let r = returnTime {
-            let days = max(1, Int(ceil(r.timeIntervalSince(s) / 86400.0)))
-            numLabeldays.text = "\(days) Days"
+        if let s = startDate, let eDate = returnTime {
+            if request?.rental_unit == "hour" {
+                var hours = 1
+                if let rawPickup = request?.pickup_time, let rawReturn = request?.return_time,
+                   let pickup = sqlTimeParser.date(from: rawPickup) ?? timeFormatter.date(from: rawPickup),
+                   let returnT = sqlTimeParser.date(from: rawReturn) ?? timeFormatter.date(from: rawReturn) {
+                    hours = max(1, Int(ceil(returnT.timeIntervalSince(pickup) / 3600.0)))
+                }
+                numLabeldays.text = "\(hours) Hour\(hours == 1 ? "" : "s")"
+            } else {
+                let days = max(1, Int(ceil(eDate.timeIntervalSince(s) / 86400.0)))
+                numLabeldays.text = "\(days) Day\(days == 1 ? "" : "s")"
+            }
         } else {
             numLabeldays.text = ""
         }
@@ -1285,6 +1328,70 @@ class BookingApprovalViewController: UIViewController {
         (0..<6).map { _ in String(Int.random(in: 0...9)) }.joined()
     }
 
+    private var shouldShowPaymentCTA: Bool {
+        guard mode == .myRentals else { return false }
+        return request?.rentalStatus == .accepted && !rentalPaymentState.borrowerMarkedPaid
+    }
+
+    private var shouldShowPickupOTPCTA: Bool {
+        guard mode == .myRentals else { return false }
+        return request?.rentalStatus == .accepted && rentalPaymentState.lenderConfirmedReceived
+    }
+
+    private var showsLegacyInlinePickupCode: Bool {
+        guard mode == .myRentals else { return false }
+        let hasLegacyCode = !(request?.pickup_code?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+        let accepted = request?.rentalStatus == .accepted
+        return hasLegacyCode && accepted
+    }
+
+    private var viewCodePrimaryButton: UIButton? {
+        viewCodeUIView?.subviews.compactMap { $0 as? UIButton }.first
+    }
+
+    private func refreshPaymentRowVisibility() {
+        guard mode == .myRentals else {
+            paymentButton.isHidden = true
+            paymentButton.isEnabled = false
+            paymentButton.alpha = 0.5
+            paymentStatus?.isHidden = true
+            viewCodeUIView.isHidden = true
+            viewCodeHeight?.constant = 0
+            statusToViewCodeTop?.constant = 0
+            return
+        }
+
+        let showsPaymentCTA = shouldShowPaymentCTA
+
+        paymentButton.isHidden = !showsPaymentCTA
+        paymentButton.isEnabled = showsPaymentCTA
+        paymentButton.alpha = showsPaymentCTA ? 1.0 : 0.5
+
+        paymentStatus?.isHidden = showsPaymentCTA
+
+        let shouldShowPickupContainer = shouldShowPickupOTPCTA || showsLegacyInlinePickupCode
+        viewCodeUIView.isHidden = !shouldShowPickupContainer
+
+        if shouldShowPickupContainer {
+            codestack.isHidden = true
+            viewCodeHeight?.constant = collapsedViewCodeHeight
+            statusToViewCodeTop?.constant = 0
+            viewCodePrimaryButton?.setTitle(
+                shouldShowPickupOTPCTA && !showsLegacyInlinePickupCode ? "View Pickup OTP" : "View Code",
+                for: .normal
+            )
+        } else {
+            viewCodeHeight?.constant = 0
+            statusToViewCodeTop?.constant = 0
+        }
+
+        if showsPaymentCTA {
+            statusView?.bringSubviewToFront(paymentButton)
+        } else if let paymentStatus {
+            statusView?.bringSubviewToFront(paymentStatus)
+        }
+    }
+
     private func updateStatusUI() {
         let tealColor = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1)
 
@@ -1301,28 +1408,18 @@ class BookingApprovalViewController: UIViewController {
                 approvedpending.textColor = .label
                 tickimage.image = UIImage(systemName: "checkmark.circle")
                 tickimage.tintColor = .white
-                if mode == .myRentals {
-                    paymentButton.isEnabled = true
-                    paymentButton.alpha = 1.0
-                }
             } else {
                 // Pickup verified — rental is active
                 approvedpending.text = "Active"
                 approvedpending.textColor = .label
                 tickimage.image = UIImage(systemName: "checkmark.seal.fill")
                 tickimage.tintColor = .white
-                if mode == .myRentals {
-                    paymentButton.isEnabled = true
-                    paymentButton.alpha = 1.0
-                }
             }
         case .pending:
             approvedpending.text = "Pending"
             approvedpending.textColor = .label
             tickimage.image = UIImage(systemName: "questionmark.circle.dashed")
             tickimage.tintColor = .white
-            paymentButton.isEnabled = false
-            paymentButton.alpha = 0.5
         case .cancelled:
             approvedpending.text = "Cancelled"
             approvedpending.textColor = .label
@@ -1359,29 +1456,16 @@ class BookingApprovalViewController: UIViewController {
         tickimage.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 22, weight: .regular)
         tickimage.contentMode = .scaleAspectFit
 
-        // Show/hide View Code container depending on pickup_code availability on request
-        let codeAvailable = (request?.pickup_code?.isEmpty == false)
-        let shouldShowCode = codeAvailable && (status != .cancelled && status != .rejected && status != .completed)
-        viewCodeUIView.isHidden = !shouldShowCode
-        if shouldShowCode {
-            viewCodeHeight?.constant = collapsedViewCodeHeight
-            statusToViewCodeTop?.constant = 0
-        } else {
-            viewCodeHeight?.constant = 0
-            statusToViewCodeTop?.constant = 0
-        }
-
         // Button title from status (only applies in myRentals mode where button is visible)
         if mode == .myRentals && status != .cancelled && status != .rejected {
             paymentButton.setTitle("Pay via UPI", for: .normal)
             paymentButton.setTitleColor(.white, for: .normal)
             paymentButton.backgroundColor = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1)
-            paymentButton.isEnabled = (status == .approved)
-            paymentButton.alpha = paymentButton.isEnabled ? 1.0 : 0.5
         }
 
         // Update paymentStatus label to show rental status text
         updatePaymentStatusLabel()
+        refreshPaymentRowVisibility()
 
         // Update extend/return button titles based on current request status
         updateReturnButtonForRequestStatus()
@@ -1459,8 +1543,15 @@ class BookingApprovalViewController: UIViewController {
     }
 
     private func selectClause() -> String {
-        """
-        id,item_id,owner_id,borrower_id,start_date,end_date,pickup_time,status,created_at,pickup_code,
+        if RequestSchemaSupport.supportsPickupCode {
+            return """
+            id,item_id,owner_id,borrower_id,start_date,end_date,pickup_time,status,created_at,pickup_code,
+            items(id,title,images,price_per_day,category)
+            """
+        }
+
+        return """
+        id,item_id,owner_id,borrower_id,start_date,end_date,pickup_time,status,created_at,
         items(id,title,images,price_per_day,category)
         """
     }
@@ -1481,7 +1572,24 @@ class BookingApprovalViewController: UIViewController {
             let fresh = try JSONDecoder().decode(RequestWithItem.self, from: response.data)
             await MainActor.run { self.mapRefreshedRow(fresh) }
         } catch {
+            if RequestSchemaSupport.isMissingPickupCodeError(error), RequestSchemaSupport.supportsPickupCode {
+                RequestSchemaSupport.markPickupCodeUnavailable()
+                await refreshRequestFromDBIfPossible()
+            }
             // ignore
+        }
+    }
+
+    private func refreshRentalPaymentState() async {
+        guard let requestId = request?.id else { return }
+        do {
+            let state = try await RentalPaymentStateService.shared.fetch(requestId: requestId)
+            await MainActor.run {
+                self.rentalPaymentState = state
+                self.updateStatusUI()
+            }
+        } catch {
+            debugLog("[BookingApproval] Failed to refresh payment state: \(error.localizedDescription)")
         }
     }
 
@@ -1635,13 +1743,26 @@ class BookingApprovalViewController: UIViewController {
     // MARK: - Compute amounts (rental fee only)
 
     private func computeAmounts(for req: RequestWithItem) async -> (rentalFee: Double, deposit: Double) {
-        var days = 1
-        if let s = sqlDateFormatter.date(from: req.start_date),
-           let e = sqlDateFormatter.date(from: req.end_date) {
-            days = max(1, Int(ceil(e.timeIntervalSince(s) / 86400.0)))
-        }
         let pricePerDay = req.items?.price_per_day ?? 0
-        let rentalFee = Double(days) * pricePerDay
+        let rentalFee: Double
+
+        if req.rental_unit == "hour" {
+            var hours = 1
+            if let rawPickup = req.pickup_time, let rawReturn = req.return_time,
+               let pickup = sqlTimeParser.date(from: rawPickup) ?? DateFormatter().date(from: rawPickup),
+               let returnT = sqlTimeParser.date(from: rawReturn) ?? DateFormatter().date(from: rawReturn) {
+                hours = max(1, Int(ceil(returnT.timeIntervalSince(pickup) / 3600.0)))
+            }
+            let hourlyRate = pricePerDay / 8.0
+            rentalFee = Double(hours) * hourlyRate
+        } else {
+            var days = 1
+            if let s = sqlDateFormatter.date(from: req.start_date),
+               let e = sqlDateFormatter.date(from: req.end_date) {
+                days = max(1, Int(ceil(e.timeIntervalSince(s) / 86400.0)))
+            }
+            rentalFee = Double(days) * pricePerDay
+        }
 
         // Deposit always zero as per new logic
         let depositAmount: Double = 0
@@ -1651,12 +1772,64 @@ class BookingApprovalViewController: UIViewController {
     
     // New helper for UPI amount compute (only rental fee)
     private func computeAmountsForUPI(for req: RequestWithItem) async -> Double {
-        var days = 1
-        if let s = sqlDateFormatter.date(from: req.start_date), let e = sqlDateFormatter.date(from: req.end_date) {
-            days = max(1, Int(ceil(e.timeIntervalSince(s) / 86400.0)))
-        }
         let pricePerDay = req.items?.price_per_day ?? 0
-        return Double(days) * pricePerDay
+        if req.rental_unit == "hour" {
+            var hours = 1
+            if let rawPickup = req.pickup_time, let rawReturn = req.return_time,
+               let pickup = sqlTimeParser.date(from: rawPickup) ?? DateFormatter().date(from: rawPickup),
+               let returnT = sqlTimeParser.date(from: rawReturn) ?? DateFormatter().date(from: rawReturn) {
+                hours = max(1, Int(ceil(returnT.timeIntervalSince(pickup) / 3600.0)))
+            }
+            let hourlyRate = pricePerDay / 8.0
+            return Double(hours) * hourlyRate
+        } else {
+            var days = 1
+            if let s = sqlDateFormatter.date(from: req.start_date), let e = sqlDateFormatter.date(from: req.end_date) {
+                days = max(1, Int(ceil(e.timeIntervalSince(s) / 86400.0)))
+            }
+            return Double(days) * pricePerDay
+        }
+    }
+
+    private func durationDays(for req: RequestWithItem) -> Int {
+        if req.rental_unit == "hour" {
+            var hours = 1
+            if let rawPickup = req.pickup_time, let rawReturn = req.return_time,
+               let pickup = sqlTimeParser.date(from: rawPickup) ?? DateFormatter().date(from: rawPickup),
+               let returnT = sqlTimeParser.date(from: rawReturn) ?? DateFormatter().date(from: rawReturn) {
+                hours = max(1, Int(ceil(returnT.timeIntervalSince(pickup) / 3600.0)))
+            }
+            return hours
+        } else {
+            guard let s = sqlDateFormatter.date(from: req.start_date),
+                  let e = sqlDateFormatter.date(from: req.end_date) else {
+                return 1
+            }
+            return max(1, Int(ceil(e.timeIntervalSince(s) / 86400.0)))
+        }
+    }
+
+    private func currentUserDisplayName() async -> String {
+        guard let userId = await SupabaseManager.shared.currentUserId() else { return "Borrower" }
+
+        struct Profile: Decodable {
+            let full_name: String?
+        }
+
+        do {
+            let response = try await SupabaseManager.shared.client
+                .from("user_profiles")
+                .select("full_name")
+                .eq("id", value: userId)
+                .single()
+                .execute()
+
+            let profile = try JSONDecoder().decode(Profile.self, from: response.data)
+            let name = profile.full_name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return name.isEmpty ? "Borrower" : name
+        } catch {
+            return "Borrower"
+        }
     }
 
     private func updateAmountLabels(rental: Double, deposit: Double, total: Double) {
@@ -1664,7 +1837,8 @@ class BookingApprovalViewController: UIViewController {
         let totalText = currencyFormatter.string(from: NSNumber(value: total)) ?? String(format: "%.2f", total)
 
         fee?.text = rentalText
-        seclabel?.text = "Direct via UPI"
+        seclabel?.text = ""
+        seclabel?.superview?.isHidden = true // Hide the entire stack view (including its label)
         totamountlabel?.text = totalText
     }
 
@@ -1831,17 +2005,31 @@ class BookingApprovalViewController: UIViewController {
     // MARK: - Payment status label helper (repurposed for rental status display)
 
     private func updatePaymentStatusLabel() {
+        if shouldShowPaymentCTA {
+            paymentStatus?.text = nil
+            paymentStatus?.isHidden = true
+            return
+        }
+
         let rawStatus = request?.status.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
         if rawStatus == "accepted" {
-            paymentStatus?.text = "Awaiting Pickup Verification"
-            paymentStatus?.textColor = .systemOrange
+            if rentalPaymentState.lenderConfirmedReceived {
+                paymentStatus?.text = "Payment confirmed. Pickup OTP ready."
+                paymentStatus?.textColor = .systemGreen
+            } else if rentalPaymentState.borrowerMarkedPaid {
+                paymentStatus?.text = "Payment sent. Waiting for lender confirmation."
+                paymentStatus?.textColor = .systemOrange
+            } else {
+                paymentStatus?.text = "Pay the lender via UPI to continue."
+                paymentStatus?.textColor = .systemOrange
+            }
             paymentStatus?.isHidden = false
             return
         }
 
         switch self.status {
         case .approved:
-            paymentStatus?.text = "Rental Confirmed"
+            paymentStatus?.text = "Pickup Verified"
             paymentStatus?.textColor = .systemGreen
             paymentStatus?.isHidden = false
         case .pending:

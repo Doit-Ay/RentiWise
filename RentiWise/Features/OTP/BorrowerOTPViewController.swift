@@ -2,14 +2,12 @@
 //  BorrowerOTPViewController.swift
 //  RentiWise
 //
-//  Shown to the borrower after request is approved + UPI payment confirmed.
-//  Calls the `generate-otp` Edge Function and displays a 4-digit OTP for the borrower
+//  Shown to the borrower after the lender confirms UPI payment receipt.
+//  Loads or regenerates the request-backed 6-digit pickup OTP for the borrower
 //  to show the lender at pickup.
 //
 
 import UIKit
-import Supabase
-
 final class BorrowerOTPViewController: UIViewController {
 
     // MARK: - Inputs (set before push)
@@ -29,10 +27,10 @@ final class BorrowerOTPViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "Pickup Code"
+        title = "Pickup OTP"
         view.backgroundColor = .systemBackground
         setupUI()
-        generateOTP()
+        loadPickupOTP()
     }
 
     deinit {
@@ -89,20 +87,65 @@ final class BorrowerOTPViewController: UIViewController {
         ])
     }
 
-    // MARK: - Generate OTP via Edge Function
-    private func generateOTP() {
+    private func loadPickupOTP() {
         spinner.startAnimating()
         otpLabel.text = "----"
+        statusLabel.text = "Checking payment confirmation..."
+        regenerateButton.isHidden = true
         regenerateButton.isEnabled = false
 
         Task {
             do {
-                let result: GenerateOTPResponse = try await SupabaseManager.shared.client.functions
-                    .invoke("generate-otp", options: .init(body: GenerateOTPRequest(request_id: requestId, type: "pickup")))
+                let paymentState = try await RentalPaymentStateService.shared.fetch(requestId: requestId)
+                guard paymentState.lenderConfirmedReceived else {
+                    await MainActor.run {
+                        self.spinner.stopAnimating()
+                        self.instructionLabel.text = "Your pickup OTP unlocks after the lender confirms they received your UPI payment."
+                        self.statusLabel.text = "Waiting for lender payment confirmation"
+                        self.regenerateButton.isHidden = true
+                    }
+                    return
+                }
+
+                try await self.displayOrCreatePickupOTP()
+            } catch {
+                await MainActor.run {
+                    self.spinner.stopAnimating()
+                    self.otpLabel.text = "Error"
+                    self.statusLabel.text = error.localizedDescription
+                    self.regenerateButton.isHidden = false
+                    self.regenerateButton.isEnabled = true
+                }
+            }
+        }
+    }
+
+    private func displayOrCreatePickupOTP() async throws {
+        let code = try await PickupOTPService.shared.loadOrCreatePickupCode(requestId: requestId)
+        await MainActor.run {
+            self.spinner.stopAnimating()
+            self.regenerateButton.isHidden = false
+            self.regenerateButton.isEnabled = true
+            self.statusLabel.text = nil
+            self.otpLabel.text = code
+        }
+    }
+
+    // MARK: - Generate OTP from request row
+    private func generateOTP() {
+        spinner.startAnimating()
+        otpLabel.text = "----"
+        regenerateButton.isHidden = false
+        regenerateButton.isEnabled = false
+        statusLabel.text = "Generating pickup code..."
+
+        Task {
+            do {
+                let code = try await PickupOTPService.shared.regeneratePickupCode(requestId: requestId)
 
                 await MainActor.run {
                     self.spinner.stopAnimating()
-                    self.otpLabel.text = result.otp
+                    self.otpLabel.text = code
                     self.startCooldown()
                 }
             } catch {
@@ -138,14 +181,4 @@ final class BorrowerOTPViewController: UIViewController {
             }
         }
     }
-}
-
-// MARK: - Models
-private struct GenerateOTPRequest: Encodable {
-    let request_id: String
-    let type: String // "pickup" or "return"
-}
-
-private struct GenerateOTPResponse: Decodable {
-    let otp: String
 }

@@ -60,7 +60,7 @@ final class CollegeVerificationViewController: UIViewController, UITextFieldDele
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "Verify Your ID"
+        title = "Verify Email"
         view.backgroundColor = bgColor
         navigationController?.navigationBar.tintColor = brandTeal
         setupScrollView()
@@ -109,14 +109,14 @@ final class CollegeVerificationViewController: UIViewController, UITextFieldDele
         contentStack.addArrangedSubview(emailIcon)
 
         // Title
-        emailTitleLabel.text = "Verify to Start Renting"
+        emailTitleLabel.text = "Optional Email Verification"
         emailTitleLabel.font = .systemFont(ofSize: 22, weight: .bold)
         emailTitleLabel.textColor = bodyColor
         emailTitleLabel.textAlignment = .center
         contentStack.addArrangedSubview(emailTitleLabel)
 
         // Subtitle
-        emailSubLabel.text = "Enter your email to verify your identity. College emails earn extra trust points! This is a one-time step."
+        emailSubLabel.text = "Verify an email to strengthen your profile. College emails can earn extra trust points, but this step is optional."
         emailSubLabel.font = .systemFont(ofSize: 16)
         emailSubLabel.textColor = captionColor
         emailSubLabel.textAlignment = .center
@@ -189,7 +189,7 @@ final class CollegeVerificationViewController: UIViewController, UITextFieldDele
         contentStack.addArrangedSubview(spinner)
 
         // Why we ask
-        infoSection.text = "🔒 Why we ask\n\nVerifying your email builds trust with lenders. College/institute emails earn +25 bonus trust points and a 🎓 badge. We never share your email."
+        infoSection.text = "🔒 Why we ask\n\nA verified email builds trust with other users. College/institute emails earn +25 bonus trust points and a 🎓 badge. We never share your email."
         infoSection.font = .systemFont(ofSize: 14)
         infoSection.textColor = captionColor
         infoSection.numberOfLines = 0

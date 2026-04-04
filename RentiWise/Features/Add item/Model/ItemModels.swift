@@ -16,6 +16,7 @@ struct ItemInsertPayload: Encodable {
     let condition: String?
     let price_per_day: Double
     let deposit_amount: Double
+    let declared_value: Int
     let images: [String] // store Storage paths or URLs
     let is_active: Bool
 }

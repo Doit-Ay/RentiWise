@@ -81,3 +81,32 @@ struct Item: Decodable {
         return boostedUntil > Date()
     }
 }
+
+enum LocalItemVisibilityStore {
+    private static let hiddenItemIDsKey = "RW.hidden_item_ids"
+
+    static func pendingItemIDs() -> [String] {
+        Array(normalizedHiddenIDs())
+    }
+
+    static func hide(_ itemId: String) {
+        var hidden = normalizedHiddenIDs()
+        hidden.insert(normalize(itemId))
+        UserDefaults.standard.set(Array(hidden), forKey: hiddenItemIDsKey)
+    }
+
+    static func remove(_ itemId: String) {
+        var hidden = normalizedHiddenIDs()
+        hidden.remove(normalize(itemId))
+        UserDefaults.standard.set(Array(hidden), forKey: hiddenItemIDsKey)
+    }
+
+    private static func normalizedHiddenIDs() -> Set<String> {
+        let raw = UserDefaults.standard.stringArray(forKey: hiddenItemIDsKey) ?? []
+        return Set(raw.map(normalize))
+    }
+
+    private static func normalize(_ itemId: String) -> String {
+        itemId.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+}
