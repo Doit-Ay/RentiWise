@@ -79,21 +79,20 @@ final class SignInService: SignInServicing {
         let normalizedEmail = email?.trimmingCharacters(in: .whitespacesAndNewlines)
         let sanitizedEmail = (normalizedEmail?.isEmpty == false) ? normalizedEmail : nil
         let sanitizedFullName = fullName?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let resolvedFullName = (sanitizedFullName?.isEmpty == false)
-            ? sanitizedFullName
-            : sanitizedEmail?.split(separator: "@").first.map(String.init)
+        let resolvedFullName = (sanitizedFullName?.isEmpty == false) ? sanitizedFullName : nil
+
         do {
             if let sanitizedEmail {
                 let minimal = MinimalUserInsert(id: userId, email: sanitizedEmail)
                 _ = try await client
                     .from("users")
-                    .upsert(minimal)
+                    .insert(minimal) // Use insert instead of upsert to avoid overwriting existing data
                     .execute()
             }
 
             _ = try await client
                 .from("user_profiles")
-                .upsert(MinimalPublicProfileInsert(id: userId, full_name: resolvedFullName))
+                .insert(MinimalPublicProfileInsert(id: userId, full_name: resolvedFullName)) // Use insert
                 .execute()
         } catch {
             // Ignore conflict if row already exists

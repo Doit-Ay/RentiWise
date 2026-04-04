@@ -17,10 +17,12 @@ extension HomeViewController {
     }
 
     func checkAndUpdateListingSection() async {
+        let isPro = await IAPManager.shared.isProUser()
+        
         guard let userId = await SupabaseManager.shared.currentUserId() else {
             await MainActor.run {
                 self.isListingDataLoaded = true
-                self.showListingSection(.empty)
+                self.showListingSection(.empty, itemCount: 0, isPro: isPro)
             }
             return
         }
@@ -32,20 +34,21 @@ extension HomeViewController {
                 .eq("owner_id", value: userId)
                 .execute()
 
-            let hasAny = (response.count ?? 0) > 0
+            let count = response.count ?? 0
+            let hasAny = count > 0
             await MainActor.run {
                 self.isListingDataLoaded = true
-                self.showListingSection(hasAny ? .manage : .empty)
+                self.showListingSection(hasAny ? .manage : .empty, itemCount: count, isPro: isPro)
             }
         } catch {
             await MainActor.run {
                 self.isListingDataLoaded = true
-                self.showListingSection(.empty)
+                self.showListingSection(.empty, itemCount: 0, isPro: isPro)
             }
         }
     }
 
-    func showListingSection(_ state: ListingSectionState) {
+    func showListingSection(_ state: ListingSectionState, itemCount: Int = 0, isPro: Bool = false) {
         switch state {
         case .empty:
             manageContainerView?.removeFromSuperview()
@@ -63,21 +66,23 @@ extension HomeViewController {
             startearninglabel?.isHidden = true
             startearningdownlabel?.isHidden = true
 
-            if manageContainerView == nil {
-                manageContainerView = buildManageCardUI()
-                if let container = manageContainerView, let host = listingUIView {
-                    host.addSubview(container)
-                    container.translatesAutoresizingMaskIntoConstraints = false
-                    NSLayoutConstraint.activate([
-                        container.leadingAnchor.constraint(equalTo: host.leadingAnchor),
-                        container.trailingAnchor.constraint(equalTo: host.trailingAnchor),
-                        container.topAnchor.constraint(equalTo: host.topAnchor),
-                        container.bottomAnchor.constraint(equalTo: host.bottomAnchor)
-                    ])
-                }
+            if manageContainerView != nil {
+                manageContainerView?.removeFromSuperview()
+            }
+            manageContainerView = buildManageCardUI(itemCount: itemCount, isPro: isPro)
+            if let container = manageContainerView, let host = listingUIView {
+                host.addSubview(container)
+                container.translatesAutoresizingMaskIntoConstraints = false
+                NSLayoutConstraint.activate([
+                    container.leadingAnchor.constraint(equalTo: host.leadingAnchor),
+                    container.trailingAnchor.constraint(equalTo: host.trailingAnchor),
+                    container.topAnchor.constraint(equalTo: host.topAnchor),
+                    container.bottomAnchor.constraint(equalTo: host.bottomAnchor)
+                ])
             }
 
-            adjustListingViewHeightIfFixed(target: 160)
+            let targetHeight: CGFloat = isPro ? 144 : 190
+            adjustListingViewHeightIfFixed(target: targetHeight)
         }
         
         // Animate section visible after data is loaded (only on first load)
@@ -113,7 +118,7 @@ extension HomeViewController {
         }
     }
 
-    func buildManageCardUI() -> UIView {
+    func buildManageCardUI(itemCount: Int, isPro: Bool = false) -> UIView {
         let card = UIView()
         card.backgroundColor = .clear
         card.layer.cornerRadius = 16
@@ -141,7 +146,7 @@ extension HomeViewController {
         actionsRow.distribution = .equalSpacing
         actionsRow.spacing = 28
 
-        func roundAction(symbol: String, title: String, selector: Selector) -> UIView {
+        func roundAction(symbol: String, title: String, selector: Selector, isEnabled: Bool = true) -> UIView {
             let wrapper = UIStackView()
             wrapper.axis = .vertical
             wrapper.alignment = .center
@@ -179,23 +184,30 @@ extension HomeViewController {
                 icon.heightAnchor.constraint(equalToConstant: 24)
             ])
 
-            let tap = UITapGestureRecognizer(target: self, action: selector)
-            circle.isUserInteractionEnabled = true
-            circle.addGestureRecognizer(tap)
-            circle.accessibilityTraits = .button
-            circle.accessibilityLabel = title
-
             let caption = UILabel()
             caption.text = title
             caption.font = .systemFont(ofSize: 13, weight: .semibold)
             caption.textColor = .label
+
+            if isEnabled {
+                let tap = UITapGestureRecognizer(target: self, action: selector)
+                circle.isUserInteractionEnabled = true
+                circle.addGestureRecognizer(tap)
+                circle.accessibilityTraits = .button
+            } else {
+                circle.isUserInteractionEnabled = false
+                wrapper.alpha = 0.4
+                caption.textColor = .secondaryLabel
+                icon.tintColor = .secondaryLabel
+            }
+            circle.accessibilityLabel = title
 
             wrapper.addArrangedSubview(circle)
             wrapper.addArrangedSubview(caption)
             return wrapper
         }
 
-        let add = roundAction(symbol: "plus", title: "Add Item", selector: #selector(manageListItemTapped))
+        let add = roundAction(symbol: "plus", title: "Add Item", selector: #selector(manageListItemTapped), isEnabled: isPro || itemCount < 3)
         let req = roundAction(symbol: "tray.and.arrow.down", title: "Requests", selector: #selector(manageRequestsTapped))
         let man = roundAction(symbol: "rectangle.stack", title: "Manage", selector: #selector(manageManageTapped))
 
@@ -205,10 +217,58 @@ extension HomeViewController {
         actionsRow.addArrangedSubview(man)
         actionsRow.addArrangedSubview(UIView())
 
+        let proStack = UIStackView()
+        proStack.axis = .horizontal
+        proStack.spacing = 8
+        proStack.alignment = .center
+        
+        let leftListings = max(0, 3 - itemCount)
+        let limitLabel = UILabel()
+        limitLabel.text = "\(leftListings)/3 listings left for free plan"
+        limitLabel.font = .systemFont(ofSize: 13, weight: .medium)
+        limitLabel.textColor = .secondaryLabel
+        limitLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        limitLabel.adjustsFontSizeToFitWidth = true
+        limitLabel.minimumScaleFactor = 0.8
+        
+        let buyProBtn = UIButton(type: .system)
+        buyProBtn.setTitle("Lender Pro", for: .normal)
+        
+        let crownConfig = UIImage.SymbolConfiguration(pointSize: 12, weight: .bold)
+        let crownImage = UIImage(systemName: "crown.fill", withConfiguration: crownConfig)?.withTintColor(.systemYellow, renderingMode: .alwaysOriginal)
+        buyProBtn.setImage(crownImage, for: .normal)
+        
+        buyProBtn.titleLabel?.font = .systemFont(ofSize: 13, weight: .bold)
+        buyProBtn.setTitleColor(.white, for: .normal)
+        
+        // Brand teal background for a button look
+        let brandTeal = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1.0)
+        buyProBtn.backgroundColor = brandTeal
+        buyProBtn.layer.cornerRadius = 16
+        
+        // Proper spacing horizontally
+        buyProBtn.contentEdgeInsets = UIEdgeInsets(top: 0, left: 14, bottom: 0, right: 14)
+        buyProBtn.titleEdgeInsets = UIEdgeInsets(top: 0, left: 6, bottom: 0, right: -6)
+        buyProBtn.imageEdgeInsets = UIEdgeInsets(top: 0, left: -2, bottom: 0, right: 2)
+        
+        buyProBtn.translatesAutoresizingMaskIntoConstraints = false
+        // Ensure button does NOT get compressed vertically or horizontally
+        buyProBtn.setContentCompressionResistancePriority(.required, for: .horizontal)
+        buyProBtn.setContentHuggingPriority(.required, for: .horizontal)
+        buyProBtn.heightAnchor.constraint(equalToConstant: 32).isActive = true
+        
+        buyProBtn.addTarget(self, action: #selector(buyLenderProTapped), for: .touchUpInside)        
+        proStack.addArrangedSubview(limitLabel)
+        proStack.addArrangedSubview(UIView()) // spacer
+        proStack.addArrangedSubview(buyProBtn)
+
         let v = UIStackView(arrangedSubviews: [title, actionsRow])
+        if !isPro {
+            v.addArrangedSubview(proStack)
+        }
         v.axis = .vertical
         v.alignment = .fill
-        v.spacing = 12
+        v.spacing = 16
         v.translatesAutoresizingMaskIntoConstraints = false
 
         card.addSubview(v)
@@ -225,6 +285,15 @@ extension HomeViewController {
     // MARK: - Manage actions
     @objc func manageListItemTapped() { additemHomeTapped(additemHome ?? UIButton(type: .system)) }
     @objc func manageRequestsTapped() { requestsButtonTapped(additemHome ?? UIButton(type: .system)) }
+    @objc func buyLenderProTapped() {
+        let upgradeVC = UpgradeProViewController()
+        upgradeVC.hidesBottomBarWhenPushed = true
+        if let nav = navigationController {
+            nav.pushViewController(upgradeVC, animated: true)
+        } else {
+            present(upgradeVC, animated: true)
+        }
+    }
     @objc func manageManageTapped() {
         let sb = UIStoryboard(name: "AppStarting", bundle: nil)
         guard let dashboard = sb.instantiateViewController(withIdentifier: "DashboardListing") as? DashboardViewController else {

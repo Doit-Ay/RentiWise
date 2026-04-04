@@ -322,7 +322,7 @@ final class UserProfileViewController: UIViewController, UITableViewDataSource, 
         } else {
             signInVC = SignViewController(service: SignInService())
         }
-        signInVC.title = "Sign In"
+        signInVC.title = ""
         signInVC.hidesBottomBarWhenPushed = true
 
         if let nav = navigationController {

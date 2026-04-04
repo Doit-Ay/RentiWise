@@ -96,12 +96,12 @@ final class LenderAgreementViewController: UIViewController {
                 // Fetch names
                 struct UserName: Decodable { let full_name: String? }
                 if let lid = data.lender_id {
-                    let r = try await SupabaseManager.shared.client.from("users").select("full_name").eq("id", value: lid).single().execute()
+                    let r = try await SupabaseManager.shared.client.from("user_profiles").select("full_name").eq("id", value: lid).single().execute()
                     let n = try? JSONDecoder().decode(UserName.self, from: r.data)
                     lenderName = n?.full_name ?? "Lender"
                 }
                 if let bid = data.borrower_id {
-                    let r = try await SupabaseManager.shared.client.from("users").select("full_name").eq("id", value: bid).single().execute()
+                    let r = try await SupabaseManager.shared.client.from("user_profiles").select("full_name").eq("id", value: bid).single().execute()
                     let n = try? JSONDecoder().decode(UserName.self, from: r.data)
                     borrowerName = n?.full_name ?? "Borrower"
                 }

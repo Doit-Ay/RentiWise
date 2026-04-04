@@ -51,6 +51,23 @@ extension HomeViewController {
                 configureFeaturedSlot(slot, with: items[i])
                 // Resolve and set owner name for this slot
                 resolveOwnerName(for: items[i].owner_id, slotIndex: i)
+
+                // Wire Rent button to open RequestViewController for the corresponding featured item slot
+                if let btn = slot.7 {
+                    btn.removeTarget(nil, action: nil, for: .allEvents)
+                    switch i {
+                    case 0:
+                        btn.addTarget(self, action: #selector(rentButton1Tapped(_:)), for: .touchUpInside)
+                    case 1:
+                        btn.addTarget(self, action: #selector(rentButton2Tapped(_:)), for: .touchUpInside)
+                    case 2:
+                        btn.addTarget(self, action: #selector(rentButton3Tapped(_:)), for: .touchUpInside)
+                    case 3:
+                        btn.addTarget(self, action: #selector(rentButton4Tapped(_:)), for: .touchUpInside)
+                    default:
+                        break
+                    }
+                }
             } else {
                 clearFeaturedSlot(slot)
             }
@@ -136,7 +153,7 @@ extension HomeViewController {
 
     func resolveOwnerName(for ownerId: String, slotIndex: Int) {
         Task {
-            if let name = try? await fetchName(from: "users", ownerId: ownerId), !name.isEmpty {
+            if let name = try? await fetchName(from: "user_profiles", ownerId: ownerId), !name.isEmpty {
                 await applyOwnerName(capitalizingFirstLetter(name), toSlotAt: slotIndex)
                 return
             }

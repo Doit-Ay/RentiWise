@@ -6,6 +6,7 @@
 //
 
 import UIKit
+import CoreLocation
 
 // MARK: - Trending UI (horizontal scroller inside trendingUiView)
 extension HomeViewController {
@@ -28,6 +29,7 @@ extension HomeViewController {
         cv.translatesAutoresizingMaskIntoConstraints = false
         cv.clipsToBounds = false
         cv.contentInset = UIEdgeInsets(top: 6, left: 0, bottom: 6, right: 0)
+        cv.delaysContentTouches = false
 
         host.addSubview(cv)
         NSLayoutConstraint.activate([
@@ -44,19 +46,42 @@ extension HomeViewController {
     }
 
     func updateTrendingItems(from items: [Item]) {
-        let sortedByRating = items.sorted { item1, item2 in
-            let rating1 = item1.average_rating ?? 0
-            let rating2 = item2.average_rating ?? 0
-            let count1 = item1.review_count ?? 0
-            let count2 = item2.review_count ?? 0
-            
-            if count1 > 0 && count2 == 0 { return true }
-            if count1 == 0 && count2 > 0 { return false }
-            
-            return rating1 > rating2
+        // Sort by a combined score: nearest distance + highest review stars.
+        // Distance weight = 60%, Rating weight = 40%.
+        // Items with no coordinates are pushed to the end.
+        // Items with no reviews default to 3.0 stars (neutral).
+
+        let viewerCoord = DistanceService.shared.cachedViewerCoordinate()
+
+        let scored: [(item: Item, score: Double)] = items.map { item in
+            // --- Distance component (lower is better → convert to 0..1 where 1 = closest) ---
+            let distanceScore: Double
+            if let viewerCoord = viewerCoord,
+               let lat = item.latitude, let lon = item.longitude,
+               lat != 0.0, lon != 0.0 {
+                let itemLoc = CLLocation(latitude: lat, longitude: lon)
+                let meters = viewerCoord.distance(from: itemLoc)
+                // Normalise: 0 m → 1.0, 100 km+ → ~0.0  (exponential decay)
+                distanceScore = exp(-meters / 20_000.0)
+            } else {
+                distanceScore = 0.0 // no coords → lowest priority
+            }
+
+            // --- Rating component (higher is better → normalise to 0..1) ---
+            let rating = item.average_rating ?? 3.0
+            let reviewCount = item.review_count ?? 0
+            // Slight boost for items with more reviews (up to cap of ~50)
+            let reviewConfidence = min(Double(reviewCount), 50.0) / 50.0
+            // Blend raw rating with confidence so a single 5-star review doesn't beat a 4.8 with 30 reviews
+            let ratingScore = (rating / 5.0) * (0.5 + 0.5 * reviewConfidence)
+
+            // --- Combined score ---
+            let combined = 0.6 * distanceScore + 0.4 * ratingScore
+            return (item, combined)
         }
-        
-        trendingItems = Array(sortedByRating.prefix(6))
+
+        let sorted = scored.sorted { $0.score > $1.score }
+        trendingItems = Array(sorted.prefix(6).map { $0.item })
         trendingCollectionView?.reloadData()
     }
 
@@ -103,7 +128,7 @@ final class TrendingItemCell: UICollectionViewCell {
     private let distanceIcon = UIImageView()
     private let distanceLabel = UILabel()
 
-    private let rentButton = UIButton(type: .system)
+    let rentButton = UIButton(type: .system)
     var onRentTapped: (() -> Void)?
 
     override init(frame: CGRect) {
@@ -263,8 +288,17 @@ final class TrendingItemCell: UICollectionViewCell {
         ])
     }
 
-    @objc private func rentTapped() {
+    @objc func rentTapped() {
         onRentTapped?()
+    }
+
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        // Convert the point to the rent button's coordinate space
+        let buttonPoint = rentButton.convert(point, from: self)
+        if rentButton.bounds.contains(buttonPoint) && !rentButton.isHidden && rentButton.isEnabled {
+            return rentButton
+        }
+        return super.hitTest(point, with: event)
     }
 
     override func prepareForReuse() {

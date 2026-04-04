@@ -57,7 +57,13 @@ final class PhoneVerificationViewController: UIViewController, UITextFieldDelega
         super.viewDidLoad()
         title = "Verify Your Phone"
         view.backgroundColor = bgColor
-        navigationItem.hidesBackButton = true // No skipping
+        // navigationItem.hidesBackButton = true // No skipping
+        navigationItem.leftBarButtonItem = UIBarButtonItem(
+            image: UIImage(systemName: "xmark"),
+            style: .plain,
+            target: self,
+            action: #selector(didTapClose)
+        )
         navigationController?.navigationBar.tintColor = brandTeal
         enteredPhone = normalizedPhoneDigits(prefillPhone)
         setupScrollView()
@@ -354,6 +360,13 @@ final class PhoneVerificationViewController: UIViewController, UITextFieldDelega
     }
 
     // MARK: - Actions
+    
+    @objc private func didTapClose() {
+        dismiss(animated: true) { [weak self] in
+            // If the user hasn't successfully verified, we can trigger an optional cancellation handler
+            // or let the presenter handle the state. Dismissing is standard.
+        }
+    }
 
     @objc private func phoneChanged() {
         let digits = phoneTextField.text?.filter { $0.isNumber } ?? ""

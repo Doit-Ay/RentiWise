@@ -47,7 +47,7 @@ class PrivacySecurityViewController: UITableViewController {
         
         switch sectionType {
         case .privacy:
-            return 5 // Terms, Privacy Policy, Manage Data, Blocked Users, App Permissions
+            return 3 // Terms, Privacy Policy, Blocked Users
         case .security:
             return 1 // Change Password
         }
@@ -77,11 +77,7 @@ class PrivacySecurityViewController: UITableViewController {
             } else if indexPath.row == 1 {
                 cell.textLabel?.text = "Privacy Policy"
             } else if indexPath.row == 2 {
-                cell.textLabel?.text = "Manage Data"
-            } else if indexPath.row == 3 {
                 cell.textLabel?.text = "Blocked Users"
-            } else {
-                cell.textLabel?.text = "App Permissions"
             }
         case .security:
             cell.textLabel?.text = "Change Password"
@@ -106,17 +102,7 @@ class PrivacySecurityViewController: UITableViewController {
                 vc.hidesBottomBarWhenPushed = true
                 navigationController?.pushViewController(vc, animated: true)
             } else if indexPath.row == 2 {
-                // Manage Data
-                let vc = ManageDataViewController()
-                vc.hidesBottomBarWhenPushed = true
-                navigationController?.pushViewController(vc, animated: true)
-            } else if indexPath.row == 3 {
                 let vc = BlockedUsersViewController()
-                vc.hidesBottomBarWhenPushed = true
-                navigationController?.pushViewController(vc, animated: true)
-            } else {
-                // App Permissions
-                let vc = AppPermissionsViewController()
                 vc.hidesBottomBarWhenPushed = true
                 navigationController?.pushViewController(vc, animated: true)
             }
@@ -211,8 +197,8 @@ enum LegalDocument {
 
             Your choices:
             - You can update profile information inside the app.
-            - You can review blocked users and app permissions from Privacy & Security.
-            - You can delete your account from Manage Data. That flow is designed to remove your login, profile, listings, requests, messages, support history, and saved data from Rentiwise.
+            - You can review blocked users from Privacy & Security.
+            - You can delete your account by contacting support@rentiwise.com. That flow is designed to remove your login, profile, listings, requests, messages, support history, and saved data from Rentiwise.
             - For privacy questions or deletion help, contact support@rentiwise.com.
             """
         }

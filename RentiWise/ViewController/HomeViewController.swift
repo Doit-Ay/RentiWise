@@ -7,7 +7,7 @@
 import UIKit
 import Supabase
 
-class HomeViewController: UIViewController, UICollectionViewDelegate, UICollectionViewDataSource, UITabBarDelegate, UICollectionViewDelegateFlowLayout {
+class HomeViewController: UIViewController, UICollectionViewDelegate, UICollectionViewDataSource, UITabBarDelegate, UICollectionViewDelegateFlowLayout, UIGestureRecognizerDelegate {
 
     @IBOutlet weak var greetingTop: UILabel!
     @IBOutlet weak var collectionView: UICollectionView!
@@ -324,6 +324,8 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
         Task { await updateNotificationBadge() }
         // Show verification nudge if needed
         Task { await showVerificationNudgeIfNeeded() }
+        // Refresh featured items & new arrivals so newly added items appear
+        Task { await loadFeaturedItems() }
     }
 
     private func showVerificationNudgeIfNeeded() async {
@@ -469,20 +471,28 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
         item4Image?.isUserInteractionEnabled = true
         item4Image?.addGestureRecognizer(tap4)
 
-        // Card taps (make entire card tappable)
+        // Card taps (make entire card tappable, but NOT the Rent button area)
         let cardTap1 = UITapGestureRecognizer(target: self, action: #selector(didTapFeatured1))
+        cardTap1.cancelsTouchesInView = false
+        cardTap1.delegate = self
         item1CardView?.isUserInteractionEnabled = true
         item1CardView?.addGestureRecognizer(cardTap1)
 
         let cardTap2 = UITapGestureRecognizer(target: self, action: #selector(didTapFeatured2))
+        cardTap2.cancelsTouchesInView = false
+        cardTap2.delegate = self
         item2CardView?.isUserInteractionEnabled = true
         item2CardView?.addGestureRecognizer(cardTap2)
 
         let cardTap3 = UITapGestureRecognizer(target: self, action: #selector(didTapFeatured3))
+        cardTap3.cancelsTouchesInView = false
+        cardTap3.delegate = self
         item3CardView?.isUserInteractionEnabled = true
         item3CardView?.addGestureRecognizer(cardTap3)
 
         let cardTap4 = UITapGestureRecognizer(target: self, action: #selector(didTapFeatured4))
+        cardTap4.cancelsTouchesInView = false
+        cardTap4.delegate = self
         item4CardView?.isUserInteractionEnabled = true
         item4CardView?.addGestureRecognizer(cardTap4)
     }
@@ -491,6 +501,18 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
     @objc private func didTapFeatured2() { openFeatured(at: 1) }
     @objc private func didTapFeatured3() { openFeatured(at: 2) }
     @objc private func didTapFeatured4() { openFeatured(at: 3) }
+
+    // MARK: - UIGestureRecognizerDelegate
+    // Prevent card tap gestures from firing when the Rent button is tapped
+    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        guard let view = gestureRecognizer.view else { return true }
+        let location = gestureRecognizer.location(in: view)
+        // Walk the hit-test tree; if the tapped view is a UIButton, let the button handle it
+        if let hitView = view.hitTest(location, with: nil), hitView is UIButton {
+            return false
+        }
+        return true
+    }
 
     private func openFeatured(at index: Int) {
         guard index < featuredItems.count else { return }
@@ -727,6 +749,21 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
     }
 
     // MARK: - UICollectionViewDelegate (single implementation branching by collection)
+
+    func collectionView(_ collectionView: UICollectionView, shouldSelectItemAt indexPath: IndexPath) -> Bool {
+        if collectionView === trendingCollectionView {
+            // Prevent cell selection when the user taps the Rent button
+            guard let cell = collectionView.cellForItem(at: indexPath) as? TrendingItemCell else { return true }
+            let touchPoint = collectionView.panGestureRecognizer.location(in: cell)
+            let buttonFrame = cell.rentButton.convert(cell.rentButton.bounds, to: cell)
+            if buttonFrame.contains(touchPoint) {
+                cell.rentTapped()
+                return false
+            }
+        }
+        return true
+    }
+
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         if collectionView === trendingCollectionView {
             let item = trendingItems[indexPath.item]
