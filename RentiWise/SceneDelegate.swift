@@ -18,57 +18,42 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         configureTabBarAppearance()
         startNetworkMonitoring()
 
-        // Check phone verification for existing users after a longer delay
-        // so root VC and Supabase session have time to fully restore.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
-            self?.checkPhoneVerificationForExistingUser()
+        // Show animated splash overlay after a brief delay so the root VC is loaded
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            self?.showAnimatedSplash()
+        }
+    }
+
+    // MARK: - Animated Splash
+
+    private func showAnimatedSplash() {
+        guard let window = self.window ?? {
+            if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
+                return scene.windows.first
+            }
+            return nil
+        }() else { return }
+
+        let splash = AnimatedSplashViewController()
+        splash.view.frame = window.bounds
+        splash.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+
+        splash.onComplete = { [weak splash] in
+            splash?.view.removeFromSuperview()
+            splash?.removeFromParent()
+        }
+
+        // Add as child of root VC so it sits on top of everything
+        if let root = window.rootViewController {
+            root.addChild(splash)
+            root.view.addSubview(splash.view)
+            splash.didMove(toParent: root)
         }
     }
 
     func sceneDidBecomeActive(_ scene: UIScene) {
         Task {
             await PendingItemRemovalSync.shared.syncIfNeeded()
-        }
-    }
-
-    // MARK: - Existing User Phone Verification Gate
-    private func checkPhoneVerificationForExistingUser() {
-        Task { @MainActor in
-            guard let userId = await SupabaseManager.shared.currentUserId() else {
-                debugLog("[SceneDelegate] No userId found, skipping phone verification gate")
-                return
-            }
-
-            debugLog("[SceneDelegate] Checking phone verification for user: \(userId)")
-
-            // Clear cached status so we always get fresh data
-            PhoneVerificationService.shared.clearCache()
-            let isVerified = await PhoneVerificationService.shared.isPhoneVerified(userId: userId)
-
-            debugLog("[SceneDelegate] Phone verified = \(isVerified)")
-
-            if !isVerified {
-                let phoneVC = PhoneVerificationViewController()
-                phoneVC.modalPresentationStyle = .fullScreen
-                phoneVC.onVerificationComplete = { [weak phoneVC] in
-                    phoneVC?.dismiss(animated: true)
-                }
-                // Present on top of whatever is showing — use self.window or fall back to connectedScenes
-                let rootVC: UIViewController? = self.window?.rootViewController ?? {
-                    if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
-                        return scene.windows.first?.rootViewController
-                    }
-                    return nil
-                }()
-                guard let root = rootVC else {
-                    debugLog("[SceneDelegate] No root VC found, cannot present phone verification")
-                    return
-                }
-                var presenter: UIViewController = root
-                while let next = presenter.presentedViewController { presenter = next }
-                debugLog("[SceneDelegate] Presenting PhoneVerificationViewController")
-                presenter.present(UINavigationController(rootViewController: phoneVC), animated: true)
-            }
         }
     }
 

@@ -188,7 +188,7 @@ final class SignViewController: UIViewController, UITextViewDelegate {
             _ = try await SupabaseManager.shared.client.auth.session
 
             // Check if phone is verified; if not, show OTP screen
-            await presentPhoneOTPIfNeeded()
+            await MainActor.run { self.routeToProfileTab() }
         } catch {
             presentAlert(title: "Sign In Failed", message: error.localizedDescription)
         }
@@ -235,7 +235,7 @@ final class SignViewController: UIViewController, UITextViewDelegate {
             AuthSessionStateStore.markSignedIn(provider: .google)
 
             _ = try await SupabaseManager.shared.client.auth.session
-            await presentPhoneOTPIfNeeded()
+            await MainActor.run { self.routeToProfileTab() }
         } catch {
             if isGoogleSignInCancellation(error) { return }
             presentAlert(title: "Google Sign-In Failed", message: error.localizedDescription)
@@ -330,36 +330,9 @@ final class SignViewController: UIViewController, UITextViewDelegate {
         user.userMetadata["full_name"]?.stringValue ?? user.userMetadata["name"]?.stringValue
     }
 
-    // MARK: - Phone Verification
-
-    /// Checks if the user's phone is verified, and presents OTP screen if not.
-    private func presentPhoneOTPIfNeeded() async {
-        let service = ProfileService()
-        do {
-            let profile = try await service.fetchCurrentUserProfile()
-            if profile.phoneVerified {
-                routeToProfileTab()
-            } else {
-                presentPhoneOTP(prefillPhone: profile.phone)
-            }
-        } catch {
-            // If we can't determine, just go to profile
-            routeToProfileTab()
-        }
-    }
-
-    private func presentPhoneOTP(prefillPhone: String) {
-        let phoneVC = PhoneVerificationViewController()
-        phoneVC.prefillPhone = prefillPhone
-        phoneVC.onVerificationComplete = { [weak self] in
-            self?.dismiss(animated: true) {
-                self?.routeToProfileTab()
-            }
-        }
-        let nav = UINavigationController(rootViewController: phoneVC)
-        nav.modalPresentationStyle = .fullScreen
-        present(nav, animated: true)
-    }
+    // MARK: - Phone Verification (disabled — MSG91 pending)
+    // Phone OTP verification is temporarily disabled.
+    // Users proceed directly to the app after sign-in.
 
     // MARK: - Auto-route if already authenticated
     private func autoRouteIfAlreadySignedIn() async {

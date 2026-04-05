@@ -26,8 +26,8 @@ final class ProfileViewController: UITableViewController {
     private var kycStatus: String = "none"
     private var currentProfile: UserProfile?
 
-    private var showsPhoneVerificationRow: Bool {
-        isLoggedIn && !phoneVerified
+    private var showsAddPhoneRow: Bool {
+        isLoggedIn && userPhone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private var showsKYCVerificationRow: Bool {
@@ -35,12 +35,12 @@ final class ProfileViewController: UITableViewController {
     }
 
     private var borrowingSetupRowIndex: Int {
-        showsPhoneVerificationRow ? 2 : 1
+        showsAddPhoneRow ? 2 : 1
     }
 
     private var kycRowIndex: Int? {
         guard showsKYCVerificationRow else { return nil }
-        return showsPhoneVerificationRow ? 3 : 2
+        return showsAddPhoneRow ? 3 : 2
     }
     
     // App brand color
@@ -177,7 +177,7 @@ final class ProfileViewController: UITableViewController {
             if isLoggedIn {
                 // header + optional verify phone + borrowing setup + optional KYC row
                 var count = 2
-                if showsPhoneVerificationRow { count += 1 }
+                if showsAddPhoneRow { count += 1 }
                 if showsKYCVerificationRow { count += 1 }
                 return count
             } else {
@@ -245,12 +245,12 @@ final class ProfileViewController: UITableViewController {
                 cell.textLabel?.text = "Sign Up"
                 cell.textLabel?.textColor = brandTeal
             } else {
-                if showsPhoneVerificationRow && indexPath.row == 1 {
-                    cell.textLabel?.text = "Verify Phone Number"
+                if showsAddPhoneRow && indexPath.row == 1 {
+                    cell.textLabel?.text = "Add Phone Number"
                     cell.textLabel?.textColor = brandTeal
                     cell.accessoryType = .disclosureIndicator
-                    cell.imageView?.image = UIImage(systemName: "checkmark.shield")
-                    cell.imageView?.tintColor = .systemOrange
+                    cell.imageView?.image = UIImage(systemName: "phone.badge.plus")
+                    cell.imageView?.tintColor = brandTeal
                 } else if indexPath.row == borrowingSetupRowIndex {
                     configureBorrowingSetupCell(cell)
                 } else if let kycRowIndex, indexPath.row == kycRowIndex {
@@ -344,8 +344,8 @@ final class ProfileViewController: UITableViewController {
                 // Sign up button
                 openSignUp()
             } else if isLoggedIn {
-                if showsPhoneVerificationRow && indexPath.row == 1 {
-                    presentPhoneVerification()
+                if showsAddPhoneRow && indexPath.row == 1 {
+                    presentAddPhoneNumber()
                 } else if indexPath.row == borrowingSetupRowIndex {
                     editProfileTapped()
                 } else if let kycRowIndex, indexPath.row == kycRowIndex {
@@ -412,20 +412,55 @@ final class ProfileViewController: UITableViewController {
         }
     }
 
-    // MARK: - Phone Verification
+    // MARK: - Add Phone Number
 
-    private func presentPhoneVerification() {
-        let phoneVC = PhoneVerificationViewController()
-        phoneVC.prefillPhone = userPhone
-        phoneVC.onVerificationComplete = { [weak self] in
-            self?.dismiss(animated: true) {
-                guard let self else { return }
-                Task { await self.refreshAuthState() }
+    private func presentAddPhoneNumber() {
+        let alert = UIAlertController(
+            title: "Add Phone Number",
+            message: "Enter your 10-digit Indian mobile number.",
+            preferredStyle: .alert
+        )
+        alert.addTextField { field in
+            field.placeholder = "e.g. 9876543210"
+            field.keyboardType = .numberPad
+        }
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Save", style: .default) { [weak self] _ in
+            guard let self,
+                  let digits = alert.textFields?.first?.text?.filter({ $0.isNumber }),
+                  digits.count == 10 else {
+                self?.showSavePhoneError("Please enter a valid 10-digit number.")
+                return
+            }
+            let e164 = "+91\(digits)"
+            Task {
+                await self.savePhoneNumber(e164)
+            }
+        })
+        present(alert, animated: true)
+    }
+
+    private func savePhoneNumber(_ phone: String) async {
+        guard let userId = await SupabaseManager.shared.currentUserId() else { return }
+        struct PhoneUpdate: Encodable { let phone: String }
+        do {
+            try await SupabaseManager.shared.client
+                .from("users")
+                .update(PhoneUpdate(phone: phone))
+                .eq("id", value: userId)
+                .execute()
+            await refreshAuthState()
+        } catch {
+            await MainActor.run {
+                self.showSavePhoneError("Failed to save: \(error.localizedDescription)")
             }
         }
-        let nav = UINavigationController(rootViewController: phoneVC)
-        nav.modalPresentationStyle = .fullScreen
-        present(nav, animated: true)
+    }
+
+    private func showSavePhoneError(_ message: String) {
+        let alert = UIAlertController(title: "Error", message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
     }
 
     // MARK: - KYC Verification
