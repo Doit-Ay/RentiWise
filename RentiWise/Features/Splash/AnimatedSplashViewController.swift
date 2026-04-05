@@ -2,8 +2,10 @@
 //  AnimatedSplashViewController.swift
 //  RentiWise
 //
-//  EXACTLY 2 animated rectangles + the original Rentiwise_logo PDF.
-//  No extra labels, no duplicate text.
+//  The ONLY way to make the final result look perfectly like the target image
+//  is to make `logoImageView` full screen width (multiplier: 1.0) so its built-in
+//  rectangles match the screen bounds perfectly.
+//  Our animated UIViews slide in and are sized to perfectly overlay the logo's rectangles.
 //
 
 import UIKit
@@ -12,7 +14,6 @@ final class AnimatedSplashViewController: UIViewController {
 
     var onComplete: (() -> Void)?
 
-    // Colors matching the original logo rectangles
     private let tealLight  = UIColor(red: 0xD6/255.0, green: 0xEB/255.0, blue: 0xEF/255.0, alpha: 1.0)
     private let tealMedium = UIColor(red: 0xC4/255.0, green: 0xE1/255.0, blue: 0xE7/255.0, alpha: 1.0)
 
@@ -38,36 +39,15 @@ final class AnimatedSplashViewController: UIViewController {
 
     private func buildUI() {
         let screenW = UIScreen.main.bounds.width
-        let rectSide = screenW * 0.85
-        let cr: CGFloat = 44
+        
+        // These perfectly match the proportions of the original logo.png
+        let rectWidth = screenW * 0.86
+        let rectHeight = screenW * 0.86
+        let cr: CGFloat = screenW * 0.16
 
-        // ── LEFT RECT (Light Teal) ──
-        rectLeft.backgroundColor = tealLight
-        rectLeft.layer.cornerRadius = cr
-        rectLeft.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(rectLeft)
-        NSLayoutConstraint.activate([
-            rectLeft.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            rectLeft.widthAnchor.constraint(equalToConstant: rectSide),
-            rectLeft.heightAnchor.constraint(equalToConstant: rectSide),
-            rectLeft.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: -40),
-        ])
-
-        // ── RIGHT RECT (Medium Teal) ──
-        rectRight.backgroundColor = tealMedium
-        rectRight.layer.cornerRadius = cr
-        rectRight.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(rectRight)
-        NSLayoutConstraint.activate([
-            rectRight.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            rectRight.widthAnchor.constraint(equalToConstant: rectSide),
-            rectRight.heightAnchor.constraint(equalToConstant: rectSide),
-            rectRight.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: -20),
-        ])
-
-        // ── LOGO (Rentiwise_logo.pdf) ──
-        // This asset already contains BOTH the shield AND the "Rentiwise" text!
-        logoImageView.image = UIImage(named: "Rentiwise_logo")
+        // ── LOGO IMAGE (Target final state) ──
+        // This is 100% width so its built-in rectangles hit the screen edges properly
+        logoImageView.image = UIImage(named: "logo")
         logoImageView.contentMode = .scaleAspectFit
         logoImageView.backgroundColor = .clear
         logoImageView.translatesAutoresizingMaskIntoConstraints = false
@@ -75,8 +55,32 @@ final class AnimatedSplashViewController: UIViewController {
         NSLayoutConstraint.activate([
             logoImageView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             logoImageView.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: -30),
-            logoImageView.widthAnchor.constraint(equalTo: view.widthAnchor, multiplier: 0.65),
-            logoImageView.heightAnchor.constraint(equalTo: logoImageView.widthAnchor),
+            logoImageView.widthAnchor.constraint(equalTo: view.widthAnchor),
+            logoImageView.heightAnchor.constraint(equalTo: view.widthAnchor)
+        ])
+
+        // ── LEFT RECT (Light Teal) ──
+        rectLeft.backgroundColor = tealLight
+        rectLeft.layer.cornerRadius = cr
+        rectLeft.translatesAutoresizingMaskIntoConstraints = false
+        view.insertSubview(rectLeft, belowSubview: logoImageView)
+        NSLayoutConstraint.activate([
+            rectLeft.leadingAnchor.constraint(equalTo: logoImageView.leadingAnchor),
+            rectLeft.widthAnchor.constraint(equalToConstant: rectWidth),
+            rectLeft.heightAnchor.constraint(equalToConstant: rectHeight),
+            rectLeft.centerYAnchor.constraint(equalTo: logoImageView.centerYAnchor, constant: -screenW * 0.04),
+        ])
+
+        // ── RIGHT RECT (Medium Teal) ──
+        rectRight.backgroundColor = tealMedium
+        rectRight.layer.cornerRadius = cr
+        rectRight.translatesAutoresizingMaskIntoConstraints = false
+        view.insertSubview(rectRight, belowSubview: logoImageView)
+        NSLayoutConstraint.activate([
+            rectRight.trailingAnchor.constraint(equalTo: logoImageView.trailingAnchor),
+            rectRight.widthAnchor.constraint(equalToConstant: rectWidth),
+            rectRight.heightAnchor.constraint(equalToConstant: rectHeight),
+            rectRight.centerYAnchor.constraint(equalTo: logoImageView.centerYAnchor, constant: screenW * 0.04),
         ])
     }
 
@@ -87,7 +91,7 @@ final class AnimatedSplashViewController: UIViewController {
         rectRight.transform = CGAffineTransform(translationX:  screenW, y: 0)
         
         logoImageView.alpha = 0
-        logoImageView.transform = CGAffineTransform(scaleX: 0.8, y: 0.8)
+        logoImageView.transform = CGAffineTransform(scaleX: 0.9, y: 0.9)
     }
 
     private func animateIn() {
@@ -101,9 +105,9 @@ final class AnimatedSplashViewController: UIViewController {
                        usingSpringWithDamping: 0.82, initialSpringVelocity: 0.4, options: []) {
             self.rectRight.transform = .identity
         }
-        // Logo fades in
-        UIView.animate(withDuration: 0.5, delay: 0.55,
-                       usingSpringWithDamping: 0.75, initialSpringVelocity: 0.5, options: []) {
+        // Logo fades in nicely on top
+        UIView.animate(withDuration: 0.4, delay: 0.6,
+                       usingSpringWithDamping: 1.0, initialSpringVelocity: 0.2, options: []) {
             self.logoImageView.alpha = 1
             self.logoImageView.transform = .identity
         }
