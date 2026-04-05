@@ -48,12 +48,6 @@
 			);
 			target = 3FE49D5E2EA2FA5C00C11A8F /* RentiWise */;
 		};
-		4A41F9E231A9F52F00112233 /* Exceptions for "RentiWiseTests" folder in "RentiWiseTests" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-			);
-			target = 3FE49D742EA2FA5D00C11A8F /* RentiWiseTests */;
-		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -67,9 +61,6 @@
 		};
 		3FE49D782EA2FA5D00C11A8F /* RentiWiseTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				4A41F9E231A9F52F00112233 /* Exceptions for "RentiWiseTests" folder in "RentiWiseTests" target */,
-			);
 			path = RentiWiseTests;
 			sourceTree = "<group>";
 		};
