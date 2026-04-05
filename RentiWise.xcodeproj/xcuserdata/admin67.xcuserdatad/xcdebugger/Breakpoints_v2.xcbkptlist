@@ -18,36 +18,6 @@
             endingLineNumber = "264"
             landmarkName = "viewDidLoad()"
             landmarkType = "7">
-            <Locations>
-               <Location
-                  uuid = "4E08748E-FB92-43BE-B92B-6CC2864E3FF2 - fc7693e582f94073"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "RentiWise.BookingApprovalViewController.viewDidLoad() -&gt; ()"
-                  moduleName = "RentiWise.debug.dylib"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/admin67/Documents/RentiWise_new_latest_1/RentiWise/Features/DashBoard/Borrower/BookingApprovalViewController.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "264"
-                  endingLineNumber = "264">
-               </Location>
-               <Location
-                  uuid = "4E08748E-FB92-43BE-B92B-6CC2864E3FF2 - fc7693e582f94052"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "RentiWise.BookingApprovalViewController.viewDidLoad() -&gt; ()"
-                  moduleName = "RentiWise.debug.dylib"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/admin67/Documents/RentiWise_new_latest_1/RentiWise/Features/DashBoard/Borrower/BookingApprovalViewController.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "265"
-                  endingLineNumber = "265">
-               </Location>
-            </Locations>
          </BreakpointContent>
       </BreakpointProxy>
    </Breakpoints>

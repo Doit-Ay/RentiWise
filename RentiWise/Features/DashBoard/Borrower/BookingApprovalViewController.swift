@@ -2142,11 +2142,4 @@ class BookingApprovalViewController: UIViewController {
     }
 }
 
-// MARK: - Glass effect fallback
-extension UIView {
-    @objc func applyGlassEffectSimple() {
-        self.backgroundColor = self.backgroundColor?.withAlphaComponent(0.5) ?? UIColor.systemBackground.withAlphaComponent(0.3)
-        self.layer.cornerRadius = self.layer.cornerRadius == 0 ? 16 : self.layer.cornerRadius
-        self.layer.masksToBounds = true
-    }
-}
+

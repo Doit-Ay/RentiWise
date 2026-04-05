@@ -18,7 +18,7 @@ final class PhoneVerificationService {
 
     private var cachedVerificationStatus: [String: Bool] = [:]
 
-    // MARK: - Send OTP (real SMS via Twilio)
+    // MARK: - Send OTP (real SMS via MSG91)
 
     func sendOTP(phone: String) async throws {
         let e164 = normalizedE164Phone(phone)
@@ -26,6 +26,8 @@ final class PhoneVerificationService {
         guard let userId = await SupabaseManager.shared.currentUserId() else {
             throw VerificationError.notLoggedIn
         }
+
+        debugLog("[PhoneOTP] Sending OTP to \(e164) for user \(userId)")
 
         // Call edge function — it generates OTP, stores hash, sends SMS
         let payload: [String: String] = ["phone": e164, "user_id": userId]
@@ -36,26 +38,22 @@ final class PhoneVerificationService {
             let message: String?
         }
         
-        // Use the Decodable overload to get the typed response directly
-        let responseData: Data = try await SupabaseManager.shared.client.functions
-            .invoke("send-phone-otp", options: .init(body: payload))
+        let edgeResp: EdgeResponse
+        do {
+            // Decodes directly into EdgeResponse
+            edgeResp = try await SupabaseManager.shared.client.functions
+                .invoke("send-phone-otp", options: .init(body: payload))
+        } catch {
+            debugLog("[PhoneOTP] Edge function invocation failed: \(error)")
+            throw VerificationError.serverError("Failed to reach OTP service: \(error.localizedDescription)")
+        }
             
-        // Parse the response to check for server-side errors
-        if let rawString = String(data: responseData, encoding: .utf8) {
-            debugLog("[PhoneOTP] Raw response: \(rawString)")
+        if let errString = edgeResp.error, !errString.isEmpty {
+            debugLog("[PhoneOTP] Server error: \(errString)")
+            throw VerificationError.serverError(errString)
         }
-        
-        // Try to decode and check for server-reported errors
-        if let edgeResp = try? JSONDecoder().decode(EdgeResponse.self, from: responseData) {
-            if let errString = edgeResp.error, !errString.isEmpty {
-                throw VerificationError.serverError(errString)
-            }
-            // success: true — OTP was sent
-        }
-        // If JSON decode fails, the HTTP status was already 2xx (SDK ensures this),
-        // so the edge function returned a non-JSON success. Treat as success.
 
-        debugLog("[PhoneOTP] SMS sent to \(e164)")
+        debugLog("[PhoneOTP] SMS sent successfully to \(e164)")
     }
 
     // MARK: - Verify OTP

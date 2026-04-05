@@ -18,9 +18,9 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         configureTabBarAppearance()
         startNetworkMonitoring()
 
-        // Check phone verification for existing users after a short delay
-        // so root VC has time to load
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+        // Check phone verification for existing users after a longer delay
+        // so root VC and Supabase session have time to fully restore.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
             self?.checkPhoneVerificationForExistingUser()
         }
     }
@@ -34,18 +34,39 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     // MARK: - Existing User Phone Verification Gate
     private func checkPhoneVerificationForExistingUser() {
         Task { @MainActor in
-            guard let userId = await SupabaseManager.shared.currentUserId() else { return }
+            guard let userId = await SupabaseManager.shared.currentUserId() else {
+                debugLog("[SceneDelegate] No userId found, skipping phone verification gate")
+                return
+            }
+
+            debugLog("[SceneDelegate] Checking phone verification for user: \(userId)")
+
+            // Clear cached status so we always get fresh data
+            PhoneVerificationService.shared.clearCache()
             let isVerified = await PhoneVerificationService.shared.isPhoneVerified(userId: userId)
+
+            debugLog("[SceneDelegate] Phone verified = \(isVerified)")
+
             if !isVerified {
                 let phoneVC = PhoneVerificationViewController()
                 phoneVC.modalPresentationStyle = .fullScreen
                 phoneVC.onVerificationComplete = { [weak phoneVC] in
                     phoneVC?.dismiss(animated: true)
                 }
-                // Present on top of whatever is showing
-                guard let root = self.window?.rootViewController else { return }
+                // Present on top of whatever is showing — use self.window or fall back to connectedScenes
+                let rootVC: UIViewController? = self.window?.rootViewController ?? {
+                    if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
+                        return scene.windows.first?.rootViewController
+                    }
+                    return nil
+                }()
+                guard let root = rootVC else {
+                    debugLog("[SceneDelegate] No root VC found, cannot present phone verification")
+                    return
+                }
                 var presenter: UIViewController = root
                 while let next = presenter.presentedViewController { presenter = next }
+                debugLog("[SceneDelegate] Presenting PhoneVerificationViewController")
                 presenter.present(UINavigationController(rootViewController: phoneVC), animated: true)
             }
         }
