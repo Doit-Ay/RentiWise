@@ -634,8 +634,8 @@ class DashboardLenderRequestViewController: UIViewController {
 
     private func resolveBorrowerName(for borrowerId: String) {
         Task {
-            // Try users table
-            if let name = try? await fetchName(from: "users", ownerId: borrowerId), !name.isEmpty {
+            // Try user_profiles table
+            if let name = try? await fetchName(from: "user_profiles", ownerId: borrowerId), !name.isEmpty {
                 await MainActor.run { self.ownNameLabel?.text = capitalizingFirstLetter(name) }
                 return
             }
@@ -646,7 +646,7 @@ class DashboardLenderRequestViewController: UIViewController {
     private func fetchName(from table: String, ownerId: String) async throws -> String? {
         struct NameDTO: Decodable { let full_name: String? }
         let response = try await SupabaseManager.shared.client
-            .from(table)
+            .from("user_profiles")
             .select("full_name")
             .eq("id", value: ownerId)
             .single()

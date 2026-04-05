@@ -16,7 +16,7 @@ class AddItemPricingViewController: UIViewController, UITextFieldDelegate {
     @IBOutlet weak var refundableDeposit: UITextField!
     @IBOutlet private weak var declaredValueHintLabel: UILabel!
 
-    private let defaultDeclaredValueHint = "Used for trust checks and borrowing limits during the beta."
+    private let defaultDeclaredValueHint = "Used for trust checks and borrowing limits."
     private let warningDeclaredValueHint = "⚠️ High-value items may need extra trust coordination with your borrower."
 
     override func viewDidLoad() {
@@ -35,11 +35,6 @@ class AddItemPricingViewController: UIViewController, UITextFieldDelegate {
         tap.cancelsTouchesInView = false
         view.addGestureRecognizer(tap)
 
-        // 2) Add Done accessory above decimal keypad (optional but helpful)
-        let doneToolbar = makeDoneToolbar()
-        pricePerDay?.inputAccessoryView = doneToolbar
-        refundableDeposit?.inputAccessoryView = doneToolbar
-
         // Feature 3: Wire deposit field delegate and configure helper copy
         refundableDeposit?.delegate = self
         configureDeclaredValueHint(for: Double(draft.declaredValue))
@@ -48,16 +43,6 @@ class AddItemPricingViewController: UIViewController, UITextFieldDelegate {
     // Dismiss keyboard utility
     @objc private func dismissKeyboard() {
         view.endEditing(true)
-    }
-
-    // Toolbar with Done button for inputs that need an explicit dismiss
-    private func makeDoneToolbar() -> UIToolbar {
-        let tb = UIToolbar()
-        tb.sizeToFit()
-        let flex = UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil)
-        let done = UIBarButtonItem(barButtonSystemItem: .done, target: self, action: #selector(dismissKeyboard))
-        tb.items = [flex, done]
-        return tb
     }
 
     @IBAction func continueTapped(_ sender: UIButton) {
@@ -81,7 +66,7 @@ class AddItemPricingViewController: UIViewController, UITextFieldDelegate {
         }
         
         if declaredValue > 5000 {
-            presentAlert(title: "Value Limit", message: "For the beta launch, items can be listed up to 5,000 INR in value.")
+            presentAlert(title: "Value Limit", message: "Items can be listed up to 5,000 INR in value.")
             return
         }
 

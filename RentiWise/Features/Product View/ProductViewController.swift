@@ -623,23 +623,17 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
                     if let data = response.data as? Data {
                         struct NameDTO: Decodable { let full_name: String?; let profile_photo_url: String? }
                         if let dto = try? JSONDecoder().decode(NameDTO.self, from: data) {
-                            let name = (dto.full_name?.isEmpty == false) ? dto.full_name! : (session.user.email?.split(separator: "@").first.map(String.init) ?? "Me")
+                            let name = (dto.full_name?.isEmpty == false) ? dto.full_name! : "Me"
                             let initials = self.makeInitials(from: name)
                             return (name, initials, dto.profile_photo_url)
                         }
                     }
                 } catch {
-                    // Fall through to use email or default
+                    // Fall through to default
                 }
 
-                let emailName: String
-                if let email = session.user.email, let namePart = email.split(separator: "@").first, !namePart.isEmpty {
-                    emailName = String(namePart)
-                } else {
-                    emailName = "Me"
-                }
-                let initials = self.makeInitials(from: emailName)
-                return (emailName, initials, nil)
+                let fallback = "Me"
+                return (fallback, self.makeInitials(from: fallback), nil)
             }
         }
         // No session: default placeholders
@@ -1709,7 +1703,7 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         } else {
             signInVC = SignViewController(service: SignInService())
         }
-        signInVC.title = "Sign In"
+        signInVC.title = ""
         signInVC.hidesBottomBarWhenPushed = true
 
         if let nav = navigationController {

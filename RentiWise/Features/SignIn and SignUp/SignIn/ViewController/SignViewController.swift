@@ -67,16 +67,14 @@ final class SignViewController: UIViewController, UITextViewDelegate {
             target: self,
             action: #selector(backToProfile)
         )
-        navigationItem.rightBarButtonItem = UIBarButtonItem(
-            title: "Legal",
-            style: .plain,
-            target: self,
-            action: #selector(showLegalMenu)
-        )
+
 
         signInEmailText?.keyboardType = UIKeyboardType.emailAddress
         signInEmailText?.autocapitalizationType = UITextAutocapitalizationType.none
         signInPasswordText?.isSecureTextEntry = true
+        signInPasswordText?.textContentType = .oneTimeCode /* Disables the yellow strong password overlay */
+        signInPasswordText?.autocorrectionType = .no
+        signInPasswordText?.spellCheckingType = .no
         configureSocialAuthButtons()
         configureLegalNotice()
     }
@@ -124,7 +122,7 @@ final class SignViewController: UIViewController, UITextViewDelegate {
         } else {
             vc = SignUpViewController(service: SignUpService())
         }
-        vc.title = "Sign Up"
+        vc.title = ""
         vc.hidesBottomBarWhenPushed = true
 
         if let nav = navigationController {

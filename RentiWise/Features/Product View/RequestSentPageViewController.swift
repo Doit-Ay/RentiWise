@@ -303,8 +303,9 @@ class RequestSentPageViewController: UIViewController {
         rentalFeeAmountLabel?.text = rentalFeeText
         totalAmountLabel?.text = totalText
 
-        securityDepositLabel?.isHidden = true
-        securityDepositAmountLabel?.isHidden = true
+        securityDepositLabel?.isHidden = false
+        securityDepositAmountLabel?.text = "Direct via UPI"
+        securityDepositAmountLabel?.isHidden = false
     }
 
     private func updateToggleUI() {

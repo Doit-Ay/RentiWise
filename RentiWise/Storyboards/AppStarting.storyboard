@@ -2,6 +2,7 @@
 <document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="24506" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES" initialViewController="0Ii-Bf-RVL">
     <device id="retina6_12" orientation="portrait" appearance="light"/>
     <dependencies>
+        <deployment identifier="iOS"/>
         <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="24504"/>
         <capability name="Image references" minToolsVersion="12.0"/>
         <capability name="Safe area layout guides" minToolsVersion="9.0"/>
@@ -117,7 +118,7 @@
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
                             <searchBar contentMode="redraw" text="" placeholder="Search" translucent="NO" translatesAutoresizingMaskIntoConstraints="NO" id="Ie6-Yc-yxm">
-                                <rect key="frame" x="0.0" y="128" width="393" height="64"/>
+                                <rect key="frame" x="2" y="128" width="393" height="64"/>
                                 <color key="backgroundColor" systemColor="secondarySystemBackgroundColor"/>
                                 <textInputTraits key="textInputTraits"/>
                                 <scopeButtonTitles>
@@ -280,9 +281,9 @@
                             <constraint firstItem="Ie6-Yc-yxm" firstAttribute="top" secondItem="Mtu-QA-AEy" secondAttribute="top" constant="10" id="DDw-A6-uDG"/>
                             <constraint firstItem="GGR-sb-tOT" firstAttribute="leading" secondItem="Mtu-QA-AEy" secondAttribute="leading" id="Pi6-qX-1Ul"/>
                             <constraint firstItem="GGR-sb-tOT" firstAttribute="trailing" secondItem="Mtu-QA-AEy" secondAttribute="trailing" id="c9q-0Z-tCG"/>
-                            <constraint firstItem="Ie6-Yc-yxm" firstAttribute="trailing" secondItem="Mtu-QA-AEy" secondAttribute="trailing" id="ckC-mX-BHz"/>
+                            <constraint firstItem="Ie6-Yc-yxm" firstAttribute="trailing" secondItem="Mtu-QA-AEy" secondAttribute="trailing" constant="2" id="ckC-mX-BHz"/>
                             <constraint firstItem="GGR-sb-tOT" firstAttribute="top" secondItem="Ie6-Yc-yxm" secondAttribute="bottom" constant="10" id="iFh-Ay-q2V"/>
-                            <constraint firstItem="Ie6-Yc-yxm" firstAttribute="leading" secondItem="Mtu-QA-AEy" secondAttribute="leading" id="rNk-OL-nG5"/>
+                            <constraint firstItem="Ie6-Yc-yxm" firstAttribute="leading" secondItem="Mtu-QA-AEy" secondAttribute="leading" constant="2" id="rNk-OL-nG5"/>
                         </constraints>
                     </view>
                     <connections>

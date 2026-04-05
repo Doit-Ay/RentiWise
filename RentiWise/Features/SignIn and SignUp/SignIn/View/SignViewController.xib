@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<document type="com.apple.InterfaceBuilder3.CocoaTouch.XIB" version="3.0" toolsVersion="24128" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES">
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.XIB" version="3.0" toolsVersion="24506" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES">
     <device id="retina6_12" orientation="portrait" appearance="light"/>
     <dependencies>
-        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="24063"/>
+        <deployment identifier="iOS"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="24504"/>
         <capability name="Safe area layout guides" minToolsVersion="9.0"/>
         <capability name="System colors in document resources" minToolsVersion="11.0"/>
         <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
@@ -11,10 +12,10 @@
         <placeholder placeholderIdentifier="IBFilesOwner" id="-1" userLabel="File's Owner" customClass="SignViewController" customModule="RentiWise" customModuleProvider="target">
             <connections>
                 <outlet property="authFormStackView" destination="dci-21-th7" id="cfK-wr-b0i"/>
-                <outlet property="socialAuthStackView" destination="kV0-Tt-mON" id="eJh-lq-f1e"/>
                 <outlet property="signInButton" destination="YKm-RI-HXf" id="aUP-wq-gqp"/>
                 <outlet property="signInEmailText" destination="v8W-Y8-oKQ" id="BDq-sh-c4T"/>
                 <outlet property="signInPasswordText" destination="KOP-gV-K2u" id="yof-TK-C4f"/>
+                <outlet property="socialAuthStackView" destination="kV0-Tt-mON" id="eJh-lq-f1e"/>
                 <outlet property="view" destination="iN0-l3-epB" id="nWu-mp-knM"/>
             </connections>
         </placeholder>
@@ -38,7 +39,7 @@
                             <nil key="textColor"/>
                             <nil key="highlightedColor"/>
                         </label>
-                        <textField opaque="NO" contentMode="scaleToFill" horizontalHuggingPriority="248" contentHorizontalAlignment="left" contentVerticalAlignment="center" borderStyle="roundedRect" placeholder="aditya...@gmail.com" textAlignment="natural" minimumFontSize="17" translatesAutoresizingMaskIntoConstraints="NO" id="v8W-Y8-oKQ">
+                        <textField opaque="NO" contentMode="scaleToFill" horizontalHuggingPriority="248" contentHorizontalAlignment="left" contentVerticalAlignment="center" borderStyle="roundedRect" textAlignment="natural" minimumFontSize="17" translatesAutoresizingMaskIntoConstraints="NO" id="v8W-Y8-oKQ">
                             <rect key="frame" x="0.0" y="30.333333333333314" width="353" height="50"/>
                             <constraints>
                                 <constraint firstAttribute="height" constant="50" id="a4s-KK-gBa"/>
@@ -64,7 +65,7 @@
                             <nil key="textColor"/>
                             <nil key="highlightedColor"/>
                         </label>
-                        <textField opaque="NO" contentMode="scaleToFill" horizontalHuggingPriority="248" contentHorizontalAlignment="left" contentVerticalAlignment="center" borderStyle="roundedRect" placeholder="*******" textAlignment="natural" minimumFontSize="17" translatesAutoresizingMaskIntoConstraints="NO" id="KOP-gV-K2u">
+                        <textField opaque="NO" contentMode="scaleToFill" horizontalHuggingPriority="248" contentHorizontalAlignment="left" contentVerticalAlignment="center" borderStyle="roundedRect" textAlignment="natural" minimumFontSize="17" translatesAutoresizingMaskIntoConstraints="NO" id="KOP-gV-K2u">
                             <rect key="frame" x="0.0" y="120.66666666666669" width="353" height="50"/>
                             <constraints>
                                 <constraint firstAttribute="height" constant="50" id="qIz-JR-ZZl"/>
@@ -102,7 +103,7 @@
                     </connections>
                 </button>
                 <stackView opaque="NO" contentMode="scaleToFill" distribution="fillEqually" translatesAutoresizingMaskIntoConstraints="NO" id="kV0-Tt-mON">
-                    <rect key="frame" x="160.66666666666666" y="600.66666666666663" width="72" height="62"/>
+                    <rect key="frame" x="160.66666666666666" y="590.66666666666663" width="72" height="62"/>
                     <subviews>
                         <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="oZf-Yw-Qru">
                             <rect key="frame" x="0.0" y="0.0" width="72" height="62"/>
@@ -115,16 +116,16 @@
                     </subviews>
                 </stackView>
                 <stackView opaque="NO" contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="tzd-7Z-Lcp">
-                    <rect key="frame" x="53.333333333333343" y="742.33333333333337" width="286.33333333333326" height="29.666666666666629"/>
+                    <rect key="frame" x="62.333333333333343" y="742.33333333333337" width="268.33333333333326" height="29.666666666666629"/>
                     <subviews>
                         <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Don't have an account?" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="5fh-5C-OtJ">
-                            <rect key="frame" x="0.0" y="0.0" width="160.66666666666666" height="29.666666666666668"/>
+                            <rect key="frame" x="0.0" y="0.0" width="151.66666666666666" height="29.666666666666668"/>
                             <fontDescription key="fontDescription" type="system" pointSize="14"/>
                             <nil key="textColor"/>
                             <nil key="highlightedColor"/>
                         </label>
                         <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="leading" contentVerticalAlignment="center" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="yIo-mQ-xLB">
-                            <rect key="frame" x="160.66666666666666" y="0.0" width="125.66666666666666" height="29.666666666666668"/>
+                            <rect key="frame" x="151.66666666666666" y="0.0" width="116.66666666666666" height="29.666666666666668"/>
                             <color key="tintColor" red="0.43921568630000002" green="0.65490196079999996" blue="0.70588235290000001" alpha="1" colorSpace="custom" customColorSpace="displayP3"/>
                             <state key="normal" title="Button"/>
                             <buttonConfiguration key="configuration" style="plain" title="Create account" titleAlignment="leading">
@@ -145,7 +146,7 @@
                     </subviews>
                 </stackView>
                 <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="trailing" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="E4X-NV-ASb">
-                    <rect key="frame" x="249.33333333333337" y="442.66666666666669" width="135.66666666666663" height="29.666666666666686"/>
+                    <rect key="frame" x="253" y="442.66666666666669" width="132" height="29.666666666666686"/>
                     <color key="tintColor" red="0.43921568630000002" green="0.65490196079999996" blue="0.70588235290000001" alpha="1" colorSpace="custom" customColorSpace="displayP3"/>
                     <state key="normal" title="Button"/>
                     <buttonConfiguration key="configuration" style="plain" title="Forgot password?">
@@ -161,13 +162,13 @@
             <constraints>
                 <constraint firstItem="vUN-kp-3ea" firstAttribute="trailing" secondItem="E4X-NV-ASb" secondAttribute="trailing" constant="8" id="6iD-Gb-Pvh"/>
                 <constraint firstItem="YKm-RI-HXf" firstAttribute="centerX" secondItem="vUN-kp-3ea" secondAttribute="centerX" id="CLM-LO-L0o"/>
-                <constraint firstAttribute="bottom" secondItem="tzd-7Z-Lcp" secondAttribute="bottom" constant="80" id="IBk-Ay-hnj"/>
                 <constraint firstItem="tzd-7Z-Lcp" firstAttribute="centerX" secondItem="vUN-kp-3ea" secondAttribute="centerX" id="K9m-Ji-mWq"/>
                 <constraint firstItem="E4X-NV-ASb" firstAttribute="top" secondItem="dci-21-th7" secondAttribute="bottom" constant="6" id="Ka6-3v-XS2"/>
                 <constraint firstItem="kV0-Tt-mON" firstAttribute="centerX" secondItem="vUN-kp-3ea" secondAttribute="centerX" id="LeX-gZ-HtW"/>
+                <constraint firstItem="vUN-kp-3ea" firstAttribute="bottom" secondItem="tzd-7Z-Lcp" secondAttribute="bottom" constant="12" id="MZU-Cg-sp9"/>
                 <constraint firstItem="B9z-FI-eGM" firstAttribute="centerX" secondItem="vUN-kp-3ea" secondAttribute="centerX" id="NAm-4N-wL0"/>
                 <constraint firstItem="vUN-kp-3ea" firstAttribute="trailing" secondItem="dci-21-th7" secondAttribute="trailing" constant="20" id="Qyc-so-ndh"/>
-                <constraint firstItem="kV0-Tt-mON" firstAttribute="top" secondItem="YKm-RI-HXf" secondAttribute="bottom" constant="30" id="cOR-i4-nZx"/>
+                <constraint firstItem="kV0-Tt-mON" firstAttribute="top" secondItem="YKm-RI-HXf" secondAttribute="bottom" constant="20" id="cOR-i4-nZx"/>
                 <constraint firstItem="B9z-FI-eGM" firstAttribute="top" secondItem="vUN-kp-3ea" secondAttribute="top" constant="30" id="htm-TH-gdO"/>
                 <constraint firstItem="YKm-RI-HXf" firstAttribute="top" secondItem="dci-21-th7" secondAttribute="bottom" constant="90" id="jc8-ol-ltV"/>
                 <constraint firstItem="dci-21-th7" firstAttribute="top" secondItem="B9z-FI-eGM" secondAttribute="bottom" constant="70" id="ntQ-uP-J6u"/>
@@ -177,7 +178,6 @@
         </view>
     </objects>
     <resources>
-        <image name="Apple" width="50" height="50"/>
         <image name="Google" width="48" height="48"/>
         <systemColor name="systemBackgroundColor">
             <color white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>

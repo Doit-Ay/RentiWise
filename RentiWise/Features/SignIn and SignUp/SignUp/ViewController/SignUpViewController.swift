@@ -49,9 +49,17 @@ final class SignUpViewController: UIViewController, UITextViewDelegate {
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        title = ""
         signUpEmailText?.keyboardType = .emailAddress
         signUpEmailText?.autocapitalizationType = .none
         signUpPasswordText?.isSecureTextEntry = true
+        signUpPasswordText?.textContentType = .oneTimeCode /* Disables the yellow strong password overlay */
+        signUpPasswordText?.autocorrectionType = .no
+        signUpPasswordText?.spellCheckingType = .no
+
+        signUpFullNameText?.autocapitalizationType = .words
+        signUpFullNameText?.autocorrectionType = .no
+        
         signUpNumberText?.keyboardType = .phonePad
 
         // Back to Profile button
@@ -61,12 +69,7 @@ final class SignUpViewController: UIViewController, UITextViewDelegate {
             target: self,
             action: #selector(backToProfile)
         )
-        navigationItem.rightBarButtonItem = UIBarButtonItem(
-            title: "Legal",
-            style: .plain,
-            target: self,
-            action: #selector(showLegalMenu)
-        )
+
         configureSocialAuthButtons()
         configureLegalNotice()
     }
@@ -109,7 +112,7 @@ final class SignUpViewController: UIViewController, UITextViewDelegate {
         } else {
             vc = SignViewController(service: SignInService())
         }
-        vc.title = "Sign In"
+        vc.title = ""
         vc.hidesBottomBarWhenPushed = true
 
         if let nav = navigationController {

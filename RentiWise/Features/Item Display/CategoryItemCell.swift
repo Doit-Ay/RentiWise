@@ -280,10 +280,10 @@ final class CategoryItemCell: UITableViewCell {
                 }
             }
 
-            // First try public.users
+            // Fetch from user_profiles
             do {
                 let response = try await SupabaseManager.shared.client
-                    .from("users")
+                    .from("user_profiles")
                     .select("full_name")
                     .eq("id", value: ownerId)
                     .limit(1)
@@ -295,25 +295,7 @@ final class CategoryItemCell: UITableViewCell {
                     return
                 }
             } catch {
-                // continue to fallback
-            }
-
-            // Fallback: profiles table
-            do {
-                let response = try await SupabaseManager.shared.client
-                    .from("profiles")
-                    .select("full_name")
-                    .eq("id", value: ownerId)
-                    .limit(1)
-                    .execute()
-
-                let rows = try JSONDecoder().decode([NameDTO].self, from: response.data)
-                if let fullName = rows.first?.full_name, !fullName.isEmpty {
-                    await apply(name: fullName)
-                    return
-                }
-            } catch {
-                // final fallback below
+                // fall through to final fallback
             }
 
             // Final fallback

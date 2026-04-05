@@ -69,6 +69,7 @@ class BookingApprovalViewController: UIViewController {
     
     @IBOutlet weak var getdirectionbutton: UIButton!
     @IBOutlet weak var copybutton: UIButton!
+    @IBOutlet weak var chatButton: UIButton!
     @IBOutlet weak var paymentButton: UIButton!
 
     @IBOutlet weak var outerblueCard: UIView!
@@ -401,7 +402,18 @@ class BookingApprovalViewController: UIViewController {
             }()
             async let addressTask: Void = {
                 let userIdForAddress = isHistoryMode ? req.borrower_id : req.owner_id
-                await self.fetchAndDisplayAddress(for: userIdForAddress)
+                if isHistoryMode {
+                    // Owner always sees borrower address
+                    await self.fetchAndDisplayAddress(for: userIdForAddress)
+                } else {
+                    // Borrower: only fetch owner address if request is accepted/approved
+                    let rawStatus = req.status.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                    let isAccepted = ["accepted", "approved", "pickup_verified", "active", "completed"].contains(rawStatus)
+                    if isAccepted {
+                        await self.fetchAndDisplayAddress(for: userIdForAddress)
+                    }
+                    // Otherwise placeholder is set by updateOwnerCardInteractivity
+                }
             }()
             async let amountsTask: Void = {
                 let amounts = await self.computeAmounts(for: req)
@@ -825,6 +837,12 @@ class BookingApprovalViewController: UIViewController {
     }
 
     @IBAction func openChatButtonTapped(_ sender: Any) {
+        // Guard: do not open chat if button is disabled (before acceptance)
+        if let btn = sender as? UIButton, !btn.isEnabled { return }
+        guard mode == .history || status == .approved || status == .completed else {
+            showToast(message: "Chat will be enabled when owner accepts your request", fromBottom: false)
+            return
+        }
         openChatSafely()
     }
     
@@ -914,42 +932,36 @@ class BookingApprovalViewController: UIViewController {
     
     
     @IBAction func getDirectionsButtonTapped(_ sender: UIButton) {
+        // Guard: do not open directions if button is disabled (before acceptance)
+        guard sender.isEnabled else { return }
         openDirections()
     }
     
     private func openDirections() {
         // Get the address text from the label
-        guard let addressText = addressLabel?.text, !addressText.isEmpty, addressText != "Address unavailable" else {
+        guard let addressText = addressLabel?.text, !addressText.isEmpty,
+              addressText != "Address unavailable",
+              !addressText.contains("will be enabled") else {
             showToast(message: "Address not available", fromBottom: false)
             return
         }
         
-        // Try to open in Apple Maps with the address
         let encodedAddress = addressText.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
         
-        // Build the Maps URL
-        if let url = URL(string: "http://maps.apple.com/?q=\(encodedAddress)") {
-            if UIApplication.shared.canOpenURL(url) {
-                UIApplication.shared.open(url, options: [:]) { success in
-                    if !success {
-                        // Fallback to Google Maps in browser
-                        if let webURL = URL(string: "https://www.google.com/maps/search/?api=1&query=\(encodedAddress)") {
-                            UIApplication.shared.open(webURL, options: [:], completionHandler: nil)
-                        }
-                    }
-                }
-            } else {
-                // Fallback to Google Maps in browser
-                if let webURL = URL(string: "https://www.google.com/maps/search/?api=1&query=\(encodedAddress)") {
-                    UIApplication.shared.open(webURL, options: [:], completionHandler: nil)
-                }
-            }
+        // Try Google Maps app first, then fallback to Google Maps in browser
+        if let googleMapsAppURL = URL(string: "comgooglemaps://?q=\(encodedAddress)"),
+           UIApplication.shared.canOpenURL(googleMapsAppURL) {
+            UIApplication.shared.open(googleMapsAppURL)
+        } else if let webURL = URL(string: "https://www.google.com/maps/search/?api=1&query=\(encodedAddress)") {
+            UIApplication.shared.open(webURL)
         }
     }
     
     @IBAction func copyAddressButtonTapped(_ sender: UIButton) {
         // Copy the address to clipboard
-        guard let addressText = addressLabel?.text, !addressText.isEmpty, addressText != "Address unavailable" else {
+        guard let addressText = addressLabel?.text, !addressText.isEmpty,
+              addressText != "Address unavailable",
+              !addressText.contains("will be enabled") else {
             showToast(message: "Address not available", fromBottom: true)
             return
         }
@@ -1469,6 +1481,9 @@ class BookingApprovalViewController: UIViewController {
 
         // Update extend/return button titles based on current request status
         updateReturnButtonForRequestStatus()
+
+        // Update chat/direction/address state based on acceptance
+        updateOwnerCardInteractivity()
     }
 
     private func applyRequestToUI() {
@@ -1590,6 +1605,60 @@ class BookingApprovalViewController: UIViewController {
             }
         } catch {
             debugLog("[BookingApproval] Failed to refresh payment state: \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: - Owner card interactivity (chat, direction, address)
+
+    /// Enables or disables the chat and direction buttons, and controls the address label
+    /// based on whether the rental request has been accepted by the lender.
+    private func updateOwnerCardInteractivity() {
+        // Owner (history mode) always has full access to borrower info
+        guard mode == .myRentals else {
+            chatButton?.isEnabled = true
+            chatButton?.alpha = 1.0
+            getdirectionbutton?.isEnabled = true
+            getdirectionbutton?.alpha = 1.0
+            copybutton?.isEnabled = true
+            copybutton?.alpha = 1.0
+            return
+        }
+
+        let isAcceptedOrBeyond = (status == .approved || status == .completed)
+
+        if isAcceptedOrBeyond {
+            // Enable chat and direction buttons
+            chatButton?.isEnabled = true
+            chatButton?.alpha = 1.0
+            getdirectionbutton?.isEnabled = true
+            getdirectionbutton?.alpha = 1.0
+            copybutton?.isEnabled = true
+            copybutton?.alpha = 1.0
+
+            // Reset address label color in case it was the placeholder
+            addressLabel?.textColor = .label
+
+            // If address is still showing placeholder, trigger fetch now
+            let currentAddr = addressLabel?.text ?? ""
+            if currentAddr.isEmpty || currentAddr.contains("will be enabled") || currentAddr == "Address unavailable" {
+                Task { [weak self] in
+                    guard let self, let req = self.request else { return }
+                    await self.fetchAndDisplayAddress(for: req.owner_id)
+                }
+            }
+        } else {
+            // Disable chat and direction buttons
+            chatButton?.isEnabled = false
+            chatButton?.alpha = 0.4
+            getdirectionbutton?.isEnabled = false
+            getdirectionbutton?.alpha = 0.4
+            copybutton?.isEnabled = false
+            copybutton?.alpha = 0.4
+
+            // Show informational placeholder instead of "Address unavailable"
+            addressLabel?.text = "Address and chat will be enabled when owner accepts rental request"
+            addressLabel?.textColor = .secondaryLabel
+            addressLabel?.font = .systemFont(ofSize: 14)
         }
     }
 

@@ -50,6 +50,14 @@ final class DistanceService {
 
     // MARK: - Public API
 
+    /// Returns the viewer's resolved coordinate from the persistent cache, or nil if not yet resolved.
+    /// Useful for fast, synchronous straight-line distance sorting without async geocoding.
+    func cachedViewerCoordinate() -> CLLocation? {
+        let viewerAddressString = SavedAddressesStore.shared.getDefaultSelectedAddress()?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let viewerAddress = (viewerAddressString?.isEmpty == false) ? viewerAddressString! : defaultViewerAddress
+        return getCachedUserCoordinates(for: viewerAddress)
+    }
+
     /// Returns a formatted distance string like "2.3 km" or "850 m".
     /// Owner-level cache (item_id = null).
     /// - Parameter progressiveUpdate: Optional closure called on the **Main thread** when
@@ -60,6 +68,11 @@ final class DistanceService {
         let viewerAddress = (viewerAddressString?.isEmpty == false) ? viewerAddressString! : defaultViewerAddress
         let viewerAddressHash = normalizeAddressKey(viewerAddress)
         let viewerUserId = await SupabaseManager.shared.currentUserId()
+
+        // If the viewer is the owner of the item, distance is natively zero.
+        if let viewerUserId, viewerUserId.lowercased() == item.owner_id.lowercased() {
+            return "0 km"
+        }
 
         // 1) FAST PATH: DB cache (logged-in users)
         if let viewerUserId {

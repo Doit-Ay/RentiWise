@@ -28,7 +28,7 @@ extension UIViewController {
                 signInVC = SignViewController(service: SignInService())
             }
             signInVC.routeContext = routeContext
-            signInVC.title = "Sign In"
+            signInVC.title = ""
             signInVC.hidesBottomBarWhenPushed = true
             viewController = signInVC
 
@@ -41,7 +41,7 @@ extension UIViewController {
             } else {
                 signUpVC = SignUpViewController(service: SignUpService())
             }
-            signUpVC.title = "Sign Up"
+            signUpVC.title = ""
             signUpVC.hidesBottomBarWhenPushed = true
             viewController = signUpVC
         }
