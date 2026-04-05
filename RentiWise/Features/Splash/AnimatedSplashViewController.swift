@@ -2,10 +2,9 @@
 //  AnimatedSplashViewController.swift
 //  RentiWise
 //
-//  EXACTLY 2 RECTANGLES ONLY. 
-//  Left rectangle's center is at the left border (half outside).
-//  Right rectangle's center is at the right border (half outside).
-//  Rentiwise_logo.pdf handles the shield + text. No duplicate UILabels.
+//  Height restored to normal (squares).
+//  To hide the outer corner radii (keep them flush against the screen border),
+//  we push the leading/trailing edges off-screen by exactly the corner radius.
 //
 
 import UIKit
@@ -40,11 +39,10 @@ final class AnimatedSplashViewController: UIViewController {
     private func buildUI() {
         let screenW = UIScreen.main.bounds.width
         
-        // As requested: "half outside the border". 
-        // We use a width of 1.5 * screen width, so if the center is on the border, 
-        // the inner half reaches exactly to the 75% mark of the screen, creating a nice overlap.
-        let rectSize = screenW * 1.5
-        let cr: CGFloat = rectSize * 0.18 // very rounded corners
+        // Height is back to normal!
+        let rectHeight = screenW * 0.85
+        let visibleWidth = screenW * 0.85
+        let cr: CGFloat = 48
 
         // ── LEFT RECT ──
         rectLeft.backgroundColor = tealLight
@@ -52,11 +50,13 @@ final class AnimatedSplashViewController: UIViewController {
         rectLeft.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(rectLeft)
         NSLayoutConstraint.activate([
-            // Center X is at the left border -> left half stays outside!
-            rectLeft.centerXAnchor.constraint(equalTo: view.leadingAnchor),
-            rectLeft.widthAnchor.constraint(equalToConstant: rectSize),
-            rectLeft.heightAnchor.constraint(equalToConstant: rectSize),
-            rectLeft.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: -screenW * 0.15)
+            // Push left edge off-screen by exactly the corner radius
+            // so the visible part touches the screen border in a perfectly straight line
+            rectLeft.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: -cr),
+            // Add `cr` to width so the visible width remains `visibleWidth`
+            rectLeft.widthAnchor.constraint(equalToConstant: visibleWidth + cr),
+            rectLeft.heightAnchor.constraint(equalToConstant: rectHeight),
+            rectLeft.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: -screenW * 0.05)
         ])
 
         // ── RIGHT RECT ──
@@ -65,14 +65,14 @@ final class AnimatedSplashViewController: UIViewController {
         rectRight.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(rectRight)
         NSLayoutConstraint.activate([
-            // Center X is at the right border -> right half stays outside!
-            rectRight.centerXAnchor.constraint(equalTo: view.trailingAnchor),
-            rectRight.widthAnchor.constraint(equalToConstant: rectSize),
-            rectRight.heightAnchor.constraint(equalToConstant: rectSize),
+            // Push right edge off-screen by exactly the corner radius
+            rectRight.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: cr),
+            rectRight.widthAnchor.constraint(equalToConstant: visibleWidth + cr),
+            rectRight.heightAnchor.constraint(equalToConstant: rectHeight),
             rectRight.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: screenW * 0.05)
         ])
 
-        // ── LOGO (contains ONLY shield and text natively) ──
+        // ── LOGO (Native PDF containing Shield + Text, no duplicates!) ──
         logoImageView.image = UIImage(named: "Rentiwise_logo")
         logoImageView.contentMode = .scaleAspectFit
         logoImageView.backgroundColor = .clear
@@ -81,8 +81,7 @@ final class AnimatedSplashViewController: UIViewController {
         
         NSLayoutConstraint.activate([
             logoImageView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            logoImageView.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: -screenW * 0.05), // slightly above center
-            // Make logo nice and proportional
+            logoImageView.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: -screenW * 0.05),
             logoImageView.widthAnchor.constraint(equalTo: view.widthAnchor, multiplier: 0.65),
             logoImageView.heightAnchor.constraint(equalTo: logoImageView.widthAnchor)
         ])
@@ -92,21 +91,20 @@ final class AnimatedSplashViewController: UIViewController {
         let screenW = UIScreen.main.bounds.width
         
         // Push rects fully off screen
-        rectLeft.transform  = CGAffineTransform(translationX: -screenW * 1.5, y: 0)
-        rectRight.transform = CGAffineTransform(translationX:  screenW * 1.5, y: 0)
+        rectLeft.transform  = CGAffineTransform(translationX: -screenW, y: 0)
+        rectRight.transform = CGAffineTransform(translationX:  screenW, y: 0)
         
         logoImageView.alpha = 0
         logoImageView.transform = CGAffineTransform(scaleX: 0.8, y: 0.8)
     }
 
     private func animateIn() {
-        // Left rect slides in to its "half offscreen" resting place
+        // Slide in
         UIView.animate(withDuration: 0.6, delay: 0.0,
                        usingSpringWithDamping: 0.82, initialSpringVelocity: 0.4, options: []) {
             self.rectLeft.transform = .identity
         }
         
-        // Right rect slides in to its "half offscreen" resting place
         UIView.animate(withDuration: 0.6, delay: 0.12,
                        usingSpringWithDamping: 0.82, initialSpringVelocity: 0.4, options: []) {
             self.rectRight.transform = .identity
