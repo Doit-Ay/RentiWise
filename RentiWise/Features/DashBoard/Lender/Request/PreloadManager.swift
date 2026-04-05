@@ -24,8 +24,6 @@ final class PreloadManager {
 
     // MARK: - Completion state
     private(set) var isComplete = false
-    private var completionContinuations: [CheckedContinuation<Void, Never>] = []
-    private let lock = NSLock()
 
     private var preloadTask: Task<Void, Never>?
 
@@ -73,43 +71,18 @@ final class PreloadManager {
     func waitForCompletion(timeout: TimeInterval = 4.0) async -> Bool {
         if isComplete { return true }
 
-        // Race: preload completion vs timeout
-        return await withTaskGroup(of: Bool.self) { group in
-            group.addTask {
-                await withCheckedContinuation { continuation in
-                    self.lock.lock()
-                    if self.isComplete {
-                        self.lock.unlock()
-                        continuation.resume()
-                    } else {
-                        self.completionContinuations.append(continuation)
-                        self.lock.unlock()
-                    }
-                }
-                return true   // preload finished
-            }
-            group.addTask {
-                try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-                return false  // timed out
-            }
-            // First to finish wins
-            let result = await group.next() ?? false
-            group.cancelAll()
-            return result
+        // Simple polling — checks every 100ms, guaranteed to return within timeout.
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if isComplete { return true }
+            try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
         }
+        return isComplete
     }
 
     /// Call once all data is stored.
     private func markComplete() {
-        lock.lock()
         isComplete = true
-        let waiting = completionContinuations
-        completionContinuations.removeAll()
-        lock.unlock()
-
-        // Resume anyone awaiting
-        for c in waiting { c.resume() }
-
         NotificationCenter.default.post(name: Self.didCompleteNotification, object: nil)
     }
 
@@ -117,14 +90,12 @@ final class PreloadManager {
 
     func reset() {
         cancelPreloading()
-        lock.lock()
         isComplete = false
         featuredItems = []
         allFetchedItems = []
         lenderRequests = []
         borrowerRequests = []
         userHasListings = nil
-        lock.unlock()
     }
 
     // MARK: - Fetch helpers

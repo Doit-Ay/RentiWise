@@ -39,6 +39,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         splash.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
 
         splash.onComplete = { [weak splash] in
+            splash?.willMove(toParent: nil)
             splash?.view.removeFromSuperview()
             splash?.removeFromParent()
         }
@@ -48,6 +49,10 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             root.addChild(splash)
             root.view.addSubview(splash.view)
             splash.didMove(toParent: root)
+
+            // Kick off animations immediately — viewDidAppear won't fire
+            // because the parent has already finished its appearance transition.
+            splash.beginSplashSequence()
         }
     }
 
