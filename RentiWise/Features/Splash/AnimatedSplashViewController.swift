@@ -81,7 +81,7 @@ final class AnimatedSplashViewController: UIViewController {
         
         NSLayoutConstraint.activate([
             logoImageView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            logoImageView.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: -screenW * 0.05),
+            logoImageView.centerYAnchor.constraint(equalTo: view.centerYAnchor), // perfectly centered
             logoImageView.widthAnchor.constraint(equalTo: view.widthAnchor, multiplier: 0.65),
             logoImageView.heightAnchor.constraint(equalTo: logoImageView.widthAnchor)
         ])
