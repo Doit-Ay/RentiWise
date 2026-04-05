@@ -2,179 +2,136 @@
 //  AnimatedSplashViewController.swift
 //  RentiWise
 //
-//  The animated splash brings the static launch screen to life.
+//  ONE animated splash screen. No static launch screen logo.
 //
-//  It replicates the logo's two overlapping rounded rectangles as
-//  separate UIViews, then slides them in from the LEFT and RIGHT
-//  screen edges to converge in the center. Once they settle, the
-//  full logo image fades in on top, followed by the wordmark.
-//
-//  This creates a seamless: static logo → animated logo → app transition.
+//  Animation sequence:
+//    0.0s  — Left teal rectangle slides in from left screen edge
+//    0.12s — Right teal rectangle slides in from right screen edge
+//           Both park with their outer edges flush to screen borders,
+//           overlapping in the center
+//    0.55s — Logo image fades in + gentle scale-up
+//    2.8s  — Everything fades out → app
 //
 
 import UIKit
 
 final class AnimatedSplashViewController: UIViewController {
 
-    // MARK: - Callback
     var onComplete: (() -> Void)?
 
-    // MARK: - Colors (match the logo's internal rectangle colors)
-    private let rectColor1 = UIColor(red: 0xD6/255.0, green: 0xEB/255.0, blue: 0xEF/255.0, alpha: 1.0)
-    private let rectColor2 = UIColor(red: 0xC4/255.0, green: 0xE1/255.0, blue: 0xE7/255.0, alpha: 1.0)
+    // Colors matching the logo asset
+    private let tealLight  = UIColor(red: 0xD6/255.0, green: 0xEB/255.0, blue: 0xEF/255.0, alpha: 1.0)
+    private let tealMedium = UIColor(red: 0xC4/255.0, green: 0xE1/255.0, blue: 0xE7/255.0, alpha: 1.0)
 
-    // MARK: - UI
     private let rectLeft  = UIView()
     private let rectRight = UIView()
     private let logoImageView = UIImageView()
 
     private var didDismiss = false
 
-    // MARK: - Lifecycle
-
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .white
+        view.clipsToBounds = true
         buildUI()
-        setPreAnimationState()
+        hideBeforeAnimation()
     }
 
-    // MARK: - Public
-
+    // Called by SceneDelegate right after addChild
     func beginSplashSequence() {
-        runAnimation()
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.8) { [weak self] in
-            self?.dismissSplash()
-        }
-        // Absolute failsafe
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) { [weak self] in
-            self?.dismissSplash()
-        }
+        animateIn()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.8) { [weak self] in self?.dismiss() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) { [weak self] in self?.dismiss() }
     }
 
-    // MARK: - Build
+    // MARK: - Layout
 
     private func buildUI() {
-        let screenW = UIScreen.main.bounds.width
+        let w = UIScreen.main.bounds.width
+        // Each rect is 70% of screen width → they overlap 40% in center
+        let rectW = w * 0.70
+        let rectH = rectW   // square
+        let cr: CGFloat = 36
 
-        // Rectangle size matches the logo's internal rounded rects
-        // The logo PNG is displayed at ~screenWidth wide, and each internal
-        // rect is roughly 75% of the logo width → ~75% of screen width
-        let rectSide = screenW * 0.72
-        let cornerRadius: CGFloat = rectSide * 0.14   // ~40pt on iPhone 17 Pro
-
-        // ── Left rectangle ──
-        rectLeft.backgroundColor = rectColor1
-        rectLeft.layer.cornerRadius = cornerRadius
+        // LEFT rect — leading edge pinned to screen left
+        rectLeft.backgroundColor = tealLight
+        rectLeft.layer.cornerRadius = cr
         rectLeft.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(rectLeft)
-
-        // ── Right rectangle ──
-        rectRight.backgroundColor = rectColor2
-        rectRight.layer.cornerRadius = cornerRadius
-        rectRight.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(rectRight)
-
-        // Position them to overlap in the center, matching the logo asset layout.
-        // The left rect is offset left and slightly up; the right rect offset right.
         NSLayoutConstraint.activate([
-            rectLeft.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: -20),
-            rectLeft.centerXAnchor.constraint(equalTo: view.centerXAnchor, constant: -screenW * 0.06),
-            rectLeft.widthAnchor.constraint(equalToConstant: rectSide),
-            rectLeft.heightAnchor.constraint(equalToConstant: rectSide),
-
-            rectRight.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: -10),
-            rectRight.centerXAnchor.constraint(equalTo: view.centerXAnchor, constant: screenW * 0.06),
-            rectRight.widthAnchor.constraint(equalToConstant: rectSide),
-            rectRight.heightAnchor.constraint(equalToConstant: rectSide),
+            rectLeft.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            rectLeft.widthAnchor.constraint(equalToConstant: rectW),
+            rectLeft.heightAnchor.constraint(equalToConstant: rectH),
+            rectLeft.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: -30),
         ])
 
-        // Subtle rotation (matching logo design)
-        rectLeft.transform  = CGAffineTransform(rotationAngle: -5 * .pi / 180)
-        rectRight.transform = CGAffineTransform(rotationAngle:  7 * .pi / 180)
+        // RIGHT rect — trailing edge pinned to screen right
+        rectRight.backgroundColor = tealMedium
+        rectRight.layer.cornerRadius = cr
+        rectRight.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(rectRight)
+        NSLayoutConstraint.activate([
+            rectRight.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            rectRight.widthAnchor.constraint(equalToConstant: rectW),
+            rectRight.heightAnchor.constraint(equalToConstant: rectH),
+            rectRight.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: -10),
+        ])
 
-        // ── Logo image (on top of the rects) ──
-        // Sized to match the launch screen: full-width, aspect-fit, vertically centered
+        // LOGO — on top, centered, same as the original launch screen size
         logoImageView.image = UIImage(named: "logo")
         logoImageView.contentMode = .scaleAspectFit
         logoImageView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(logoImageView)
-
         NSLayoutConstraint.activate([
-            logoImageView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            logoImageView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            logoImageView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             logoImageView.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: -20),
-            logoImageView.heightAnchor.constraint(equalTo: view.widthAnchor),
+            logoImageView.widthAnchor.constraint(equalTo: view.widthAnchor, multiplier: 0.65),
+            logoImageView.heightAnchor.constraint(equalTo: logoImageView.widthAnchor),
         ])
     }
 
-    // MARK: - Pre-animation state
+    // MARK: - Pre-animation
 
-    private func setPreAnimationState() {
-        let screenW = UIScreen.main.bounds.width
+    private func hideBeforeAnimation() {
+        let w = UIScreen.main.bounds.width
 
-        // Rects start pushed to screen edges (off-center) and invisible
-        let leftBase  = CGAffineTransform(rotationAngle: -5 * .pi / 180)
-        let rightBase = CGAffineTransform(rotationAngle:  7 * .pi / 180)
+        // Push rects fully off-screen to their respective sides
+        rectLeft.transform  = CGAffineTransform(translationX: -w, y: 0)
+        rectRight.transform = CGAffineTransform(translationX:  w, y: 0)
 
-        rectLeft.alpha = 0
-        rectLeft.transform = leftBase.translatedBy(x: -screenW, y: 0)
-
-        rectRight.alpha = 0
-        rectRight.transform = rightBase.translatedBy(x: screenW, y: 0)
-
-        // Logo starts invisible — only appears after rects settle
+        // Logo hidden
         logoImageView.alpha = 0
+        logoImageView.transform = CGAffineTransform(scaleX: 0.85, y: 0.85)
     }
 
     // MARK: - Animation
 
-    private func runAnimation() {
-        let leftBase  = CGAffineTransform(rotationAngle: -5 * .pi / 180)
-        let rightBase = CGAffineTransform(rotationAngle:  7 * .pi / 180)
-
-        // ── Phase 1: Left rect slides in from left edge ──
-        UIView.animate(
-            withDuration: 0.7,
-            delay: 0.0,
-            usingSpringWithDamping: 0.78,
-            initialSpringVelocity: 0.3,
-            options: []
-        ) {
-            self.rectLeft.alpha = 1
-            self.rectLeft.transform = leftBase
+    private func animateIn() {
+        // Left rect slides in from left
+        UIView.animate(withDuration: 0.6, delay: 0.0,
+                       usingSpringWithDamping: 0.82, initialSpringVelocity: 0.4, options: []) {
+            self.rectLeft.transform = .identity
         }
 
-        // ── Phase 2: Right rect slides in from right edge ──
-        UIView.animate(
-            withDuration: 0.7,
-            delay: 0.12,
-            usingSpringWithDamping: 0.78,
-            initialSpringVelocity: 0.3,
-            options: []
-        ) {
-            self.rectRight.alpha = 1
-            self.rectRight.transform = rightBase
+        // Right rect slides in from right
+        UIView.animate(withDuration: 0.6, delay: 0.12,
+                       usingSpringWithDamping: 0.82, initialSpringVelocity: 0.4, options: []) {
+            self.rectRight.transform = .identity
         }
 
-        // ── Phase 3: Logo fades in once rects have settled ──
-        UIView.animate(
-            withDuration: 0.5,
-            delay: 0.55,
-            options: [.curveEaseOut]
-        ) {
+        // Logo fades in + scales up after rects land
+        UIView.animate(withDuration: 0.45, delay: 0.55, options: [.curveEaseOut]) {
             self.logoImageView.alpha = 1
+            self.logoImageView.transform = .identity
         }
     }
 
     // MARK: - Dismiss
 
-    private func dismissSplash() {
+    private func dismiss() {
         guard !didDismiss else { return }
         didDismiss = true
-
-        UIView.animate(withDuration: 0.35, delay: 0, options: [.curveEaseIn]) {
+        UIView.animate(withDuration: 0.3, delay: 0, options: [.curveEaseIn]) {
             self.view.alpha = 0
         } completion: { _ in
             self.onComplete?()
