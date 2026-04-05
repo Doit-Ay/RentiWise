@@ -595,13 +595,13 @@ class RequestViewController: UIViewController {
         
         // Assign amounts to the correct labels per your requirement:
         // - fee: shows the computed rental fee amount
-        // - secRate: hides security deposit (no deposit shown)
-        // - rentalfee and security are static titles; security and deposit hidden
+        // - secRate: repurposed in XIB as 'Payment Note' value ("Direct via UPI"), so we keep it visible
+        // - rentalfee and security are static titles; security is repurposed in XIB as 'Payment Note'
         
         fee.text = currencyFormatter.string(from: NSNumber(value: rentalFeeAmount))
-        secRate?.text = nil
-        security?.isHidden = true
-        secRate?.isHidden = true
+        secRate?.text = "Direct via UPI"
+        security?.isHidden = false
+        secRate?.isHidden = false
         
         totalamount.text = currencyFormatter.string(from: NSNumber(value: total))
         
