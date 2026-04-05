@@ -11,12 +11,35 @@ import Supabase
 // MARK: - Featured items loading
 extension HomeViewController {
 
-    func loadFeaturedItems() async {
+    func loadFeaturedItems(forceRefresh: Bool = false) async {
+        // On cold start, use PreloadManager's cached data to avoid duplicate API call.
+        if !forceRefresh, PreloadManager.shared.isComplete, !PreloadManager.shared.allFetchedItems.isEmpty {
+            let allItems = PreloadManager.shared.allFetchedItems
+            let items = Array(allItems.prefix(4))
+
+            // Still warm the distance cache in background
+            Task.detached(priority: .utility) {
+                await withTaskGroup(of: Void.self) { group in
+                    for item in allItems {
+                        group.addTask {
+                            _ = await DistanceService.shared.distanceText(for: item)
+                        }
+                    }
+                }
+            }
+
+            await MainActor.run {
+                self.applyFeatured(items: items)
+                self.updateTrendingItems(from: allItems)
+            }
+            return
+        }
+
+        // Network fetch (subsequent refreshes or cache miss)
         do {
             let allItems = try await itemsService.fetchItems(category: "")
             let items = Array(allItems.prefix(4))
 
-            // Pre-warm distance cache concurrently for ALL fetched items.
             Task.detached(priority: .utility) {
                 await withTaskGroup(of: Void.self) { group in
                     for item in allItems {

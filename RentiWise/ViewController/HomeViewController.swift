@@ -169,6 +169,11 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
     var isListingDataLoaded = false // track if listing data has been fetched
     var manageContainerView: UIView? // inserted inside listingUIView when user has items
 
+    // MARK: - Cold start tracking
+    /// True on first viewWillAppear; flipped to false after first load completes.
+    /// Used to decide whether to use PreloadManager cache or force-refresh.
+    private var isFirstLoad = true
+
     // MARK: - Trending collection
     var trendingCollectionView: UICollectionView?
     var trendingItems: [Item] = []
@@ -259,8 +264,9 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
         // Ensure tab bar item shows title
         navigationController?.tabBarItem.title = "Explore"
         
-        // Initially hide the listing section until data loads to prevent flicker
-        listingUIView?.alpha = 0
+        // Listing section alpha is no longer zeroed out here — the animated
+        // splash covers the UI until PreloadManager data is ready, so there's
+        // no empty-card flicker to hide.
 
         NotificationCenter.default.addObserver(
             self,
@@ -316,8 +322,13 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
         startHomeImageRotation()
         // Update greeting based on time of day
         updateGreeting()
-        // Refresh the listing section each time we come back
-        Task { await checkAndUpdateListingSection() }
+
+        // On cold start, use PreloadManager's cache (already fetched).
+        // On subsequent appears (tab switches, back-nav), force a network refresh.
+        let needsRefresh = !isFirstLoad
+        isFirstLoad = false
+
+        Task { await checkAndUpdateListingSection(forceRefresh: needsRefresh) }
         // Refresh location button on appear as well
         refreshLocationButtonTitle()
         // Update notification badge
@@ -400,7 +411,7 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
     }
 
     @objc private func handleBlockedUsersChanged() {
-        Task { await loadFeaturedItems() }
+        Task { await loadFeaturedItems(forceRefresh: true) }
     }
 
     override func viewWillDisappear(_ animated: Bool) {

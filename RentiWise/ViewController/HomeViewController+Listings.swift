@@ -16,7 +16,17 @@ extension HomeViewController {
         case manage
     }
 
-    func checkAndUpdateListingSection() async {
+    func checkAndUpdateListingSection(forceRefresh: Bool = false) async {
+        // On cold start, use PreloadManager's cached result
+        if !forceRefresh, let hasListings = PreloadManager.shared.userHasListings {
+            await MainActor.run {
+                self.isListingDataLoaded = true
+                self.showListingSection(hasListings ? .manage : .empty)
+            }
+            return
+        }
+
+        // Network check (subsequent refreshes or cache miss)
         guard let userId = await SupabaseManager.shared.currentUserId() else {
             await MainActor.run {
                 self.isListingDataLoaded = true
@@ -78,13 +88,6 @@ extension HomeViewController {
             }
 
             adjustListingViewHeightIfFixed(target: 160)
-        }
-        
-        // Animate section visible after data is loaded (only on first load)
-        if isListingDataLoaded, listingUIView?.alpha == 0 {
-            UIView.animate(withDuration: 0.3) {
-                self.listingUIView?.alpha = 1
-            }
         }
     }
 

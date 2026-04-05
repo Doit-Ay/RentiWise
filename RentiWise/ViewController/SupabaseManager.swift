@@ -100,6 +100,7 @@ final class SupabaseManager {
         defer {
             AuthSessionStateStore.clear()
             CommunitySafetyService.shared.clearLocalState()
+            PreloadManager.shared.reset()
         }
         try await client.auth.signOut()
     }

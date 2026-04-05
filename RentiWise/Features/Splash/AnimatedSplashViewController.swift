@@ -3,7 +3,16 @@
 //  RentiWise
 //
 //  Premium animated splash overlay that plays after the static LaunchScreen.
-//  Follows iOS onboarding animation best practices:
+//
+//  System Design Role:
+//    This splash serves as a **loading gate** — it covers the UI while
+//    PreloadManager fetches Supabase data in the background. The splash
+//    only dismisses when BOTH conditions are met:
+//      1. The minimum animation duration has elapsed (~1.8s)
+//      2. PreloadManager.isComplete == true (or 4s timeout)
+//    This guarantees users never see empty card skeletons flash in.
+//
+//  Animation Principles:
 //    • Layered reveal — staggered background shapes create depth
 //    • Spring physics — organic, tactile logo entrance
 //    • Sequential disclosure — elements appear one-by-one to guide the eye
@@ -16,6 +25,14 @@ final class AnimatedSplashViewController: UIViewController {
 
     // MARK: - Callback
     var onComplete: (() -> Void)?
+
+    // MARK: - Timing
+    /// Minimum time the splash shows (for animation to complete)
+    private let minimumDisplayDuration: TimeInterval = 1.8
+    /// Max time to wait for data before dismissing anyway
+    private let maxWaitTimeout: TimeInterval = 4.0
+    /// Timestamp when splash appeared
+    private var appearTime: Date?
 
     // MARK: - Brand Palette
     private let brandTeal   = UIColor(red: 0x70/255, green: 0xA7/255, blue: 0xB4/255, alpha: 1)
@@ -44,7 +61,9 @@ final class AnimatedSplashViewController: UIViewController {
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        appearTime = Date()
         runAnimationSequence()
+        waitForDataThenDismiss()
     }
 
     // MARK: - Setup
@@ -72,7 +91,6 @@ final class AnimatedSplashViewController: UIViewController {
                 shape.heightAnchor.constraint(equalToConstant: sizes[i].1),
             ])
 
-            // Pre-rotate so they overlap at different angles
             shape.transform = CGAffineTransform(rotationAngle: rotations[i] * .pi / 180)
         }
     }
@@ -118,7 +136,6 @@ final class AnimatedSplashViewController: UIViewController {
     // MARK: - Pre-animation State
 
     private func hideAllElements() {
-        // Background shapes — invisible, slightly scaled down & extra-rotated
         let shapes = [bgRect1, bgRect2, bgRect3]
         let baseRotations: [CGFloat] = [15, -10, 20]
         for (i, shape) in shapes.enumerated() {
@@ -127,11 +144,9 @@ final class AnimatedSplashViewController: UIViewController {
             shape.transform = baseRotation.scaledBy(x: 0.7, y: 0.7)
         }
 
-        // Logo — invisible, scaled down
         logoImageView.alpha = 0
         logoImageView.transform = CGAffineTransform(scaleX: 0.5, y: 0.5)
 
-        // Labels — invisible, shifted down
         nameLabel.alpha = 0
         nameLabel.transform = CGAffineTransform(translationX: 0, y: 20)
 
@@ -139,16 +154,15 @@ final class AnimatedSplashViewController: UIViewController {
         taglineLabel.transform = CGAffineTransform(translationX: 0, y: 15)
     }
 
-    // MARK: - Animation Sequence
+    // MARK: - Animation Sequence (visual only — dismissal handled separately)
 
     private func runAnimationSequence() {
-
         // ── Phase 1: Background shapes fade in with staggered timing ──
         let shapes = [bgRect1, bgRect2, bgRect3]
         let baseRotations: [CGFloat] = [15, -10, 20]
 
         for (i, shape) in shapes.enumerated() {
-            let delay = Double(i) * 0.15  // 0.0, 0.15, 0.30
+            let delay = Double(i) * 0.15
             UIView.animate(
                 withDuration: 0.6,
                 delay: delay,
@@ -194,13 +208,31 @@ final class AnimatedSplashViewController: UIViewController {
             self.taglineLabel.alpha = 1
             self.taglineLabel.transform = .identity
         }
+    }
 
-        // ── Phase 5: Hold, then dismiss ──
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) { [weak self] in
+    // MARK: - Data-driven dismissal
+
+    /// Waits for PreloadManager to complete (or timeout), ensures the minimum
+    /// animation duration has elapsed, then fades out.
+    private func waitForDataThenDismiss() {
+        Task { @MainActor in
+            // Wait for preload (with timeout)
+            await PreloadManager.shared.waitForCompletion(timeout: maxWaitTimeout)
+
+            // Ensure minimum animation time has elapsed
+            if let appear = appearTime {
+                let elapsed = Date().timeIntervalSince(appear)
+                let remaining = minimumDisplayDuration - elapsed
+                if remaining > 0 {
+                    try? await Task.sleep(nanoseconds: UInt64(remaining * 1_000_000_000))
+                }
+            }
+
+            // Fade out and remove
             UIView.animate(withDuration: 0.4, delay: 0, options: [.curveEaseIn]) {
-                self?.view.alpha = 0
+                self.view.alpha = 0
             } completion: { _ in
-                self?.onComplete?()
+                self.onComplete?()
             }
         }
     }
