@@ -110,6 +110,10 @@ final class BorrowerOTPViewController: UIViewController {
                 try await self.displayOrCreatePickupOTP()
             } catch {
                 await MainActor.run {
+                    if PickupOTPService.isManualConfirmationRequiredError(error) {
+                        self.showManualPickupFallback(message: error.localizedDescription)
+                        return
+                    }
                     self.spinner.stopAnimating()
                     self.otpLabel.text = "Error"
                     self.statusLabel.text = error.localizedDescription
@@ -118,6 +122,17 @@ final class BorrowerOTPViewController: UIViewController {
                 }
             }
         }
+    }
+
+    private func showManualPickupFallback(message: String) {
+        spinner.stopAnimating()
+        title = "Pickup Confirmation"
+        instructionLabel.text = "Meet \(lenderName) for pickup. Pickup codes are not available on this backend, so the lender will confirm the handoff directly in their app."
+        otpLabel.font = .systemFont(ofSize: 34, weight: .bold)
+        otpLabel.text = "No Code"
+        statusLabel.text = message
+        regenerateButton.isHidden = true
+        regenerateButton.isEnabled = false
     }
 
     private func displayOrCreatePickupOTP() async throws {

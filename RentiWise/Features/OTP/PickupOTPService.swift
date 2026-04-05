@@ -3,6 +3,7 @@ import Supabase
 
 final class PickupOTPService {
     static let shared = PickupOTPService()
+    static let manualConfirmationRequiredCode = 1001
 
     private let client: SupabaseClient
     private let decoder = JSONDecoder()
@@ -23,6 +24,12 @@ final class PickupOTPService {
             throw makeError("Pickup OTP is only available after the request is accepted.")
         }
 
+        guard RequestSchemaSupport.supportsPickupCode else {
+            throw makeManualConfirmationRequiredError(
+                "Pickup OTP isn't available on this backend yet. Meet the lender for pickup and ask them to tap Confirm Pickup in their app."
+            )
+        }
+
         if let existingCode = request.pickup_code?.trimmingCharacters(in: .whitespacesAndNewlines),
            !existingCode.isEmpty {
             return existingCode
@@ -37,6 +44,12 @@ final class PickupOTPService {
 
         guard request.rentalStatus == .accepted else {
             throw makeError("Pickup OTP can only be generated while the request is awaiting handoff.")
+        }
+
+        guard RequestSchemaSupport.supportsPickupCode else {
+            throw makeManualConfirmationRequiredError(
+                "Pickup OTP isn't available on this backend yet. Meet the lender for pickup and ask them to tap Confirm Pickup in their app."
+            )
         }
 
         let code = generateCode()
@@ -70,6 +83,12 @@ final class PickupOTPService {
 
         guard request.rentalStatus == .accepted else {
             throw makeError("This request is no longer waiting for pickup verification.")
+        }
+
+        guard RequestSchemaSupport.supportsPickupCode else {
+            throw makeManualConfirmationRequiredError(
+                "Pickup OTP isn't available on this backend yet. Use Confirm Pickup instead."
+            )
         }
 
         guard let expectedCode = request.pickup_code?.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -108,10 +127,18 @@ final class PickupOTPService {
     }
 
     private func fetchRequest(requestId: String) async throws -> RequestWithItem {
-        let select = """
-        id,item_id,owner_id,borrower_id,start_date,end_date,pickup_time,return_time,rental_unit,pickup_code,status,created_at,
-        items(id,title,images,price_per_day,category)
-        """
+        let select: String
+        if RequestSchemaSupport.supportsPickupCode {
+            select = """
+            id,item_id,owner_id,borrower_id,start_date,end_date,pickup_time,return_time,rental_unit,pickup_code,status,created_at,
+            items(id,title,images,price_per_day,category)
+            """
+        } else {
+            select = """
+            id,item_id,owner_id,borrower_id,start_date,end_date,pickup_time,return_time,rental_unit,status,created_at,
+            items(id,title,images,price_per_day,category)
+            """
+        }
 
         do {
             let response = try await client
@@ -124,7 +151,8 @@ final class PickupOTPService {
             return try decoder.decode(RequestWithItem.self, from: response.data)
         } catch {
             if RequestSchemaSupport.isMissingPickupCodeError(error) {
-                throw makeError("Pickup OTP support is not enabled on the backend yet.")
+                RequestSchemaSupport.markPickupCodeUnavailable()
+                return try await fetchRequest(requestId: requestId)
             }
             throw error
         }
@@ -161,6 +189,15 @@ final class PickupOTPService {
             code: code,
             userInfo: [NSLocalizedDescriptionKey: message]
         )
+    }
+
+    private func makeManualConfirmationRequiredError(_ message: String) -> NSError {
+        makeError(message, code: Self.manualConfirmationRequiredCode)
+    }
+
+    static func isManualConfirmationRequiredError(_ error: Error) -> Bool {
+        let nsError = error as NSError
+        return nsError.domain == "Rentiwise.PickupOTP" && nsError.code == manualConfirmationRequiredCode
     }
 
     private func createRentalHistoryIfNeeded(for request: RequestWithItem) async {

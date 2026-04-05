@@ -92,10 +92,13 @@ extension UIView {
         if let existing = viewWithTag(blurTag) as? UIVisualEffectView {
             blurView = existing
             blurView.effect = UIBlurEffect(style: style)
+            blurView.isUserInteractionEnabled = false
         } else {
             let blur = UIVisualEffectView(effect: UIBlurEffect(style: style))
             blur.tag = blurTag
             blur.translatesAutoresizingMaskIntoConstraints = false
+            // Decorative glass layers should never block taps on controls beneath them.
+            blur.isUserInteractionEnabled = false
             insertSubview(blur, at: 0)
             NSLayoutConstraint.activate([
                 blur.leadingAnchor.constraint(equalTo: leadingAnchor),
@@ -108,6 +111,7 @@ extension UIView {
                 let vibrancy = UIVibrancyEffect(blurEffect: blurEffect)
                 let vibrancyView = UIVisualEffectView(effect: vibrancy)
                 vibrancyView.translatesAutoresizingMaskIntoConstraints = false
+                vibrancyView.isUserInteractionEnabled = false
                 blur.contentView.addSubview(vibrancyView)
                 NSLayoutConstraint.activate([
                     vibrancyView.leadingAnchor.constraint(equalTo: blur.contentView.leadingAnchor),

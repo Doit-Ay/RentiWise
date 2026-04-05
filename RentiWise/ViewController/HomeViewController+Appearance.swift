@@ -360,21 +360,25 @@ extension HomeViewController {
 
     @IBAction func rentButton1Tapped(_ sender: UIButton) {
         guard featuredItems.indices.contains(0) else { return }
+        markFeaturedRentTap(index: 0)
         openRequestView(for: featuredItems[0])
     }
 
     @IBAction func rentButton2Tapped(_ sender: UIButton) {
         guard featuredItems.indices.contains(1) else { return }
+        markFeaturedRentTap(index: 1)
         openRequestView(for: featuredItems[1])
     }
 
     @IBAction func rentButton3Tapped(_ sender: UIButton) {
         guard featuredItems.indices.contains(2) else { return }
+        markFeaturedRentTap(index: 2)
         openRequestView(for: featuredItems[2])
     }
 
     @IBAction func rentButton4Tapped(_ sender: UIButton) {
         guard featuredItems.indices.contains(3) else { return }
+        markFeaturedRentTap(index: 3)
         openRequestView(for: featuredItems[3])
     }
 }

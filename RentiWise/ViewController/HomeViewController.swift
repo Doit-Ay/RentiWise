@@ -181,6 +181,11 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
     // Owner name cache for trending items
     var ownerNameCache: [String: String] = [:]
 
+    // Guard against accidental Product Detail pushes right after tapping Rent.
+    private var lastFeaturedRentTap: (index: Int, timestamp: TimeInterval)?
+    private var lastTrendingRentTap: (itemId: String, timestamp: TimeInterval)?
+    private let rentTapSuppressionWindow: TimeInterval = 0.6
+
     // MARK: - Search helper
     var homeSearch: HomeSearchController?
     private let safetyService = CommunitySafetyService.shared
@@ -519,14 +524,32 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
         guard let view = gestureRecognizer.view else { return true }
         let location = gestureRecognizer.location(in: view)
         // Walk the hit-test tree; if the tapped view is a UIButton, let the button handle it
-        if let hitView = view.hitTest(location, with: nil), hitView is UIButton {
-            return false
+        if let hitView = view.hitTest(location, with: nil) {
+            // Check if the hit view is any UIButton (rent button or otherwise)
+            if hitView is UIButton { return false }
+            // Also check if any ancestor of the hit view is a UIButton (for buttons with subviews)
+            var ancestor = hitView.superview
+            while let v = ancestor, v !== view {
+                if v is UIButton { return false }
+                ancestor = v.superview
+            }
+        }
+        return true
+    }
+
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        var current: UIView? = touch.view
+        while let view = current {
+            if view is UIControl { return false }
+            if view === gestureRecognizer.view { break }
+            current = view.superview
         }
         return true
     }
 
     private func openFeatured(at index: Int) {
         guard index < featuredItems.count else { return }
+        guard !shouldSuppressFeaturedSelection(for: index) else { return }
         let item = featuredItems[index]
         guard ensureItemVisible(item) else { return }
         // Instantiate ProductViewController
@@ -711,6 +734,7 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
             let item = trendingItems[indexPath.item]
             cell.configure(with: item, currencyFormatter: currencyFormatter)
             cell.onRentTapped = { [weak self] in
+                self?.markTrendingRentTap(itemId: item.id)
                 self?.openRequestView(for: item)
             }
             // Owner name removed from trending UI; no resolution or setting here.
@@ -762,22 +786,13 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
     // MARK: - UICollectionViewDelegate (single implementation branching by collection)
 
     func collectionView(_ collectionView: UICollectionView, shouldSelectItemAt indexPath: IndexPath) -> Bool {
-        if collectionView === trendingCollectionView {
-            // Prevent cell selection when the user taps the Rent button
-            guard let cell = collectionView.cellForItem(at: indexPath) as? TrendingItemCell else { return true }
-            let touchPoint = collectionView.panGestureRecognizer.location(in: cell)
-            let buttonFrame = cell.rentButton.convert(cell.rentButton.bounds, to: cell)
-            if buttonFrame.contains(touchPoint) {
-                cell.rentTapped()
-                return false
-            }
-        }
         return true
     }
 
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         if collectionView === trendingCollectionView {
             let item = trendingItems[indexPath.item]
+            guard !shouldSuppressTrendingSelection(for: item.id) else { return }
             guard ensureItemVisible(item) else { return }
             openItem(item)
             return
@@ -858,6 +873,26 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
         }
         
         greetingTop?.text = greeting
+    }
+}
+
+extension HomeViewController {
+    func markFeaturedRentTap(index: Int) {
+        lastFeaturedRentTap = (index: index, timestamp: Date().timeIntervalSinceReferenceDate)
+    }
+
+    func shouldSuppressFeaturedSelection(for index: Int) -> Bool {
+        guard let last = lastFeaturedRentTap, last.index == index else { return false }
+        return Date().timeIntervalSinceReferenceDate - last.timestamp < rentTapSuppressionWindow
+    }
+
+    func markTrendingRentTap(itemId: String) {
+        lastTrendingRentTap = (itemId: itemId, timestamp: Date().timeIntervalSinceReferenceDate)
+    }
+
+    func shouldSuppressTrendingSelection(for itemId: String) -> Bool {
+        guard let last = lastTrendingRentTap, last.itemId == itemId else { return false }
+        return Date().timeIntervalSinceReferenceDate - last.timestamp < rentTapSuppressionWindow
     }
 }
 

@@ -877,7 +877,7 @@ class BookingApprovalViewController: UIViewController {
         }
     }
     
-    // REPLACED paymentbuttontapped with UPI payment flow
+    // UPI payment flow — borrower pays lender directly via UPI
     @IBAction func paymentbuttontapped(_ sender: UIButton) {
         guard mode == .myRentals else { return }
         guard let req = request else { return }
@@ -1285,6 +1285,9 @@ class BookingApprovalViewController: UIViewController {
         let dateFormatter = DateFormatter()
         dateFormatter.dateStyle = .medium
         dateFormatter.timeStyle = .none
+        // Use UTC to match sqlDateFormatter which parses date-only strings in UTC;
+        // prevents timezone offset causing a 1-day shift in display (e.g., IST showing April 20 instead of April 21)
+        dateFormatter.timeZone = TimeZone(secondsFromGMT: 0)
 
         if let s = startDate {
             dateperiodLabel.text = dateFormatter.string(from: s)
@@ -1309,7 +1312,10 @@ class BookingApprovalViewController: UIViewController {
                 if let rawPickup = request?.pickup_time, let rawReturn = request?.return_time,
                    let pickup = sqlTimeParser.date(from: rawPickup) ?? timeFormatter.date(from: rawPickup),
                    let returnT = sqlTimeParser.date(from: rawReturn) ?? timeFormatter.date(from: rawReturn) {
-                    hours = max(1, Int(ceil(returnT.timeIntervalSince(pickup) / 3600.0)))
+                    var interval = returnT.timeIntervalSince(pickup)
+                    // Handle overnight: if return time is before pickup, add 24 hours
+                    if interval < 0 { interval += 86400 }
+                    hours = max(1, Int(ceil(interval / 3600.0)))
                 }
                 numLabeldays.text = "\(hours) Hour\(hours == 1 ? "" : "s")"
             } else {
@@ -1352,7 +1358,7 @@ class BookingApprovalViewController: UIViewController {
 
     private var showsLegacyInlinePickupCode: Bool {
         guard mode == .myRentals else { return false }
-        let hasLegacyCode = !(request?.pickup_code?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+        let hasLegacyCode = !(request?.pickup_code?.trimmingCharacters(in: . whitespacesAndNewlines).isEmpty ?? true)
         let accepted = request?.rentalStatus == .accepted
         return hasLegacyCode && accepted
     }
@@ -1389,7 +1395,9 @@ class BookingApprovalViewController: UIViewController {
             viewCodeHeight?.constant = collapsedViewCodeHeight
             statusToViewCodeTop?.constant = 0
             viewCodePrimaryButton?.setTitle(
-                shouldShowPickupOTPCTA && !showsLegacyInlinePickupCode ? "View Pickup OTP" : "View Code",
+                shouldShowPickupOTPCTA && !showsLegacyInlinePickupCode
+                    ? (RequestSchemaSupport.supportsPickupCode ? "View Pickup OTP" : "Pickup Instructions")
+                    : "View Code",
                 for: .normal
             )
         } else {
@@ -1560,13 +1568,13 @@ class BookingApprovalViewController: UIViewController {
     private func selectClause() -> String {
         if RequestSchemaSupport.supportsPickupCode {
             return """
-            id,item_id,owner_id,borrower_id,start_date,end_date,pickup_time,status,created_at,pickup_code,
+            id,item_id,owner_id,borrower_id,start_date,end_date,pickup_time,return_time,rental_unit,status,created_at,pickup_code,
             items(id,title,images,price_per_day,category)
             """
         }
 
         return """
-        id,item_id,owner_id,borrower_id,start_date,end_date,pickup_time,status,created_at,
+        id,item_id,owner_id,borrower_id,start_date,end_date,pickup_time,return_time,rental_unit,status,created_at,
         items(id,title,images,price_per_day,category)
         """
     }
@@ -2210,5 +2218,4 @@ class BookingApprovalViewController: UIViewController {
         }
     }
 }
-
 

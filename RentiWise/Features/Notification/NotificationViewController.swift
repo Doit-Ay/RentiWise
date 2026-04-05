@@ -349,9 +349,16 @@ extension NotificationViewController: UITableViewDelegate {
         switch notification.type {
         case .extensionRequest, .returnRequest:
             openRequestApprovalScreen(for: notification)
-        case .requestAccepted, .requestRejected, .paymentReceived, .paymentConfirmed, .pickupConfirmed, .newRequest:
-            // General notifications are informational — just marking as read is sufficient
-            break
+        case .requestAccepted, .requestRejected, .paymentConfirmed, .pickupConfirmed:
+            // Borrower-side notifications: open BookingApprovalVC if we have a request_id
+            if !notification.requestId.isEmpty {
+                openBookingApprovalScreen(requestId: notification.requestId)
+            }
+        case .paymentReceived, .newRequest:
+            // Lender-side notifications: open the lender request detail if we have a request_id
+            if !notification.requestId.isEmpty {
+                openBookingApprovalScreen(requestId: notification.requestId)
+            }
         }
     }
     
@@ -373,7 +380,40 @@ extension NotificationViewController: UITableViewDelegate {
         navigationController?.pushViewController(approvalVC, animated: true)
     }
 
+    private func openBookingApprovalScreen(requestId: String) {
+        Task {
+            do {
+                // Fetch the request with joined item data
+                let response = try await SupabaseManager.shared.client
+                    .from("requests")
+                    .select("""
+                        id,item_id,owner_id,borrower_id,start_date,end_date,pickup_time,return_time,rental_unit,status,created_at,
+                        items(id,title,images,price_per_day,category)
+                    """)
+                    .eq("id", value: requestId)
+                    .single()
+                    .execute()
 
+                let request = try JSONDecoder().decode(RequestWithItem.self, from: response.data)
+
+                await MainActor.run {
+                    let nibName = "BookingApprovalViewController"
+                    let bookingVC: BookingApprovalViewController
+                    if Bundle.main.path(forResource: nibName, ofType: "nib") != nil ||
+                        Bundle.main.path(forResource: nibName, ofType: "xib") != nil {
+                        bookingVC = BookingApprovalViewController(nibName: nibName, bundle: nil)
+                    } else {
+                        bookingVC = BookingApprovalViewController()
+                    }
+                    bookingVC.request = request
+                    bookingVC.hidesBottomBarWhenPushed = true
+                    self.navigationController?.pushViewController(bookingVC, animated: true)
+                }
+            } catch {
+                debugLog("[Notifications] Error opening booking: \(error)")
+            }
+        }
+    }
     
     func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
         return 110

@@ -478,10 +478,12 @@ class DashboardLenderRequestViewController: UIViewController {
 
         if rentalPaymentState.lenderConfirmedReceived {
             navigationItem.rightBarButtonItem = UIBarButtonItem(
-                title: "Verify OTP",
+                title: RequestSchemaSupport.supportsPickupCode ? "Verify OTP" : "Confirm Pickup",
                 style: .plain,
                 target: self,
-                action: #selector(openPickupOTPVerification)
+                action: RequestSchemaSupport.supportsPickupCode
+                    ? #selector(openPickupOTPVerification)
+                    : #selector(confirmPickupWithoutOTPTapped)
             )
             return
         }
@@ -563,7 +565,9 @@ class DashboardLenderRequestViewController: UIViewController {
                 self.updateVerificationAction()
                 let success = UIAlertController(
                     title: "Payment Confirmed",
-                    message: "The borrower can now open the pickup OTP, and you can verify it from this screen.",
+                    message: RequestSchemaSupport.supportsPickupCode
+                        ? "The borrower can now open the pickup OTP, and you can verify it from this screen."
+                        : "The borrower is ready for handoff. Use Confirm Pickup from this screen when you meet.",
                     preferredStyle: .alert
                 )
                 success.addAction(UIAlertAction(title: "OK", style: .default))
@@ -585,6 +589,10 @@ class DashboardLenderRequestViewController: UIViewController {
     }
 
     @objc private func openPickupOTPVerification() {
+        guard RequestSchemaSupport.supportsPickupCode else {
+            confirmPickupWithoutOTPTapped()
+            return
+        }
         guard let req = request else { return }
         let otpVC = LenderOTPInputViewController()
         otpVC.requestId = req.id

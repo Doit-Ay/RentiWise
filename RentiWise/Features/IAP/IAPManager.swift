@@ -2,11 +2,13 @@
 //  IAPManager.swift
 //  RentiWise
 //
-//  StoreKit 2 singleton for In-App Purchases.
+//  Manages in-app purchase entitlements.
+//  Payment processing is handled by Razorpay (see RazorpayPaymentService).
+//  This manager handles entitlement checks against the user_entitlements table.
 //  Products: Listing Boost (consumable), Lender Pro (subscription), Verified Badge (non-consumable).
 //
 
-import StoreKit
+import Foundation
 import Supabase
 
 @MainActor
@@ -19,65 +21,7 @@ final class IAPManager {
     static let lenderProProductId = "com.rentiwise.lenderpro"
     static let verifiedBadgeProductId = "com.rentiwise.verifiedbadge"
 
-    private(set) var products: [Product] = []
-    private var updateTask: Task<Void, Never>?
-
-    private init() {
-        // Start listening for transaction updates
-        updateTask = Task {
-            await listenForTransactions()
-        }
-    }
-
-    deinit {
-        updateTask?.cancel()
-    }
-
-    // MARK: - Fetch Products
-
-    func fetchProducts() async {
-        do {
-            let productIds: Set<String> = [
-                Self.boostProductId,
-                Self.lenderProProductId,
-                Self.verifiedBadgeProductId
-            ]
-            products = try await Product.products(for: productIds)
-            debugLog("[IAP] Fetched \(products.count) products")
-        } catch {
-            debugLog("[IAP] Failed to fetch products: \(error)")
-        }
-    }
-
-    // MARK: - Purchase
-
-    func purchase(_ product: Product) async throws -> Bool {
-        let result = try await product.purchase()
-
-        switch result {
-        case .success(let verification):
-            let transaction = try checkVerified(verification)
-            // Validate with our server
-            await validateWithServer(
-                productId: product.id,
-                transactionId: String(transaction.id)
-            )
-            await transaction.finish()
-            debugLog("[IAP] Purchase successful: \(product.id)")
-            return true
-
-        case .userCancelled:
-            debugLog("[IAP] User cancelled purchase")
-            return false
-
-        case .pending:
-            debugLog("[IAP] Purchase pending (Ask to Buy, etc.)")
-            return false
-
-        @unknown default:
-            return false
-        }
-    }
+    private init() {}
 
     // MARK: - Entitlement Checks
 
@@ -142,66 +86,13 @@ final class IAPManager {
         }
     }
 
-    // MARK: - Product Helpers
-
-    func product(for id: String) -> Product? {
-        products.first(where: { $0.id == id })
-    }
-
     // MARK: - Private
-
-    private func listenForTransactions() async {
-        for await result in Transaction.updates {
-            do {
-                let transaction = try checkVerified(result)
-                await validateWithServer(
-                    productId: transaction.productID,
-                    transactionId: String(transaction.id)
-                )
-                await transaction.finish()
-            } catch {
-                debugLog("[IAP] Transaction update error: \(error)")
-            }
-        }
-    }
-
-    private func checkVerified<T>(_ result: VerificationResult<T>) throws -> T {
-        switch result {
-        case .verified(let safe):
-            return safe
-        case .unverified(_, let error):
-            throw error
-        }
-    }
-
-    private func validateWithServer(productId: String, transactionId: String) async {
-        guard let userId = await currentUserId() else { return }
-        do {
-            let body: [String: String] = [
-                "user_id": userId,
-                "product_id": productId,
-                "transaction_id": transactionId,
-            ]
-            try await SupabaseManager.shared.client.functions.invoke(
-                "validate-iap-receipt",
-                options: .init(body: body)
-            )
-            debugLog("[IAP] Server validation complete for \(productId)")
-        } catch {
-            debugLog("[IAP] Server validation failed: \(error)")
-        }
-    }
 
     private func currentUserId() async -> String? {
         return await SupabaseManager.shared.currentUserId()
     }
+}
 
-    // MARK: - Restore Purchases (TC-P03)
-
-    /// Syncs with the App Store to restore previously purchased subscriptions
-    /// and non-consumables. Must be accessible in the UI per App Store guidelines.
-    func restorePurchases() async throws {
-        try await AppStore.sync()
-        debugLog("[IAP] Restore purchases completed (AppStore.sync)")
-    }
+extension Notification.Name {
+    static let iapEntitlementsDidChange = Notification.Name("IAPEntitlementsDidChange")
 }

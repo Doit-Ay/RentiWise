@@ -760,6 +760,35 @@ class RequestViewController: UIViewController {
                 .insert(row)
                 .execute()
             
+            // Notify the lender about the new rental request
+            // Fetch the just-created request ID so the notification links correctly
+            do {
+                struct RequestIdRow: Decodable { let id: String }
+                let recentRows: [RequestIdRow] = try await SupabaseManager.shared.client
+                    .from("requests")
+                    .select("id")
+                    .eq("item_id", value: itemObj.id)
+                    .eq("borrower_id", value: currentUserId)
+                    .eq("status", value: "pending")
+                    .order("created_at", ascending: false)
+                    .limit(1)
+                    .execute()
+                    .value
+                let newRequestId = recentRows.first?.id ?? ""
+                RemoteNotificationService.sendNewRequest(
+                    requestId: newRequestId,
+                    ownerId: itemObj.owner_id,
+                    itemTitle: itemObj.title
+                )
+            } catch {
+                // Fire-and-forget: still send notification without request ID
+                RemoteNotificationService.sendNewRequest(
+                    requestId: "",
+                    ownerId: itemObj.owner_id,
+                    itemTitle: itemObj.title
+                )
+            }
+            
             var startComponents = calendar.dateComponents([.year, .month, .day], from: pickupDate)
             let pickupTimeComponents = calendar.dateComponents([.hour, .minute, .second], from: pickupTime)
             startComponents.hour = pickupTimeComponents.hour
@@ -866,7 +895,7 @@ class RequestViewController: UIViewController {
         let declaredValue = item.declared_value ?? 0
 
         if profile.totalRentalsAsBorrower == 0 && declaredValue > 1500 {
-            return "New borrowers can only request items up to 1,500 INR until they complete their first rental."
+            return "To keep borrowing safe for both lenders and new members, higher-value items unlock after your first completed rental. Right now, new accounts can request items up to ₹1,500. Once you finish one rental, this limit is removed."
         }
 
         if profile.totalRentalsAsBorrower > 0,
@@ -880,8 +909,8 @@ class RequestViewController: UIViewController {
     }
 
     private func presentBorrowingBlockedAlert(message: String) {
-        let alert = UIAlertController(title: "Borrowing Unavailable", message: message, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "Go to Profile", style: .default, handler: { [weak self] _ in
+        let alert = UIAlertController(title: "Complete One Rental First", message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "Open Profile", style: .default, handler: { [weak self] _ in
             self?.routeToProfileTab()
         }))
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))

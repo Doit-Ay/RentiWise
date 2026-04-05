@@ -29,10 +29,12 @@ final class ProfileService: ProfileServicing {
         async let privateRowTask = fetchPrivateUserRow(userId: userId)
         async let publicCoreTask = fetchPublicUserProfileCoreRow(userId: userId)
         async let publicStatsTask = fetchPublicUserProfileStatsRow(userId: userId)
+        async let lenderProTask = fetchActiveLenderProEntitlement(userId: userId)
 
         let privateRow = await privateRowTask
         let publicCore = await publicCoreTask
         let publicStats = await publicStatsTask
+        let isLenderPro = await lenderProTask
 
         let email = privateRow?.email ?? authUser.email ?? ""
         let fullName = publicCore?.full_name ?? privateRow?.full_name ?? ""
@@ -47,6 +49,7 @@ final class ProfileService: ProfileServicing {
             phone: phone,
             phoneVerified: phoneVerified,
             kycStatus: kycStatus,
+            isLenderPro: isLenderPro,
             upiId: publicCore?.upi_id ?? privateRow?.upi_id ?? "",
             collegeEmail: publicCore?.college_email ?? privateRow?.college_email ?? "",
             isCollegeVerified: publicCore?.is_college_verified ?? privateRow?.is_college_verified ?? false,
@@ -168,6 +171,26 @@ final class ProfileService: ProfileServicing {
             )
         } catch {
             return nil
+        }
+    }
+
+    private func fetchActiveLenderProEntitlement(userId: String) async -> Bool {
+        do {
+            struct EntitlementRow: Decodable { let id: String }
+            let response = try await client
+                .from("user_entitlements")
+                .select("id")
+                .eq("user_id", value: userId)
+                .eq("product_id", value: IAPManager.lenderProProductId)
+                .eq("is_active", value: true)
+                .gt("expires_at", value: ISO8601DateFormatter().string(from: Date()))
+                .limit(1)
+                .execute()
+
+            let rows = try JSONDecoder().decode([EntitlementRow].self, from: response.data)
+            return !rows.isEmpty
+        } catch {
+            return false
         }
     }
 
