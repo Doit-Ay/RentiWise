@@ -279,6 +279,12 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
             name: CommunitySafetyService.blockedUsersDidChangeNotification,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleNotificationsUpdated),
+            name: .notificationsDidUpdate,
+            object: nil
+        )
     }
 
     @objc private func dismissKeyboardTap() {
@@ -419,6 +425,10 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
 
     @objc private func handleBlockedUsersChanged() {
         Task { await loadFeaturedItems(forceRefresh: true) }
+    }
+
+    @objc private func handleNotificationsUpdated() {
+        Task { await updateNotificationBadge() }
     }
 
     override func viewWillDisappear(_ animated: Bool) {

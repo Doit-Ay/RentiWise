@@ -225,74 +225,37 @@ class RequestSentPageViewController: UIViewController {
     }
     
     private func updateBookingLabels() {
-        guard let start = bookingStartDate, let end = bookingEndDate else {
+        guard let start = bookingStartDate,
+              let end = bookingEndDate,
+              let item = item else {
             bookingDateRangeLabel?.text = "—"
             bookingPickupTimeLabel?.text = "—"
             bookingDurationLabel?.text = "—"
             return
         }
+        let booking = BookingPresentationFormatter.presentation(
+            pickupDateTime: start,
+            returnDateTime: end,
+            rentalUnit: rentalUnit == .perHour ? .hour : .day,
+            pricePerDay: item.price_per_day
+        )
 
-        if rentalUnit == .perHour {
-            // Per-hour booking
-            // bookingDateRangeLabel → shows the single date (e.g. "5 Feb 2026")
-            bookingDateRangeLabel?.text = dateFormatter.string(from: start)
-
-            // bookingPickupTimeLabel → shows the time range (e.g. "4:00 PM – 8:00 PM")
-            let startTime = timeFormatter.string(from: start)
-            let endTime   = timeFormatter.string(from: end)
-            bookingPickupTimeLabel?.text = "\(startTime) – \(endTime)"
-
-            // bookingDurationLabel → hours/minutes
-            let duration = max(0, end.timeIntervalSince(start))
-            let hoursRaw = duration / 3600.0
-            let h = Int(hoursRaw)
-            let m = Int((hoursRaw - Double(h)) * 60)
-            if h > 0 && m > 0 {
-                bookingDurationLabel?.text = "\(h)h \(m)m"
-            } else if h > 0 {
-                bookingDurationLabel?.text = "\(h)h"
-            } else {
-                bookingDurationLabel?.text = "\(max(1, m))m"
-            }
-        } else {
-            // Per-day booking
-            // bookingDateRangeLabel → shows the date range (e.g. "5 Feb 2026 – 7 Feb 2026")
-            bookingDateRangeLabel?.text = "\(dateFormatter.string(from: start)) – \(dateFormatter.string(from: end))"
-
-            // bookingPickupTimeLabel → shows single pickup time (e.g. "10:00 AM")
-            let pickupDisplay = pickupTime ?? start
-            bookingPickupTimeLabel?.text = timeFormatter.string(from: pickupDisplay)
-
-            // bookingDurationLabel → number of days
-            let duration = max(0, end.timeIntervalSince(start))
-            let days = max(1, Int(ceil(duration / 86400.0)))
-            bookingDurationLabel?.text = "\(days)d"
-        }
+        bookingDateRangeLabel?.text = booking.dateText
+        bookingPickupTimeLabel?.text = booking.timeText
+        bookingDurationLabel?.text = booking.durationText
     }
     
     private func updatePriceLabels() {
         guard let item = item else { return }
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
-
-        // Compute unit price
-        let perDay = item.price_per_day
-        // Match RequestViewController: per-hour derived from per-day/8
-        let perHour = (perDay / 8.0)
-        let unitPrice = (rentalUnit == .perHour) ? perHour : perDay
-
-        // Rental fee based on duration if both dates exist; else show unit price
-        var rentalFee = unitPrice
-        if let start = bookingStartDate, let end = bookingEndDate, end > start {
-            let duration = end.timeIntervalSince(start)
-            if rentalUnit == .perHour {
-                let hours = max(1.0, ceil(duration / 3600.0))
-                rentalFee = perHour * hours
-            } else {
-                let days = max(1.0, ceil(duration / 86400.0))
-                rentalFee = perDay * days
-            }
-        }
+        let booking = BookingPresentationFormatter.presentation(
+            pickupDateTime: bookingStartDate ?? Date(),
+            returnDateTime: bookingEndDate ?? Date(),
+            rentalUnit: rentalUnit == .perHour ? .hour : .day,
+            pricePerDay: item.price_per_day
+        )
+        let rentalFee = booking.rentalFee
 
         // Totals align with RequestViewController: rental fee only for the TestFlight flow.
         let total = rentalFee

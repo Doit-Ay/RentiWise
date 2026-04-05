@@ -514,80 +514,18 @@ class RequestViewController: UIViewController {
     private func recalculatePricing() {
         if rentalUnit == .none { return }
         guard let item = item else { return }
-        
-        let pricePerDay = item.price_per_day
-        let pricePerHour = (pricePerDay / 8).rounded(toPlaces: 2)
-        
-        let calendar = Calendar.current
-        let baseDate = dateLabel.date
-        
-        var startComponents = calendar.dateComponents([.year, .month, .day], from: baseDate)
-        let pickupTimeComponents = calendar.dateComponents([.hour, .minute, .second], from: pickuptimeLabel.date)
-        startComponents.hour = pickupTimeComponents.hour
-        startComponents.minute = pickupTimeComponents.minute
-        startComponents.second = pickupTimeComponents.second
-        guard let startDateTime = calendar.date(from: startComponents) else { return }
-        
-        let endDateTime: Date
-        switch rentalUnit {
-        case .hour:
-            var endComponents = calendar.dateComponents([.year, .month, .day], from: baseDate)
-            let returnTimeComponents = calendar.dateComponents([.hour, .minute, .second], from: returntimeLabel.date)
-            endComponents.hour = returnTimeComponents.hour
-            endComponents.minute = returnTimeComponents.minute
-            endComponents.second = returnTimeComponents.second
-            endDateTime = calendar.date(from: endComponents) ?? returntimeLabel.date
-        case .day:
-            let returnDate = returntimeLabel.date
-            var endComponents = calendar.dateComponents([.year, .month, .day], from: returnDate)
-            let pickupTimeComps = calendar.dateComponents([.hour, .minute, .second], from: pickuptimeLabel.date)
-            endComponents.hour = pickupTimeComps.hour
-            endComponents.minute = pickupTimeComps.minute
-            endComponents.second = pickupTimeComps.second
-            endDateTime = calendar.date(from: endComponents) ?? returnDate
-        case .none:
-            return
-        }
-        
-        var actualEndDateTime = endDateTime
-        if actualEndDateTime < startDateTime {
-            actualEndDateTime = calendar.date(byAdding: .day, value: 1, to: actualEndDateTime) ?? actualEndDateTime
-        }
-        
-        let duration = actualEndDateTime.timeIntervalSince(startDateTime)
-        var rentalFeeAmount: Double = 0
-        var quantityDescription1 = ""
-        var quantityDescription2 = ""
-        var quantityDescription3 = ""
-        
-        switch rentalUnit {
-        case .hour:
-            let hoursRaw = max(0, duration / 3600)
-            let quantityHours = max(1, Int(ceil(hoursRaw)))
-            rentalFeeAmount = Double(quantityHours) * pricePerHour
-            quantityDescription1 = dateFormatter.string(from: baseDate)
-            quantityDescription2 = "\(timeFormatter.string(from: startDateTime)) - \(timeFormatter.string(from: actualEndDateTime))"
-            if hoursRaw > 0 {
-                let h = Int(hoursRaw)
-                let m = Int((hoursRaw - Double(h)) * 60)
-                if h > 0 && m > 0 { quantityDescription3 = "\(h)h \(m)m" }
-                else if h > 0 { quantityDescription3 = "\(h)h" }
-                else { quantityDescription3 = "\(m)m" }
-            } else {
-                quantityDescription3 = "0m"
-            }
-        case .day:
-            let daysRaw = max(0, duration / 86400)
-            let quantityDays = max(1, Int(ceil(daysRaw)))
-            rentalFeeAmount = Double(quantityDays) * pricePerDay
-            let startStr = dateFormatter.string(from: baseDate)
-            let endStr = dateFormatter.string(from: actualEndDateTime)
-            quantityDescription1 = "\(startStr) - \(endStr)"
-            quantityDescription2 = timeFormatter.string(from: pickuptimeLabel.date)
-            quantityDescription3 = "\(quantityDays) day\(quantityDays == 1 ? "" : "s")"
-        case .none:
-            return
-        }
+        let booking = BookingPresentationFormatter.presentation(
+            startDate: dateLabel.date,
+            pickupTime: pickuptimeLabel.date,
+            returnSelection: returntimeLabel.date,
+            rentalUnit: rentalUnit == .hour ? .hour : .day,
+            pricePerDay: item.price_per_day
+        )
+
+        let rentalFeeAmount = booking.rentalFee
+        let quantityDescription1 = booking.dateText
+        let quantityDescription2 = booking.timeText
+        let quantityDescription3 = booking.durationText
         
         // Removed service fee and deposit from total calculation
         // let serviceFee = rentalFeeAmount * serviceFeeRate
@@ -680,42 +618,14 @@ class RequestViewController: UIViewController {
         isSubmittingRequest = true
         defer { isSubmittingRequest = false }
         
-        let calendar = Calendar.current
-        let pickupDate = dateLabel.date
-        let pickupTime = pickuptimeLabel.date
-        let returnPicker = returntimeLabel.date
-        
-        let startOfPickup = calendar.startOfDay(for: pickupDate)
-        var endDate: Date
-        switch rentalUnit {
-        case .day:
-            endDate = calendar.startOfDay(for: returnPicker)
-            if endDate < startOfPickup {
-                endDate = calendar.date(byAdding: .day, value: 1, to: endDate) ?? endDate
-            }
-        case .hour:
-            var endComponents = calendar.dateComponents([.year, .month, .day], from: pickupDate)
-            let returnTimeComponents = calendar.dateComponents([.hour, .minute, .second], from: returnPicker)
-            endComponents.hour = returnTimeComponents.hour
-            endComponents.minute = returnTimeComponents.minute
-            endComponents.second = returnTimeComponents.second
-            let endDateTime = calendar.date(from: endComponents) ?? returnPicker
-            endDate = endDateTime < pickupTime ? calendar.date(byAdding: .day, value: 1, to: pickupDate) ?? pickupDate : pickupDate
-        case .none:
-            presentAlert(title: "Error", message: "Please select a rental duration before sending a request.")
-            return
-        }
-        
-        let sqlDateFormatter = DateFormatter()
-        sqlDateFormatter.calendar = Calendar(identifier: .gregorian)
-        sqlDateFormatter.timeZone = TimeZone(secondsFromGMT: 0)
-        sqlDateFormatter.dateFormat = "yyyy-MM-dd"
-        
-        let sqlTimeFormatter = DateFormatter()
-        sqlTimeFormatter.calendar = Calendar(identifier: .gregorian)
-        sqlTimeFormatter.timeZone = TimeZone.current
-        sqlTimeFormatter.dateFormat = "HH:mm:ssXXXXX"
-        
+        let booking = BookingPresentationFormatter.presentation(
+            startDate: dateLabel.date,
+            pickupTime: pickuptimeLabel.date,
+            returnSelection: returntimeLabel.date,
+            rentalUnit: rentalUnit == .hour ? .hour : .day,
+            pricePerDay: item.price_per_day
+        )
+
         struct NewRequestRow: Encodable {
             let item_id: String
             let owner_id: String
@@ -742,16 +652,16 @@ class RequestViewController: UIViewController {
             item_id: itemObj.id,
             owner_id: itemObj.owner_id,
             borrower_id: currentUserId,
-            start_date: sqlDateFormatter.string(from: startOfPickup),
-            end_date: sqlDateFormatter.string(from: endDate),
-            pickup_time: sqlTimeFormatter.string(from: pickupTime),
+            start_date: BookingPresentationFormatter.sqlDateString(for: booking.pickupDateTime),
+            end_date: BookingPresentationFormatter.sqlDateString(for: booking.returnDateTime),
+            pickup_time: BookingPresentationFormatter.sqlTimeString(for: booking.pickupDateTime),
             status: "pending",
             message: nil,
             borrower_lat: coordinates?.latitude,
             borrower_lng: coordinates?.longitude,
             borrower_location_captured_at: locationTimestamp,
             rental_unit: rentalUnit == .hour ? "hour" : "day",
-            return_time: sqlTimeFormatter.string(from: rentalUnit == .hour ? returnPicker : returnPicker) // returnPicker has the time
+            return_time: BookingPresentationFormatter.sqlTimeString(for: booking.returnDateTime)
         )
         
         do {
@@ -789,43 +699,17 @@ class RequestViewController: UIViewController {
                 )
             }
             
-            var startComponents = calendar.dateComponents([.year, .month, .day], from: pickupDate)
-            let pickupTimeComponents = calendar.dateComponents([.hour, .minute, .second], from: pickupTime)
-            startComponents.hour = pickupTimeComponents.hour
-            startComponents.minute = pickupTimeComponents.minute
-            startComponents.second = pickupTimeComponents.second
-            let bookingStartDate = calendar.date(from: startComponents) ?? pickupDate
-            
-            let bookingEndDate: Date
-            switch rentalUnit {
-            case .day:
-                var endComponents = calendar.dateComponents([.year, .month, .day], from: endDate)
-                endComponents.hour = pickupTimeComponents.hour
-                endComponents.minute = pickupTimeComponents.minute
-                endComponents.second = pickupTimeComponents.second
-                bookingEndDate = calendar.date(from: endComponents) ?? endDate
-            case .hour:
-                var endComponents = calendar.dateComponents([.year, .month, .day], from: endDate)
-                let returnTimeComponents = calendar.dateComponents([.hour, .minute, .second], from: returnPicker)
-                endComponents.hour = returnTimeComponents.hour
-                endComponents.minute = returnTimeComponents.minute
-                endComponents.second = returnTimeComponents.second
-                bookingEndDate = calendar.date(from: endComponents) ?? endDate
-            case .none:
-                bookingEndDate = endDate
-            }
-            
             NotificationCenter.default.post(name: Notification.Name("rentalRequestCreated"), object: nil, userInfo: ["item_id": itemObj.id])
 
             // Track analytics event
-            let rentalDays = max(1, Int(ceil(endDate.timeIntervalSince(startOfPickup) / 86400.0)))
+            let rentalDays = max(1, Int(ceil(booking.returnDateTime.timeIntervalSince(booking.pickupDateTime) / 86400.0)))
             AnalyticsService.shared.trackRentalRequestSent(itemId: itemObj.id, days: rentalDays)
             
             let sentVC = RequestSentPageViewController(nibName: "RequestSentPageViewController", bundle: .main)
             sentVC.configure(with: itemObj)
-            sentVC.bookingStartDate = bookingStartDate
-            sentVC.bookingEndDate = bookingEndDate
-            sentVC.pickupTime = pickupTime
+            sentVC.bookingStartDate = booking.pickupDateTime
+            sentVC.bookingEndDate = booking.returnDateTime
+            sentVC.pickupTime = booking.pickupDateTime
             sentVC.isPerHour = (rentalUnit == .hour)
             navigationController?.pushViewController(sentVC, animated: true)
         } catch {

@@ -88,6 +88,17 @@ enum RemoteNotificationService {
         )
     }
 
+    /// Notify a nearby user that a new listing was posted close to them.
+    static func sendNearbyItemPosted(itemId: String, userId: String, itemTitle: String, distanceText: String) {
+        insert(
+            userId: userId,
+            type: "nearby_item_posted",
+            title: "New Item Nearby",
+            message: "\"\(itemTitle)\" was just listed near you (\(distanceText)).",
+            requestId: itemId
+        )
+    }
+
     // MARK: - Private
 
     private struct NotificationInsert: Encodable {
@@ -114,6 +125,9 @@ enum RemoteNotificationService {
                     .from("notifications")
                     .insert(payload)
                     .execute()
+                if SupabaseManager.shared.currentUserIdSync()?.lowercased() == userId.lowercased() {
+                    NotificationCenter.default.post(name: .notificationsDidUpdate, object: nil)
+                }
                 debugLog("[NotificationService] Sent \(type) to user \(userId)")
             } catch {
                 // Fire-and-forget: log but don't crash

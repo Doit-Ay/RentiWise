@@ -7,6 +7,7 @@
 
 import UIKit
 import Supabase
+import CoreLocation
 
 class AddItemPublishViewController: UIViewController {
 
@@ -161,7 +162,9 @@ class AddItemPublishViewController: UIViewController {
             let item = try await service.insertItem(draft: draft, status: { [weak self] message in
                 Task { await MainActor.run { self?.updateLoader(message) } }
             })
-            _ = item
+            Task.detached(priority: .utility) {
+                await Self.notifyNearbyUsersAboutPublishedItem(item)
+            }
             await MainActor.run {
                 self.hideLoader()
                 self.routeToHome()
@@ -245,5 +248,69 @@ class AddItemPublishViewController: UIViewController {
         }
         // Final fallback
         dismiss(animated: true)
+    }
+
+    private struct NearbyAddressRow: Decodable {
+        let user_id: String
+        let latitude: Double?
+        let longitude: Double?
+    }
+
+    private static func notifyNearbyUsersAboutPublishedItem(_ item: ItemRow) async {
+        guard let origin = await fetchDefaultCoordinate(for: item.owner_id) else { return }
+
+        do {
+            let rows: [NearbyAddressRow] = try await SupabaseManager.shared.client
+                .from("user_default_address")
+                .select("user_id,latitude,longitude")
+                .neq("user_id", value: item.owner_id)
+                .execute()
+                .value
+
+            let nearby = rows.compactMap { row -> (String, Double)? in
+                guard let lat = row.latitude, let lon = row.longitude, lat != 0, lon != 0 else {
+                    return nil
+                }
+
+                let km = origin.distance(from: CLLocation(latitude: lat, longitude: lon)) / 1000.0
+                guard km <= 25 else { return nil }
+                return (row.user_id, km)
+            }
+
+            for (userId, km) in nearby.prefix(50) {
+                RemoteNotificationService.sendNearbyItemPosted(
+                    itemId: item.id,
+                    userId: userId,
+                    itemTitle: item.title,
+                    distanceText: String(format: "%.1f km", km)
+                )
+            }
+        } catch {
+            debugLog("[AddItem] Nearby item notification failed: \(error.localizedDescription)")
+        }
+    }
+
+    private static func fetchDefaultCoordinate(for userId: String) async -> CLLocation? {
+        do {
+            let rows: [NearbyAddressRow] = try await SupabaseManager.shared.client
+                .from("user_default_address")
+                .select("user_id,latitude,longitude")
+                .eq("user_id", value: userId)
+                .limit(1)
+                .execute()
+                .value
+
+            if let row = rows.first,
+               let lat = row.latitude,
+               let lon = row.longitude,
+               lat != 0,
+               lon != 0 {
+                return CLLocation(latitude: lat, longitude: lon)
+            }
+        } catch {
+            debugLog("[AddItem] Could not resolve owner coordinate for nearby notification: \(error.localizedDescription)")
+        }
+
+        return nil
     }
 }

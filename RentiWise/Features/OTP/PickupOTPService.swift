@@ -24,14 +24,7 @@ final class PickupOTPService {
             throw makeError("Pickup OTP is only available after the request is accepted.")
         }
 
-        guard RequestSchemaSupport.supportsPickupCode else {
-            throw makeManualConfirmationRequiredError(
-                "Pickup OTP isn't available on this backend yet. Meet the lender for pickup and ask them to tap Confirm Pickup in their app."
-            )
-        }
-
-        if let existingCode = request.pickup_code?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !existingCode.isEmpty {
+        if let existingCode = try await fetchStoredPickupCode(for: request) {
             return existingCode
         }
 
@@ -46,25 +39,8 @@ final class PickupOTPService {
             throw makeError("Pickup OTP can only be generated while the request is awaiting handoff.")
         }
 
-        guard RequestSchemaSupport.supportsPickupCode else {
-            throw makeManualConfirmationRequiredError(
-                "Pickup OTP isn't available on this backend yet. Meet the lender for pickup and ask them to tap Confirm Pickup in their app."
-            )
-        }
-
         let code = generateCode()
-        struct PickupCodePatch: Encodable { let pickup_code: String }
-        struct UpdatedRow: Decodable { let id: String }
-
-        _ = try await client
-            .from("requests")
-            .update(PickupCodePatch(pickup_code: code))
-            .eq("id", value: requestId)
-            .eq("borrower_id", value: request.borrower_id)
-            .select("id")
-            .single()
-            .execute()
-
+        try await storePickupCode(code, for: request)
         return code
     }
 
@@ -85,14 +61,7 @@ final class PickupOTPService {
             throw makeError("This request is no longer waiting for pickup verification.")
         }
 
-        guard RequestSchemaSupport.supportsPickupCode else {
-            throw makeManualConfirmationRequiredError(
-                "Pickup OTP isn't available on this backend yet. Use Confirm Pickup instead."
-            )
-        }
-
-        guard let expectedCode = request.pickup_code?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !expectedCode.isEmpty else {
+        guard let expectedCode = try await fetchStoredPickupCode(for: request) else {
             throw makeError("The borrower has not generated a pickup OTP yet.")
         }
 
@@ -105,12 +74,29 @@ final class PickupOTPService {
             let pickup_code: String?
         }
 
-        _ = try await client
-            .from("requests")
-            .update(VerificationPatch(status: "approved", pickup_code: nil))
-            .eq("id", value: requestId)
-            .eq("owner_id", value: request.owner_id)
-            .execute()
+        do {
+            _ = try await client
+                .from("requests")
+                .update(VerificationPatch(status: "approved", pickup_code: nil))
+                .eq("id", value: requestId)
+                .eq("owner_id", value: request.owner_id)
+                .execute()
+        } catch {
+            if RequestSchemaSupport.isMissingPickupCodeError(error) {
+                RequestSchemaSupport.markPickupCodeUnavailable()
+                struct StatusOnlyPatch: Encodable { let status: String }
+                _ = try await client
+                    .from("requests")
+                    .update(StatusOnlyPatch(status: "approved"))
+                    .eq("id", value: requestId)
+                    .eq("owner_id", value: request.owner_id)
+                    .execute()
+            } else {
+                throw error
+            }
+        }
+
+        try await clearStoredPickupCode(for: request)
 
         await createRentalHistoryIfNeeded(for: request)
 
@@ -177,6 +163,138 @@ final class PickupOTPService {
             throw makeError("Sign in again to continue.")
         }
         return userId
+    }
+
+    private struct PaymentPickupRow: Decodable {
+        let id: String
+        let pickup_code: String?
+    }
+
+    private struct PaymentPickupPatch: Encodable {
+        let pickup_code: String?
+    }
+
+    private func fetchStoredPickupCode(for request: RequestWithItem) async throws -> String? {
+        if let requestCode = request.pickup_code?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !requestCode.isEmpty {
+            return requestCode
+        }
+
+        if let payment = try await fetchLatestPayment(requestId: request.id),
+           let paymentCode = payment.pickup_code?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !paymentCode.isEmpty {
+            return paymentCode
+        }
+
+        if let paymentId = try await fetchLatestPayment(requestId: request.id)?.id,
+           let eventCode = try await fetchEventBackedPickupCode(paymentId: paymentId) {
+            return eventCode
+        }
+
+        return nil
+    }
+
+    private func storePickupCode(_ code: String, for request: RequestWithItem) async throws {
+        if let payment = try await fetchLatestPayment(requestId: request.id) {
+            do {
+                _ = try await client
+                    .from("payments")
+                    .update(PaymentPickupPatch(pickup_code: code))
+                    .eq("id", value: payment.id)
+                    .execute()
+                return
+            } catch {
+                debugLog("[PickupOTP] Could not persist pickup code on payment row: \(error.localizedDescription)")
+            }
+
+            do {
+                try await insertEventBackedPickupCode(code, paymentId: payment.id)
+                return
+            } catch {
+                debugLog("[PickupOTP] Could not persist pickup code in payment_events: \(error.localizedDescription)")
+            }
+        }
+
+        guard RequestSchemaSupport.supportsPickupCode else {
+            throw makeError("Pickup-code generation is still syncing. Please try again in a moment.")
+        }
+
+        struct PickupCodePatch: Encodable { let pickup_code: String }
+        do {
+            _ = try await client
+                .from("requests")
+                .update(PickupCodePatch(pickup_code: code))
+                .eq("id", value: request.id)
+                .eq("borrower_id", value: request.borrower_id)
+                .select("id")
+                .single()
+                .execute()
+        } catch {
+            if RequestSchemaSupport.isMissingPickupCodeError(error) {
+                RequestSchemaSupport.markPickupCodeUnavailable()
+                throw makeError("Pickup-code generation is still syncing. Please try again in a moment.")
+            }
+            throw error
+        }
+    }
+
+    private func clearStoredPickupCode(for request: RequestWithItem) async throws {
+        if let payment = try await fetchLatestPayment(requestId: request.id) {
+            do {
+                _ = try await client
+                    .from("payments")
+                    .update(PaymentPickupPatch(pickup_code: nil))
+                    .eq("id", value: payment.id)
+                    .execute()
+            } catch {
+                debugLog("[PickupOTP] Could not clear pickup code on payment row: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func fetchLatestPayment(requestId: String) async throws -> PaymentPickupRow? {
+        let response = try await client
+            .from("payments")
+            .select("id,pickup_code")
+            .eq("request_id", value: requestId)
+            .order("created_at", ascending: false)
+            .limit(1)
+            .execute()
+
+        let rows = try decoder.decode([PaymentPickupRow].self, from: response.data)
+        return rows.first
+    }
+
+    private func insertEventBackedPickupCode(_ code: String, paymentId: String) async throws {
+        let payload = PaymentEventInsert(
+            payment_id: paymentId,
+            event_type: "pickup_code_generated",
+            raw_payload: code
+        )
+
+        try await client
+            .from("payment_events")
+            .insert(payload)
+            .execute()
+    }
+
+    private func fetchEventBackedPickupCode(paymentId: String) async throws -> String? {
+        struct EventRow: Decodable {
+            let raw_payload: String?
+        }
+
+        let response = try await client
+            .from("payment_events")
+            .select("raw_payload")
+            .eq("payment_id", value: paymentId)
+            .eq("event_type", value: "pickup_code_generated")
+            .order("created_at", ascending: false)
+            .limit(1)
+            .execute()
+
+        let rows = try decoder.decode([EventRow].self, from: response.data)
+        let code = rows.first?.raw_payload?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return (code?.isEmpty == false) ? code : nil
     }
 
     private func generateCode() -> String {

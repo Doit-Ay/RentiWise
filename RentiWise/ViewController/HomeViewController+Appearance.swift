@@ -260,7 +260,8 @@ extension HomeViewController {
             
             let extensionCount = try await fetchUnreadExtensionCount(for: userId)
             let returnCount = try await fetchUnreadReturnCount(for: userId)
-            let totalCount = extensionCount + returnCount
+            let generalCount = try await fetchUnreadGeneralNotificationCount(for: userId)
+            let totalCount = extensionCount + returnCount + generalCount
             
             await MainActor.run {
                 self.unreadNotificationCount = totalCount
@@ -293,6 +294,17 @@ extension HomeViewController {
             .select("id, requests!inner(id)", head: true, count: .exact)
             .eq("requests.owner_id", value: ownerId)
             .eq("status", value: "pending")
+            .or("is_read.is.null,is_read.eq.false")
+            .execute()
+
+        return response.count ?? 0
+    }
+
+    func fetchUnreadGeneralNotificationCount(for userId: String) async throws -> Int {
+        let response = try await SupabaseManager.shared.client
+            .from("notifications")
+            .select("id", head: true, count: .exact)
+            .eq("user_id", value: userId)
             .or("is_read.is.null,is_read.eq.false")
             .execute()
 

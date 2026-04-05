@@ -158,7 +158,7 @@ public enum RentalStatus: String, CaseIterable, Codable {
 
 // MARK: - Shared models for lender requests with joined item
 
-public struct RequestWithItem: Codable {
+public struct RequestWithItem: Codable, Sendable {
     public let id: String
     public let item_id: String
     public let owner_id: String
@@ -199,7 +199,7 @@ public enum RequestSchemaSupport {
     }
 }
 
-public struct ItemLite: Codable {
+public struct ItemLite: Codable, Sendable {
     public let id: String
     public let title: String
     public let images: [String]

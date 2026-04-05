@@ -46,42 +46,27 @@ extension HomeViewController {
     }
 
     func updateTrendingItems(from items: [Item]) {
-        // Sort by a combined score: nearest distance + highest review stars.
-        // Distance weight = 60%, Rating weight = 40%.
-        // Items with no coordinates are pushed to the end.
-        // Items with no reviews default to 3.0 stars (neutral).
-
-        let viewerCoord = DistanceService.shared.cachedViewerCoordinate()
-
-        let scored: [(item: Item, score: Double)] = items.map { item in
-            // --- Distance component (lower is better → convert to 0..1 where 1 = closest) ---
-            let distanceScore: Double
-            if let viewerCoord = viewerCoord,
-               let lat = item.latitude, let lon = item.longitude,
-               lat != 0.0, lon != 0.0 {
-                let itemLoc = CLLocation(latitude: lat, longitude: lon)
-                let meters = viewerCoord.distance(from: itemLoc)
-                // Normalise: 0 m → 1.0, 100 km+ → ~0.0  (exponential decay)
-                distanceScore = exp(-meters / 20_000.0)
-            } else {
-                distanceScore = 0.0 // no coords → lowest priority
+        let sorted = items.sorted { lhs, rhs in
+            let lhsRating = lhs.average_rating ?? 0
+            let rhsRating = rhs.average_rating ?? 0
+            if lhsRating != rhsRating {
+                return lhsRating > rhsRating
             }
 
-            // --- Rating component (higher is better → normalise to 0..1) ---
-            let rating = item.average_rating ?? 3.0
-            let reviewCount = item.review_count ?? 0
-            // Slight boost for items with more reviews (up to cap of ~50)
-            let reviewConfidence = min(Double(reviewCount), 50.0) / 50.0
-            // Blend raw rating with confidence so a single 5-star review doesn't beat a 4.8 with 30 reviews
-            let ratingScore = (rating / 5.0) * (0.5 + 0.5 * reviewConfidence)
+            let lhsReviews = lhs.review_count ?? 0
+            let rhsReviews = rhs.review_count ?? 0
+            if lhsReviews != rhsReviews {
+                return lhsReviews > rhsReviews
+            }
 
-            // --- Combined score ---
-            let combined = 0.6 * distanceScore + 0.4 * ratingScore
-            return (item, combined)
+            if lhs.hasActiveBoost != rhs.hasActiveBoost {
+                return lhs.hasActiveBoost && !rhs.hasActiveBoost
+            }
+
+            return (lhs.created_at ?? .distantPast) > (rhs.created_at ?? .distantPast)
         }
 
-        let sorted = scored.sorted { $0.score > $1.score }
-        trendingItems = Array(sorted.prefix(6).map { $0.item })
+        trendingItems = Array(sorted.prefix(6))
         trendingCollectionView?.reloadData()
     }
 

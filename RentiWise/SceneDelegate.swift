@@ -17,6 +17,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
                options connectionOptions: UIScene.ConnectionOptions) {
         configureTabBarAppearance()
         startNetworkMonitoring()
+        NotificationRealtimeService.shared.start()
 
         // Show animated splash overlay after a brief delay so the root VC is loaded
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
@@ -57,8 +58,10 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     func sceneDidBecomeActive(_ scene: UIScene) {
+        NotificationService.shared.requestPermissionIfNeeded()
         Task {
             await PendingItemRemovalSync.shared.syncIfNeeded()
+            await NotificationRealtimeService.shared.refresh()
         }
     }
 

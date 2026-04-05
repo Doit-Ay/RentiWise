@@ -19,6 +19,9 @@ struct ItemInsertPayload: Encodable {
     let declared_value: Int
     let images: [String] // store Storage paths or URLs
     let is_active: Bool
+    let latitude: Double?
+    let longitude: Double?
+    let location_address: String?
 }
 
 // Row shape returned from public.items
@@ -34,6 +37,9 @@ struct ItemRow: Decodable {
     let declared_value: Int?
     let images: [String]
     let is_active: Bool
+    let latitude: Double?
+    let longitude: Double?
+    let location_address: String?
     let created_at: String
     let updated_at: String
 }

@@ -256,95 +256,16 @@ class DashboardLenderRequestViewController: UIViewController {
             }
         }
 
-        // Dates and duration
-        let startDate = sqlDateFormatter.date(from: req.start_date)
-        let endDate = sqlDateFormatter.date(from: req.end_date)
-
-        var durationUnits: Int?
-        if let s = startDate, let e = endDate {
-            datelabel?.text = "\(displayDateFormatter.string(from: s)) — \(displayDateFormatter.string(from: e))"
-            
-            if req.rental_unit == "hour" {
-                // Calculate hours between pickup and return
-                var hours = 1
-                if let rawPickup = req.pickup_time, let rawReturn = req.return_time,
-                   let pickup = sqlTimeParser.date(from: rawPickup) ?? displayTimeFormatter.date(from: rawPickup),
-                   let returnT = sqlTimeParser.date(from: rawReturn) ?? displayTimeFormatter.date(from: rawReturn) {
-                    let diff = max(1, Int(ceil(returnT.timeIntervalSince(pickup) / 3600.0)))
-                    hours = diff
-                }
-                durationUnits = hours
-                numberodDaysLabel?.text = "\(hours) hour\(hours == 1 ? "" : "s")"
-            } else {
-                let d = max(1, Int(ceil(e.timeIntervalSince(s) / 86400.0)))
-                durationUnits = d
-                numberodDaysLabel?.text = "\(d) day\(d == 1 ? "" : "s")"
-            }
-        } else {
-            datelabel?.text = "—"
-            numberodDaysLabel?.text = "—"
-        }
-
-        // Pickup time: parse "HH:mm:ssXXXXX" and show localized short time
-        if let raw = req.pickup_time, !raw.isEmpty {
-            if let date = sqlTimeParser.date(from: raw) {
-                pickuptimeLabel?.text = displayTimeFormatter.string(from: date)
-            } else {
-                // Fallbacks for possible older formats like "HH:mm" or "HH:mm:ss"
-                let fallbacks = ["HH:mm:ss", "HH:mm"]
-                var shown = false
-                for fmt in fallbacks {
-                    let df = DateFormatter()
-                    df.calendar = Calendar(identifier: .gregorian)
-                    df.timeZone = .current
-                    df.dateFormat = fmt
-                    if let d = df.date(from: raw) {
-                        pickuptimeLabel?.text = displayTimeFormatter.string(from: d)
-                        shown = true
-                        break
-                    }
-                }
-                if !shown {
-                    // Last resort: show raw
-                    pickuptimeLabel?.text = raw
-                }
-            }
-            // If it's hourly, we show pickup -> return_time
-            if req.rental_unit == "hour", let rawReturn = req.return_time, !rawReturn.isEmpty {
-                var returnStr = rawReturn
-                if let rDate = sqlTimeParser.date(from: rawReturn) {
-                    returnStr = displayTimeFormatter.string(from: rDate)
-                } else if let rDate = DateFormatter().date(from: rawReturn) { // fallback
-                    returnStr = displayTimeFormatter.string(from: rDate)
-                } else {
-                    let fallbacks = ["HH:mm:ss", "HH:mm"]
-                    for fmt in fallbacks {
-                        let df = DateFormatter()
-                        df.calendar = Calendar(identifier: .gregorian)
-                        df.timeZone = .current
-                        df.dateFormat = fmt
-                        if let d = df.date(from: rawReturn) {
-                            returnStr = displayTimeFormatter.string(from: d)
-                            break
-                        }
-                    }
-                }
-                pickuptimeLabel?.text = "\(pickuptimeLabel?.text ?? "") — \(returnStr)"
-            }
-        } else {
-            pickuptimeLabel?.text = "—"
-        }
-
-        // Price per day/hour from joined item
-        if let p = req.items?.price_per_day {
-            if req.rental_unit == "hour" {
-                let hourly = p / 8.0
-                let text = (currencyFormatter.string(from: NSNumber(value: hourly)) ?? "\(hourly)") + " / hr"
-                feerentLabel?.text = text
-            } else {
-                let text = (currencyFormatter.string(from: NSNumber(value: p)) ?? "\(p)") + " / day"
-                feerentLabel?.text = text
-            }
+        let booking = BookingPresentationFormatter.presentation(
+            from: req,
+            pricePerDay: req.items?.price_per_day ?? 0
+        )
+        datelabel?.text = booking?.dateText ?? "—"
+        numberodDaysLabel?.text = booking?.durationText ?? "—"
+        pickuptimeLabel?.text = booking?.timeText ?? "—"
+        let durationUnits = booking?.quantityUnits
+        if let rentalFee = booking?.rentalFee {
+            feerentLabel?.text = currencyFormatter.string(from: NSNumber(value: rentalFee))
         } else {
             feerentLabel?.text = ""
         }
@@ -738,8 +659,7 @@ class DashboardLenderRequestViewController: UIViewController {
 
         let rentalFee: Double
         if rentalUnit == "hour" {
-            let hourly = p / 8.0
-            rentalFee = Double(units) * hourly
+            rentalFee = Double(units) * (p / 8.0)
         } else {
             rentalFee = Double(units) * p
         }

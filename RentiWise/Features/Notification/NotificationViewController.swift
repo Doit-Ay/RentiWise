@@ -29,6 +29,13 @@ class NotificationViewController: UIViewController {
         Task {
             await loadNotifications()
         }
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleNotificationFeedUpdated),
+            name: .notificationsDidUpdate,
+            object: nil
+        )
     }
     
     override func viewWillAppear(_ animated: Bool) {
@@ -37,6 +44,10 @@ class NotificationViewController: UIViewController {
         Task {
             await loadNotifications()
         }
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
     
     // MARK: - Setup
@@ -64,6 +75,12 @@ class NotificationViewController: UIViewController {
         Task {
             await loadNotifications()
             refreshControl.endRefreshing()
+        }
+    }
+
+    @objc private func handleNotificationFeedUpdated() {
+        Task {
+            await loadNotifications()
         }
     }
     
@@ -267,6 +284,7 @@ class NotificationViewController: UIViewController {
             case "payment_confirmed": notifType = .paymentConfirmed
             case "pickup_confirmed":  notifType = .pickupConfirmed
             case "new_request":       notifType = .newRequest
+            case "nearby_item_posted": notifType = .nearbyItem
             default:                  notifType = .requestAccepted
             }
 
@@ -294,7 +312,7 @@ class NotificationViewController: UIViewController {
                 tableName = "extension_requests"
             case .returnRequest:
                 tableName = "return_requests"
-            case .requestAccepted, .requestRejected, .paymentReceived, .paymentConfirmed, .pickupConfirmed, .newRequest:
+            case .requestAccepted, .requestRejected, .paymentReceived, .paymentConfirmed, .pickupConfirmed, .newRequest, .nearbyItem:
                 tableName = "notifications"
             }
             
@@ -311,6 +329,7 @@ class NotificationViewController: UIViewController {
                     tableView.reloadRows(at: [IndexPath(row: index, section: 0)], with: .none)
                 }
             }
+            NotificationCenter.default.post(name: .notificationsDidUpdate, object: nil)
         } catch {
             debugLog("[Notifications] Error marking as read: \(error)")
         }
@@ -357,7 +376,11 @@ extension NotificationViewController: UITableViewDelegate {
         case .paymentReceived, .newRequest:
             // Lender-side notifications: open the lender request detail if we have a request_id
             if !notification.requestId.isEmpty {
-                openBookingApprovalScreen(requestId: notification.requestId)
+                openLenderRequestScreen(requestId: notification.requestId)
+            }
+        case .nearbyItem:
+            if !notification.requestId.isEmpty {
+                openProductScreen(itemId: notification.requestId)
             }
         }
     }
@@ -414,6 +437,74 @@ extension NotificationViewController: UITableViewDelegate {
             }
         }
     }
+
+    private func openLenderRequestScreen(requestId: String) {
+        Task {
+            do {
+                let select: String
+                if RequestSchemaSupport.supportsPickupCode {
+                    select = """
+                        id,item_id,owner_id,borrower_id,start_date,end_date,pickup_time,return_time,rental_unit,status,created_at,pickup_code,
+                        items(id,title,images,price_per_day,category)
+                    """
+                } else {
+                    select = """
+                        id,item_id,owner_id,borrower_id,start_date,end_date,pickup_time,return_time,rental_unit,status,created_at,
+                        items(id,title,images,price_per_day,category)
+                    """
+                }
+
+                let response = try await SupabaseManager.shared.client
+                    .from("requests")
+                    .select(select)
+                    .eq("id", value: requestId)
+                    .single()
+                    .execute()
+
+                let request = try JSONDecoder().decode(RequestWithItem.self, from: response.data)
+
+                await MainActor.run {
+                    let vc = DashboardLenderRequestViewController(
+                        nibName: "DashboardLenderRequestViewController",
+                        bundle: nil
+                    )
+                    vc.request = request
+                    vc.hidesBottomBarWhenPushed = true
+                    self.navigationController?.pushViewController(vc, animated: true)
+                }
+            } catch {
+                if RequestSchemaSupport.isMissingPickupCodeError(error), RequestSchemaSupport.supportsPickupCode {
+                    RequestSchemaSupport.markPickupCodeUnavailable()
+                    self.openLenderRequestScreen(requestId: requestId)
+                    return
+                }
+                debugLog("[Notifications] Error opening lender request: \(error)")
+            }
+        }
+    }
+
+    private func openProductScreen(itemId: String) {
+        Task {
+            do {
+                let response = try await SupabaseManager.shared.client
+                    .from("items")
+                    .select()
+                    .eq("id", value: itemId)
+                    .single()
+                    .execute()
+
+                let item = try JSONDecoder().decode(Item.self, from: response.data)
+                await MainActor.run {
+                    let vc = ProductViewController(nibName: "ProductViewController", bundle: nil)
+                    vc.configure(with: item)
+                    vc.hidesBottomBarWhenPushed = true
+                    self.navigationController?.pushViewController(vc, animated: true)
+                }
+            } catch {
+                debugLog("[Notifications] Error opening item from notification: \(error)")
+            }
+        }
+    }
     
     func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
         return 110
@@ -443,6 +534,7 @@ enum NotificationType {
     case paymentConfirmed
     case pickupConfirmed
     case newRequest
+    case nearbyItem
     
     var icon: String {
         switch self {
@@ -454,6 +546,7 @@ enum NotificationType {
         case .paymentConfirmed:  return "checkmark.seal.fill"
         case .pickupConfirmed:   return "shippingbox.fill"
         case .newRequest:        return "bell.badge.fill"
+        case .nearbyItem:        return "location.circle.fill"
         }
     }
     
@@ -475,6 +568,8 @@ enum NotificationType {
             return UIColor(red: 0.36, green: 0.66, blue: 0.71, alpha: 1.0)
         case .newRequest:
             return UIColor.systemBlue
+        case .nearbyItem:
+            return UIColor(red: 0.36, green: 0.66, blue: 0.71, alpha: 1.0)
         }
     }
 }

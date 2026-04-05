@@ -15,7 +15,9 @@ extension HomeViewController {
         // On cold start, use PreloadManager's cached data to avoid duplicate API call.
         if !forceRefresh, PreloadManager.shared.isComplete, !PreloadManager.shared.allFetchedItems.isEmpty {
             let allItems = PreloadManager.shared.allFetchedItems
-            let items = Array(allItems.prefix(4))
+            let items = Array(allItems.sorted {
+                ($0.created_at ?? .distantPast) > ($1.created_at ?? .distantPast)
+            }.prefix(4))
 
             // Still warm the distance cache in background
             Task.detached(priority: .utility) {
@@ -38,7 +40,9 @@ extension HomeViewController {
         // Network fetch (subsequent refreshes or cache miss)
         do {
             let allItems = try await itemsService.fetchItems(category: "")
-            let items = Array(allItems.prefix(4))
+            let items = Array(allItems.sorted {
+                ($0.created_at ?? .distantPast) > ($1.created_at ?? .distantPast)
+            }.prefix(4))
 
             Task.detached(priority: .utility) {
                 await withTaskGroup(of: Void.self) { group in

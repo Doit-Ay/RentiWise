@@ -23,8 +23,8 @@ class BookingApprovalViewController: UIViewController {
         case history     // no payment UI; show borrower address
     }
 
-    static let requestApprovedNotification = Notification.Name("BookingApprovalRequestApprovedNotification")
-    static let requestCancelledNotification = Notification.Name("BookingApprovalRequestCancelledNotification")
+    nonisolated static let requestApprovedNotification = Notification.Name("BookingApprovalRequestApprovedNotification")
+    nonisolated static let requestCancelledNotification = Notification.Name("BookingApprovalRequestCancelledNotification")
 
     // Inject the selected request from the caller (e.g., MyRentalsViewController)
     var request: RequestWithItem? {
@@ -189,6 +189,8 @@ class BookingApprovalViewController: UIViewController {
 
     // Periodic refresh timer — polls for status changes while on screen
     private var refreshTimer: Timer?
+    private let brandTeal = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1)
+    private let statusWarningColor = UIColor(red: 0xBD/255.0, green: 0x83/255.0, blue: 0x2F/255.0, alpha: 1)
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -1282,49 +1284,20 @@ class BookingApprovalViewController: UIViewController {
     }
 
     private func updateDatesUI() {
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateStyle = .medium
-        dateFormatter.timeStyle = .none
-        // Use UTC to match sqlDateFormatter which parses date-only strings in UTC;
-        // prevents timezone offset causing a 1-day shift in display (e.g., IST showing April 20 instead of April 21)
-        dateFormatter.timeZone = TimeZone(secondsFromGMT: 0)
-
-        if let s = startDate {
-            dateperiodLabel.text = dateFormatter.string(from: s)
-        } else {
-            dateperiodLabel.text = ""
+        if let req = request,
+           let booking = BookingPresentationFormatter.presentation(
+                from: req,
+                pricePerDay: req.items?.price_per_day ?? 0
+           ) {
+            dateperiodLabel.text = booking.dateText
+            picktimeLabel.text = booking.timeText
+            numLabeldays.text = booking.durationText
+            return
         }
 
-        if let p = pickupTime {
-            if request?.rental_unit == "hour", let rawReturn = request?.return_time,
-               let returnT = sqlTimeParser.date(from: rawReturn) ?? timeFormatter.date(from: rawReturn) {
-                picktimeLabel.text = "\(timeFormatter.string(from: p)) — \(timeFormatter.string(from: returnT))"
-            } else {
-                picktimeLabel.text = timeFormatter.string(from: p)
-            }
-        } else {
-            picktimeLabel.text = ""
-        }
-
-        if let s = startDate, let eDate = returnTime {
-            if request?.rental_unit == "hour" {
-                var hours = 1
-                if let rawPickup = request?.pickup_time, let rawReturn = request?.return_time,
-                   let pickup = sqlTimeParser.date(from: rawPickup) ?? timeFormatter.date(from: rawPickup),
-                   let returnT = sqlTimeParser.date(from: rawReturn) ?? timeFormatter.date(from: rawReturn) {
-                    var interval = returnT.timeIntervalSince(pickup)
-                    // Handle overnight: if return time is before pickup, add 24 hours
-                    if interval < 0 { interval += 86400 }
-                    hours = max(1, Int(ceil(interval / 3600.0)))
-                }
-                numLabeldays.text = "\(hours) Hour\(hours == 1 ? "" : "s")"
-            } else {
-                let days = max(1, Int(ceil(eDate.timeIntervalSince(s) / 86400.0)))
-                numLabeldays.text = "\(days) Day\(days == 1 ? "" : "s")"
-            }
-        } else {
-            numLabeldays.text = ""
-        }
+        dateperiodLabel.text = startDate.map { BookingPresentationFormatter.displayDateString(for: $0) } ?? ""
+        picktimeLabel.text = pickupTime.map { BookingPresentationFormatter.displayTimeString(for: $0) } ?? ""
+        numLabeldays.text = ""
     }
     
     private func setCodeDigits(from code: String) {
@@ -1358,7 +1331,7 @@ class BookingApprovalViewController: UIViewController {
 
     private var showsLegacyInlinePickupCode: Bool {
         guard mode == .myRentals else { return false }
-        let hasLegacyCode = !(request?.pickup_code?.trimmingCharacters(in: . whitespacesAndNewlines).isEmpty ?? true)
+        let hasLegacyCode = !(request?.pickup_code?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
         let accepted = request?.rentalStatus == .accepted
         return hasLegacyCode && accepted
     }
@@ -1413,10 +1386,8 @@ class BookingApprovalViewController: UIViewController {
     }
 
     private func updateStatusUI() {
-        let tealColor = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1)
-
         // circ2 is the teal circle behind the icon — always teal
-        circ2?.backgroundColor = tealColor
+        circ2?.backgroundColor = brandTeal
 
         switch status {
         case .approved:
@@ -1465,7 +1436,7 @@ class BookingApprovalViewController: UIViewController {
             approvedpending.textColor = .label
             tickimage.image = UIImage(systemName: "checkmark.seal.fill")
             tickimage.tintColor = .white
-            circ2?.backgroundColor = tealColor
+            circ2?.backgroundColor = brandTeal
             // Hide payment and action buttons (rental is done)
             paymentButton.isHidden = true
             extendReturnButtonsStack?.isHidden = true
@@ -1480,7 +1451,7 @@ class BookingApprovalViewController: UIViewController {
         if mode == .myRentals && status != .cancelled && status != .rejected {
             paymentButton.setTitle("Pay via UPI", for: .normal)
             paymentButton.setTitleColor(.white, for: .normal)
-            paymentButton.backgroundColor = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1)
+            paymentButton.backgroundColor = brandTeal
         }
 
         // Update paymentStatus label to show rental status text
@@ -1522,12 +1493,18 @@ class BookingApprovalViewController: UIViewController {
         }
 
         // Dates
-        let sDate = sqlDateFormatter.date(from: req.start_date)
-        let eDate = sqlDateFormatter.date(from: req.end_date)
-        let pTime = (req.pickup_time != nil && !(req.pickup_time ?? "").isEmpty) ? sqlTimeParser.date(from: req.pickup_time!) : nil
-        self.startDate = sDate
-        self.returnTime = eDate
-        self.pickupTime = pTime
+        if let booking = BookingPresentationFormatter.presentation(from: req, pricePerDay: req.items?.price_per_day ?? 0) {
+            self.startDate = booking.pickupDateTime
+            self.pickupTime = booking.pickupDateTime
+            self.returnTime = booking.returnDateTime
+        } else {
+            let sDate = sqlDateFormatter.date(from: req.start_date)
+            let eDate = sqlDateFormatter.date(from: req.end_date)
+            let pTime = (req.pickup_time != nil && !(req.pickup_time ?? "").isEmpty) ? sqlTimeParser.date(from: req.pickup_time!) : nil
+            self.startDate = sDate
+            self.returnTime = eDate
+            self.pickupTime = pTime
+        }
         updateDatesUI()
 
         // Title/image — lightweight, fine to do synchronously
@@ -1820,26 +1797,10 @@ class BookingApprovalViewController: UIViewController {
     // MARK: - Compute amounts (rental fee only)
 
     private func computeAmounts(for req: RequestWithItem) async -> (rentalFee: Double, deposit: Double) {
-        let pricePerDay = req.items?.price_per_day ?? 0
-        let rentalFee: Double
-
-        if req.rental_unit == "hour" {
-            var hours = 1
-            if let rawPickup = req.pickup_time, let rawReturn = req.return_time,
-               let pickup = sqlTimeParser.date(from: rawPickup) ?? DateFormatter().date(from: rawPickup),
-               let returnT = sqlTimeParser.date(from: rawReturn) ?? DateFormatter().date(from: rawReturn) {
-                hours = max(1, Int(ceil(returnT.timeIntervalSince(pickup) / 3600.0)))
-            }
-            let hourlyRate = pricePerDay / 8.0
-            rentalFee = Double(hours) * hourlyRate
-        } else {
-            var days = 1
-            if let s = sqlDateFormatter.date(from: req.start_date),
-               let e = sqlDateFormatter.date(from: req.end_date) {
-                days = max(1, Int(ceil(e.timeIntervalSince(s) / 86400.0)))
-            }
-            rentalFee = Double(days) * pricePerDay
-        }
+        let rentalFee = BookingPresentationFormatter.presentation(
+            from: req,
+            pricePerDay: req.items?.price_per_day ?? 0
+        )?.rentalFee ?? 0
 
         // Deposit always zero as per new logic
         let depositAmount: Double = 0
@@ -1849,41 +1810,17 @@ class BookingApprovalViewController: UIViewController {
     
     // New helper for UPI amount compute (only rental fee)
     private func computeAmountsForUPI(for req: RequestWithItem) async -> Double {
-        let pricePerDay = req.items?.price_per_day ?? 0
-        if req.rental_unit == "hour" {
-            var hours = 1
-            if let rawPickup = req.pickup_time, let rawReturn = req.return_time,
-               let pickup = sqlTimeParser.date(from: rawPickup) ?? DateFormatter().date(from: rawPickup),
-               let returnT = sqlTimeParser.date(from: rawReturn) ?? DateFormatter().date(from: rawReturn) {
-                hours = max(1, Int(ceil(returnT.timeIntervalSince(pickup) / 3600.0)))
-            }
-            let hourlyRate = pricePerDay / 8.0
-            return Double(hours) * hourlyRate
-        } else {
-            var days = 1
-            if let s = sqlDateFormatter.date(from: req.start_date), let e = sqlDateFormatter.date(from: req.end_date) {
-                days = max(1, Int(ceil(e.timeIntervalSince(s) / 86400.0)))
-            }
-            return Double(days) * pricePerDay
-        }
+        BookingPresentationFormatter.presentation(
+            from: req,
+            pricePerDay: req.items?.price_per_day ?? 0
+        )?.rentalFee ?? 0
     }
 
     private func durationDays(for req: RequestWithItem) -> Int {
-        if req.rental_unit == "hour" {
-            var hours = 1
-            if let rawPickup = req.pickup_time, let rawReturn = req.return_time,
-               let pickup = sqlTimeParser.date(from: rawPickup) ?? DateFormatter().date(from: rawPickup),
-               let returnT = sqlTimeParser.date(from: rawReturn) ?? DateFormatter().date(from: rawReturn) {
-                hours = max(1, Int(ceil(returnT.timeIntervalSince(pickup) / 3600.0)))
-            }
-            return hours
-        } else {
-            guard let s = sqlDateFormatter.date(from: req.start_date),
-                  let e = sqlDateFormatter.date(from: req.end_date) else {
-                return 1
-            }
-            return max(1, Int(ceil(e.timeIntervalSince(s) / 86400.0)))
-        }
+        BookingPresentationFormatter.presentation(
+            from: req,
+            pricePerDay: req.items?.price_per_day ?? 0
+        )?.quantityUnits ?? 1
     }
 
     private func currentUserDisplayName() async -> String {
@@ -2091,14 +2028,14 @@ class BookingApprovalViewController: UIViewController {
         let rawStatus = request?.status.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
         if rawStatus == "accepted" {
             if rentalPaymentState.lenderConfirmedReceived {
-                paymentStatus?.text = "Payment confirmed. Pickup OTP ready."
-                paymentStatus?.textColor = .systemGreen
+                paymentStatus?.text = "Payment received. Your pickup code is ready."
+                paymentStatus?.textColor = brandTeal
             } else if rentalPaymentState.borrowerMarkedPaid {
-                paymentStatus?.text = "Payment sent. Waiting for lender confirmation."
-                paymentStatus?.textColor = .systemOrange
+                paymentStatus?.text = "Payment marked as sent. Waiting for lender confirmation."
+                paymentStatus?.textColor = statusWarningColor
             } else {
-                paymentStatus?.text = "Pay the lender via UPI to continue."
-                paymentStatus?.textColor = .systemOrange
+                paymentStatus?.text = "Pay the lender directly via UPI to continue."
+                paymentStatus?.textColor = statusWarningColor
             }
             paymentStatus?.isHidden = false
             return
@@ -2107,11 +2044,11 @@ class BookingApprovalViewController: UIViewController {
         switch self.status {
         case .approved:
             paymentStatus?.text = "Pickup Verified"
-            paymentStatus?.textColor = .systemGreen
+            paymentStatus?.textColor = brandTeal
             paymentStatus?.isHidden = false
         case .pending:
             paymentStatus?.text = "Awaiting Confirmation"
-            paymentStatus?.textColor = .systemOrange
+            paymentStatus?.textColor = statusWarningColor
             paymentStatus?.isHidden = false
         case .cancelled:
             paymentStatus?.text = "Rental Cancelled"
@@ -2218,4 +2155,3 @@ class BookingApprovalViewController: UIViewController {
         }
     }
 }
-

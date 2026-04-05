@@ -43,7 +43,8 @@ final class CategoryItemCell: UITableViewCell {
     // Track the item id this cell is showing (to further guard async distance updates)
     private var currentItemId: String?
 
-    // Simple UI cache to avoid flicker while scrolling; key by owner_id (owner-level distance)
+    // Simple UI cache to avoid flicker while scrolling; key by item when item-level location exists,
+    // otherwise fall back to owner-level distance.
     private static let distanceCache = NSCache<NSString, NSString>()
 
     override func awakeFromNib() {
@@ -216,10 +217,10 @@ final class CategoryItemCell: UITableViewCell {
 
     // MARK: - Distance resolution (owner-level, cached, reuse-safe, with progressive loading)
     private func resolveDistance(for item: Item) {
-        let ownerKey = item.owner_id as NSString
+        let cacheKey = distanceCacheKey(for: item) as NSString
 
         // 1) UI cache hit to avoid flicker while scrolling
-        if let cached = CategoryItemCell.distanceCache.object(forKey: ownerKey) {
+        if let cached = CategoryItemCell.distanceCache.object(forKey: cacheKey) {
             if self.currentOwnerId == item.owner_id, self.currentItemId == item.id {
                 self.itemDistance?.text = cached as String
             }
@@ -236,12 +237,12 @@ final class CategoryItemCell: UITableViewCell {
                 // Update with accurate road distance when available
                 if self.currentOwnerId == item.owner_id, self.currentItemId == item.id {
                     self.itemDistance?.text = updatedText
-                    CategoryItemCell.distanceCache.setObject(updatedText as NSString, forKey: ownerKey)
+                    CategoryItemCell.distanceCache.setObject(updatedText as NSString, forKey: cacheKey)
                 }
             }
             
             // Cache initial distance for subsequent rows
-            CategoryItemCell.distanceCache.setObject(text as NSString, forKey: ownerKey)
+            CategoryItemCell.distanceCache.setObject(text as NSString, forKey: cacheKey)
 
             await MainActor.run { [weak self] in
                 guard let self = self else { return }
@@ -253,8 +254,21 @@ final class CategoryItemCell: UITableViewCell {
         }
     }
 
+    private func distanceCacheKey(for item: Item) -> String {
+        if let lat = item.latitude, let lon = item.longitude, lat != 0, lon != 0 {
+            return "item:\(item.id)"
+        }
+
+        let locationAddress = item.location_address?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !locationAddress.isEmpty {
+            return "item:\(item.id)"
+        }
+
+        return "owner:\(item.owner_id)"
+    }
+
     // MARK: - Owner name resolution (self-contained, cached)
-    private static var ownerNameCache = NSCache<NSString, NSString>()
+    nonisolated(unsafe) private static var ownerNameCache = NSCache<NSString, NSString>()
 
     private func resolveOwnerName(for ownerId: String) {
         // 1) Cache hit
@@ -328,4 +342,3 @@ final class CategoryItemCell: UITableViewCell {
         itemRating?.attributedText = attr
     }
 }
-

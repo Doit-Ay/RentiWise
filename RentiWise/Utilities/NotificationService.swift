@@ -8,12 +8,19 @@
 import Foundation
 import UserNotifications
 
+extension Notification.Name {
+    static let notificationsDidUpdate = Notification.Name("RentiWiseNotificationsDidUpdate")
+}
+
 /// Lightweight local notification manager for rental lifecycle events.
 /// Coordinates permission requests and schedules reminders for approaching due dates,
 /// status changes, and return/extension updates.
-final class NotificationService {
+final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
     static let shared = NotificationService()
-    private init() {}
+    private override init() {
+        super.init()
+        center.delegate = self
+    }
 
     private let center = UNUserNotificationCenter.current()
 
@@ -117,65 +124,80 @@ final class NotificationService {
     ///   - newStatus: The new status (e.g., "accepted", "denied", "completed").
     ///   - role: "borrower" or "lender" — used to customize the message.
     func notifyStatusChange(requestId: String, itemTitle: String, newStatus: RentalStatus, role: String) {
-        ensureAuthorizedThenSchedule { [weak self] in
-            guard let self else { return }
-            let content = UNMutableNotificationContent()
-            content.sound = .default
+        let title: String
+        let body: String
 
-            switch newStatus {
-            case .accepted:
-                content.title = "Request Accepted"
-                content.body = role == "borrower"
-                    ? "Your request for \"\(itemTitle)\" was accepted. Pay the lender via UPI to continue."
-                    : "You accepted the request for \"\(itemTitle)\"."
-            case .denied, .rejected:
-                content.title = "Request Denied"
-                content.body = role == "borrower"
-                    ? "Your request for \"\(itemTitle)\" was denied."
-                    : "You denied the request for \"\(itemTitle)\"."
-            case .approved:
-                content.title = "Rental Active"
-                content.body = "Pickup verified! The rental for \"\(itemTitle)\" is now active."
-            case .completed:
-                content.title = "Rental Completed"
-                content.body = role == "borrower"
-                    ? "Your rental of \"\(itemTitle)\" is complete. Leave a review!"
-                    : "The rental of \"\(itemTitle)\" is complete."
-            case .cancelled:
-                content.title = "Request Cancelled"
-                content.body = "The request for \"\(itemTitle)\" has been cancelled."
-            default:
-                return // No notification for other states
-            }
-
-            let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
-            let id = "status_\(requestId)_\(newStatus.rawValue)"
-            let request = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
-            self.center.add(request)
+        switch newStatus {
+        case .accepted:
+            title = "Request Accepted"
+            body = role == "borrower"
+                ? "Your request for \"\(itemTitle)\" was accepted. Pay the lender via UPI to continue."
+                : "You accepted the request for \"\(itemTitle)\"."
+        case .denied, .rejected:
+            title = "Request Denied"
+            body = role == "borrower"
+                ? "Your request for \"\(itemTitle)\" was denied."
+                : "You denied the request for \"\(itemTitle)\"."
+        case .approved:
+            title = "Rental Active"
+            body = "Pickup verified! The rental for \"\(itemTitle)\" is now active."
+        case .completed:
+            title = "Rental Completed"
+            body = role == "borrower"
+                ? "Your rental of \"\(itemTitle)\" is complete. Leave a review!"
+                : "The rental of \"\(itemTitle)\" is complete."
+        case .cancelled:
+            title = "Request Cancelled"
+            body = "The request for \"\(itemTitle)\" has been cancelled."
+        default:
+            return
         }
+
+        notifyImmediately(
+            identifier: "status_\(requestId)_\(newStatus.rawValue)",
+            title: title,
+            body: body
+        )
     }
 
     // MARK: - Return / Extension Request Notifications
 
     /// Notifies the lender that a return or extension request was submitted.
     func notifyNewSubRequest(requestId: String, itemTitle: String, type: String) {
+        let isReturn = type == "return"
+        notifyImmediately(
+            identifier: "sub_\(type)_\(requestId)",
+            title: isReturn ? "Return Request" : "Extension Request",
+            body: isReturn
+                ? "A borrower wants to return \"\(itemTitle)\". Review the request."
+                : "A borrower wants to extend the rental of \"\(itemTitle)\". Review the request."
+        )
+    }
+
+    func notifyImmediately(
+        identifier: String,
+        title: String,
+        body: String,
+        userInfo: [AnyHashable: Any] = [:]
+    ) {
         ensureAuthorizedThenSchedule { [weak self] in
             guard let self else { return }
             let content = UNMutableNotificationContent()
+            content.title = title
+            content.body = body
             content.sound = .default
+            content.userInfo = userInfo
 
-            if type == "return" {
-                content.title = "Return Request"
-                content.body = "A borrower wants to return \"\(itemTitle)\". Review the request."
-            } else {
-                content.title = "Extension Request"
-                content.body = "A borrower wants to extend the rental of \"\(itemTitle)\". Review the request."
+            let request = UNNotificationRequest(
+                identifier: identifier,
+                content: content,
+                trigger: UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
+            )
+            self.center.add(request) { error in
+                if let error = error {
+                    debugLog("[Notifications] Failed to schedule immediate notification: \(error)")
+                }
             }
-
-            let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
-            let id = "sub_\(type)_\(requestId)"
-            let request = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
-            self.center.add(request)
         }
     }
 
@@ -189,6 +211,18 @@ final class NotificationService {
                 .map(\.identifier)
                 .filter { id in prefixes.contains(where: { id.hasPrefix($0) }) }
             self.center.removePendingNotificationRequests(withIdentifiers: idsToRemove)
+        }
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        if #available(iOS 14.0, *) {
+            completionHandler([.banner, .sound, .badge])
+        } else {
+            completionHandler([.alert, .sound, .badge])
         }
     }
 }

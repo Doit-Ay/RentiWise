@@ -3,7 +3,7 @@
 
 import Foundation
 
-struct Item: Decodable {
+struct Item: Decodable, Sendable {
     let id: String
     let owner_id: String
     let title: String

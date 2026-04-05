@@ -12,6 +12,12 @@ import CoreGraphics
 import ImageIO
 import MobileCoreServices
 
+private struct ListingLocation {
+    let latitude: Double?
+    let longitude: Double?
+    let locationAddress: String?
+}
+
 protocol AddItemServicing {
     func insertItem(draft: AddItemDraft, status: ((String) -> Void)?) async throws -> ItemRow
     func updateItem(draft: AddItemDraft, status: ((String) -> Void)?) async throws -> ItemRow
@@ -77,11 +83,13 @@ final class AddItemService: AddItemServicing {
 
         // 3) Insert into public.items and return the created row
         status?("Saving item…")
+        let listingLocation = await fetchListingLocation(for: ownerId)
         do {
             let item = try await insertItemRecord(
                 ownerId: ownerId,
                 draft: draft,
-                imagePaths: imagePaths
+                imagePaths: imagePaths,
+                listingLocation: listingLocation
             )
             status?("Done")
             return item
@@ -122,12 +130,14 @@ final class AddItemService: AddItemServicing {
         }
 
         status?("Updating item…")
+        let listingLocation = await fetchListingLocation(for: ownerId)
         do {
             let declaredValue = try await updateItemRecord(
                 itemId: itemId,
                 ownerId: ownerId,
                 draft: draft,
-                imagePaths: finalImagePaths
+                imagePaths: finalImagePaths,
+                listingLocation: listingLocation
             )
             status?("Updated")
             return makeLocalItemRow(
@@ -135,14 +145,15 @@ final class AddItemService: AddItemServicing {
                 ownerId: ownerId,
                 draft: draft,
                 imagePaths: finalImagePaths,
-                declaredValue: declaredValue
+                declaredValue: declaredValue,
+                listingLocation: listingLocation
             )
         } catch {
             throw wrap(error, category: "DB", hint: "Update failed (RLS/policy/constraint).")
         }
     }
 
-    private func insertItemRecord(ownerId: String, draft: AddItemDraft, imagePaths: [String]) async throws -> ItemRow {
+    private func insertItemRecord(ownerId: String, draft: AddItemDraft, imagePaths: [String], listingLocation: ListingLocation?) async throws -> ItemRow {
         if ItemSchemaSupport.supportsDeclaredValue {
             do {
                 let payload = ItemInsertPayload(
@@ -155,7 +166,10 @@ final class AddItemService: AddItemServicing {
                     deposit_amount: draft.depositAmount,
                     declared_value: draft.declaredValue,
                     images: imagePaths,
-                    is_active: draft.isActive
+                    is_active: draft.isActive,
+                    latitude: listingLocation?.latitude,
+                    longitude: listingLocation?.longitude,
+                    location_address: listingLocation?.locationAddress
                 )
                 return try await executeInsert(payload)
             } catch {
@@ -176,12 +190,15 @@ final class AddItemService: AddItemServicing {
             price_per_day: draft.pricePerDay,
             deposit_amount: draft.depositAmount,
             images: imagePaths,
-            is_active: draft.isActive
+            is_active: draft.isActive,
+            latitude: listingLocation?.latitude,
+            longitude: listingLocation?.longitude,
+            location_address: listingLocation?.locationAddress
         )
         return try await executeInsert(legacyPayload)
     }
 
-    private func updateItemRecord(itemId: String, ownerId: String, draft: AddItemDraft, imagePaths: [String]) async throws -> Int? {
+    private func updateItemRecord(itemId: String, ownerId: String, draft: AddItemDraft, imagePaths: [String], listingLocation: ListingLocation?) async throws -> Int? {
         if ItemSchemaSupport.supportsDeclaredValue {
             do {
                 let payload = ItemUpdatePayload(
@@ -193,7 +210,10 @@ final class AddItemService: AddItemServicing {
                     deposit_amount: draft.depositAmount,
                     declared_value: draft.declaredValue,
                     images: imagePaths,
-                    is_active: draft.isActive
+                    is_active: draft.isActive,
+                    latitude: listingLocation?.latitude,
+                    longitude: listingLocation?.longitude,
+                    location_address: listingLocation?.locationAddress
                 )
                 try await executeUpdate(payload, itemId: itemId, ownerId: ownerId)
                 return draft.declaredValue
@@ -214,7 +234,10 @@ final class AddItemService: AddItemServicing {
             price_per_day: draft.pricePerDay,
             deposit_amount: draft.depositAmount,
             images: imagePaths,
-            is_active: draft.isActive
+            is_active: draft.isActive,
+            latitude: listingLocation?.latitude,
+            longitude: listingLocation?.longitude,
+            location_address: listingLocation?.locationAddress
         )
         try await executeUpdate(legacyPayload, itemId: itemId, ownerId: ownerId)
         return nil
@@ -433,7 +456,7 @@ final class AddItemService: AddItemServicing {
         return "\(ownerId)/item_\(batchId)_\(milliseconds)_\(index)_\(objectId).jpg"
     }
 
-    private func makeLocalItemRow(itemId: String, ownerId: String, draft: AddItemDraft, imagePaths: [String], declaredValue: Int?) -> ItemRow {
+    private func makeLocalItemRow(itemId: String, ownerId: String, draft: AddItemDraft, imagePaths: [String], declaredValue: Int?, listingLocation: ListingLocation?) -> ItemRow {
         let timestamp = ISO8601DateFormatter().string(from: Date())
         return ItemRow(
             id: itemId,
@@ -447,9 +470,46 @@ final class AddItemService: AddItemServicing {
             declared_value: declaredValue,
             images: imagePaths,
             is_active: draft.isActive,
+            latitude: listingLocation?.latitude,
+            longitude: listingLocation?.longitude,
+            location_address: listingLocation?.locationAddress,
             created_at: timestamp,
             updated_at: timestamp
         )
+    }
+
+    private func fetchListingLocation(for ownerId: String) async -> ListingLocation? {
+        struct DefaultAddressRow: Decodable {
+            let latitude: Double?
+            let longitude: Double?
+            let city: String?
+            let state: String?
+            let country: String?
+        }
+
+        do {
+            let rows: [DefaultAddressRow] = try await client
+                .from("user_default_address")
+                .select("latitude,longitude,city,state,country")
+                .eq("user_id", value: ownerId)
+                .limit(1)
+                .execute()
+                .value
+
+            guard let row = rows.first else { return nil }
+            let parts = [row.city, row.state, row.country]
+                .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+
+            return ListingLocation(
+                latitude: row.latitude,
+                longitude: row.longitude,
+                locationAddress: parts.isEmpty ? nil : parts.joined(separator: ", ")
+            )
+        } catch {
+            debugLog("[AddItem] Failed to fetch listing location: \(error.localizedDescription)")
+            return nil
+        }
     }
 
     // MARK: - Error wrapping for clearer UI
@@ -472,6 +532,9 @@ private struct ItemUpdatePayload: Encodable {
     let declared_value: Int
     let images: [String]
     let is_active: Bool
+    let latitude: Double?
+    let longitude: Double?
+    let location_address: String?
 }
 
 private struct LegacyItemInsertPayload: Encodable {
@@ -484,6 +547,9 @@ private struct LegacyItemInsertPayload: Encodable {
     let deposit_amount: Double
     let images: [String]
     let is_active: Bool
+    let latitude: Double?
+    let longitude: Double?
+    let location_address: String?
 }
 
 private struct LegacyItemUpdatePayload: Encodable {
@@ -495,6 +561,9 @@ private struct LegacyItemUpdatePayload: Encodable {
     let deposit_amount: Double
     let images: [String]
     let is_active: Bool
+    let latitude: Double?
+    let longitude: Double?
+    let location_address: String?
 }
 
 private enum ItemSchemaSupport {
