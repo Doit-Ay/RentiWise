@@ -307,17 +307,125 @@ final class SupportChatViewController: UIViewController {
     private func loadInitialState() {
         Task {
             currentUserId = await SupabaseManager.shared.currentUserId()
-            await addWelcomeMessage()
+            // Try to load existing open ticket and its history
+            await loadExistingTicketAndMessages()
             await MainActor.run {
                 self.updateStatusCard()
             }
         }
     }
 
+    /// Loads the most recent open support ticket for the current user.
+    /// If found, fetches all messages for that ticket so history is preserved.
+    private func loadExistingTicketAndMessages() async {
+        guard let userId = currentUserId else {
+            await addWelcomeMessage()
+            return
+        }
+
+        do {
+            // Fetch the newest open (or in_progress) ticket for this user
+            struct TicketRow: Decodable {
+                let id: String
+                let user_id: String
+                let subject: String
+                let status: String
+                let priority: String
+                let created_at: String
+                let updated_at: String?
+                let resolved_at: String?
+            }
+
+            let ticketRows: [TicketRow] = try await SupabaseManager.shared.client
+                .from("support_tickets")
+                .select()
+                .eq("user_id", value: userId)
+                .in("status", values: ["open", "in_progress"])
+                .order("created_at", ascending: false)
+                .limit(1)
+                .execute()
+                .value
+
+            if let latestTicket = ticketRows.first {
+                // Convert to SupportTicket model
+                let decoder = JSONDecoder()
+                decoder.dateDecodingStrategy = .iso8601
+                let ticketData = try JSONSerialization.data(withJSONObject: [
+                    "id": latestTicket.id,
+                    "user_id": latestTicket.user_id,
+                    "subject": latestTicket.subject,
+                    "status": latestTicket.status,
+                    "priority": latestTicket.priority,
+                    "created_at": latestTicket.created_at,
+                    "updated_at": latestTicket.updated_at as Any,
+                    "resolved_at": latestTicket.resolved_at as Any
+                ].compactMapValues { $0 })
+                let ticket = try decoder.decode(SupportTicket.self, from: ticketData)
+
+                // Fetch all messages for this ticket
+                struct MessageRow: Decodable {
+                    let id: String
+                    let ticket_id: String
+                    let sender_id: String
+                    let text: String
+                    let is_from_support: Bool
+                    let created_at: String
+                }
+                let messageRows: [MessageRow] = try await SupabaseManager.shared.client
+                    .from("support_messages")
+                    .select()
+                    .eq("ticket_id", value: ticket.id)
+                    .order("created_at", ascending: true)
+                    .execute()
+                    .value
+
+                let iso = ISO8601DateFormatter()
+                iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                let isoFallback = ISO8601DateFormatter()
+
+                let loadedMessages: [SupportMessage] = messageRows.map { row in
+                    let date = iso.date(from: row.created_at) ?? isoFallback.date(from: row.created_at) ?? Date()
+                    return SupportMessage(
+                        id: row.id,
+                        ticket_id: row.ticket_id,
+                        sender_id: row.sender_id,
+                        text: row.text,
+                        is_from_support: row.is_from_support,
+                        created_at: date
+                    )
+                }
+
+                await MainActor.run {
+                    self.currentTicket = ticket
+                    if loadedMessages.isEmpty {
+                        self.addWelcomeMessageSync()
+                    } else {
+                        self.messages = loadedMessages
+                    }
+                    self.tableView.reloadData()
+                    self.scrollToBottom()
+                }
+                return
+            }
+        } catch {
+            debugLog("[SupportChat] Failed to load existing ticket: \(error.localizedDescription)")
+        }
+
+        // No existing ticket found — show welcome
+        await addWelcomeMessage()
+    }
+
     private func updateStatusCard() {
         if let ticket = currentTicket {
-            ticketStatusLabel.text = "Ticket Status"
-            ticketIdLabel.text = "Open • ID #\(ticket.id.prefix(8))\nReply here or email support@rentiwise.com"
+            ticketStatusLabel.text = "Ticket #\(ticket.id.prefix(8))"
+            let statusText: String
+            switch ticket.status {
+            case .open: statusText = "Open"
+            case .inProgress: statusText = "In Progress"
+            case .resolved: statusText = "Resolved"
+            case .closed: statusText = "Closed"
+            }
+            ticketIdLabel.text = "\(statusText) • Reply here or email support@rentiwise.com"
         } else {
             ticketStatusLabel.text = "Support Contact"
             ticketIdLabel.text = "Use in-app support or email support@rentiwise.com"
@@ -326,18 +434,21 @@ final class SupportChatViewController: UIViewController {
     
     private func addWelcomeMessage() async {
         await MainActor.run {
-            // Add a welcome message locally
-            let welcomeMessage = SupportMessage(
-                id: "welcome",
-                ticket_id: "",
-                sender_id: "system",
-                text: "Hello! I'm the Rentiwise Assistant. Choose a topic below or type your question.",
-                is_from_support: true,
-                created_at: Date()
-            )
-            messages = [welcomeMessage]
+            addWelcomeMessageSync()
             tableView.reloadData()
         }
+    }
+
+    private func addWelcomeMessageSync() {
+        let welcomeMessage = SupportMessage(
+            id: "welcome",
+            ticket_id: "",
+            sender_id: "system",
+            text: "Hello! I'm the Rentiwise Assistant. Choose a topic below or type your question.",
+            is_from_support: true,
+            created_at: Date()
+        )
+        messages = [welcomeMessage]
     }
     
     // MARK: - Actions
@@ -420,6 +531,13 @@ final class SupportChatViewController: UIViewController {
         messages.append(botMessage)
         tableView.reloadData()
         scrollToBottom()
+
+        // Persist the bot auto-response to DB so it appears in chat history
+        if let ticketId = currentTicket?.id {
+            Task {
+                try? await chatService.sendSupportMessage(ticketId: ticketId, text: response)
+            }
+        }
     }
     
     private func generateBotResponse(for query: String) -> String {

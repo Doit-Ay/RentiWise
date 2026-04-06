@@ -383,39 +383,66 @@ class DashboardLenderRequestViewController: UIViewController {
 
     private func updateVerificationAction() {
         guard let req = request else {
-            navigationItem.rightBarButtonItem = nil
+            navigationItem.rightBarButtonItems = nil
             return
         }
 
         let current = req.status.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard current == "accepted" else {
-            navigationItem.rightBarButtonItem = nil
-            return
-        }
 
-        if rentalPaymentState.borrowerMarkedPaid && !rentalPaymentState.lenderConfirmedReceived {
-            navigationItem.rightBarButtonItem = UIBarButtonItem(
-                title: "Confirm Payment",
+        // Build the list of right bar button items
+        var items: [UIBarButtonItem] = []
+
+        // 1) Chat button — visible when status is accepted or approved
+        if current == "accepted" || current == "approved" {
+            let chatItem = UIBarButtonItem(
+                image: UIImage(systemName: "bubble.left.and.bubble.right"),
                 style: .plain,
                 target: self,
-                action: #selector(confirmPaymentReceivedTapped)
+                action: #selector(chatWithBorrowerTapped)
             )
-            return
+            chatItem.tintColor = brandTeal
+            items.append(chatItem)
         }
 
-        if rentalPaymentState.lenderConfirmedReceived {
-            navigationItem.rightBarButtonItem = UIBarButtonItem(
-                title: RequestSchemaSupport.supportsPickupCode ? "Verify OTP" : "Confirm Pickup",
-                style: .plain,
-                target: self,
-                action: RequestSchemaSupport.supportsPickupCode
-                    ? #selector(openPickupOTPVerification)
-                    : #selector(confirmPickupWithoutOTPTapped)
-            )
-            return
+        // 2) Verification / payment action (only when accepted)
+        if current == "accepted" {
+            if rentalPaymentState.borrowerMarkedPaid && !rentalPaymentState.lenderConfirmedReceived {
+                items.insert(
+                    UIBarButtonItem(
+                        title: "Confirm Payment",
+                        style: .plain,
+                        target: self,
+                        action: #selector(confirmPaymentReceivedTapped)
+                    ),
+                    at: 0
+                )
+            } else if rentalPaymentState.lenderConfirmedReceived {
+                items.insert(
+                    UIBarButtonItem(
+                        title: RequestSchemaSupport.supportsPickupCode ? "Verify OTP" : "Confirm Pickup",
+                        style: .plain,
+                        target: self,
+                        action: RequestSchemaSupport.supportsPickupCode
+                            ? #selector(openPickupOTPVerification)
+                            : #selector(confirmPickupWithoutOTPTapped)
+                    ),
+                    at: 0
+                )
+            }
         }
 
-        navigationItem.rightBarButtonItem = nil
+        navigationItem.rightBarButtonItems = items.isEmpty ? nil : items
+    }
+
+    // MARK: - Chat with Borrower
+
+    @objc private func chatWithBorrowerTapped() {
+        guard let req = request else { return }
+        ChatThreadViewController.open(
+            from: self,
+            itemId: req.item_id,
+            otherUserId: req.borrower_id
+        )
     }
 
     private func refreshRentalPaymentState() async {
@@ -528,6 +555,12 @@ class DashboardLenderRequestViewController: UIViewController {
             Task {
                 await self.refreshRequestFromServer()
                 await self.refreshRentalPaymentState()
+                // Prompt lender to capture handoff proof after OTP verification
+                if let req = await MainActor.run(body: { self.request }) {
+                    await MainActor.run {
+                        self.promptForHandoffProof(request: req)
+                    }
+                }
             }
         }
         navigationController?.pushViewController(otpVC, animated: true)
@@ -1204,9 +1237,7 @@ class DashboardLenderRequestViewController: UIViewController {
             await MainActor.run {
                 self.updateButtonsAndStatusUI(status: current.status)
                 self.updateVerificationAction()
-                let alert = UIAlertController(title: "Pickup Verified", message: "The OTP matched and the rental is now marked as active.", preferredStyle: .alert)
-                alert.addAction(UIAlertAction(title: "OK", style: .default))
-                self.present(alert, animated: true)
+                self.promptForHandoffProof(request: current)
             }
 
             NotificationCenter.default.post(name: Notification.Name("requestsShouldRefresh"), object: nil)
@@ -1221,6 +1252,30 @@ class DashboardLenderRequestViewController: UIViewController {
             }
         }
         await MainActor.run { self.setButtonsEnabled(true) }
+    }
+
+    // MARK: - Handoff Proof
+
+    /// Presents a prompt after pickup verification asking the lender to capture
+    /// condition photos before handing the item over.
+    private func promptForHandoffProof(request req: RequestWithItem) {
+        let alert = UIAlertController(
+            title: "Pickup Verified ✓",
+            message: "Take photos of the item before handing it over. This protects you in case of disputes.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Take Photos", style: .default) { [weak self] _ in
+            guard let self else { return }
+            HandoffProofViewController.present(
+                from: self,
+                requestId: req.id,
+                proofType: .pickup,
+                role: .lender,
+                itemTitle: req.items?.title
+            )
+        })
+        alert.addAction(UIAlertAction(title: "Skip", style: .cancel))
+        present(alert, animated: true)
     }
 
     // MARK: - Rental History Auto-Creation

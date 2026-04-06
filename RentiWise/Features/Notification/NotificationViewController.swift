@@ -99,7 +99,15 @@ class NotificationViewController: UIViewController {
             // Combine and sort by date
             var allNotifications = extensionRequests + returnRequests + generalNotifications
             allNotifications.sort { $0.createdAt > $1.createdAt }
-            
+
+            // Deduplicate: keep only the most recent notification per (type, requestId)
+            var seen = Set<String>()
+            allNotifications = allNotifications.filter { notif in
+                let key = "\(notif.type.deduplicationKey)_\(notif.requestId)"
+                if notif.requestId.isEmpty { return true } // keep items with no request id
+                return seen.insert(key).inserted
+            }
+
             await MainActor.run {
                 self.notifications = allNotifications
                 self.tableView.reloadData()
@@ -250,6 +258,13 @@ class NotificationViewController: UIViewController {
     // MARK: - General Notifications (from notifications table)
 
     private func fetchGeneralNotifications(for userId: String) async throws -> [NotificationItem] {
+        // Nested Decodable for the joined items inside requests
+        struct JoinedItemInfo: Decodable {
+            let images: [String]?
+        }
+        struct JoinedRequestInfo: Decodable {
+            let items: JoinedItemInfo?
+        }
         struct GeneralNotificationRow: Decodable {
             let id: String
             let type: String
@@ -259,12 +274,13 @@ class NotificationViewController: UIViewController {
             let item_id: String?
             let is_read: Bool?
             let created_at: String
+            let requests: JoinedRequestInfo?
         }
 
         do {
             let response: [GeneralNotificationRow] = try await SupabaseManager.shared.client
                 .from("notifications")
-                .select("id, type, title, message, request_id, item_id, is_read, created_at")
+                .select("id, type, title, message, request_id, item_id, is_read, created_at, requests(items(images))")
                 .eq("user_id", value: userId)
                 .order("created_at", ascending: false)
                 .limit(50)
@@ -273,7 +289,6 @@ class NotificationViewController: UIViewController {
             
             return response.map { row in
                 let dateFormatter = ISO8601DateFormatter()
-                // Sometimes Supabase returns fractional seconds which ISO8601DateFormatter fails on without options
                 dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
                 var date = dateFormatter.date(from: row.created_at)
                 if date == nil {
@@ -293,13 +308,16 @@ class NotificationViewController: UIViewController {
                 default:                  notifType = .requestAccepted
                 }
 
+                // Extract image from the joined request → item path
+                let itemImage = row.requests?.items?.images?.first
+
                 return NotificationItem(
                     id: row.id,
                     type: notifType,
                     requestId: row.request_id ?? "",
                     itemId: row.item_id,
                     itemTitle: row.title,
-                    itemImage: nil,
+                    itemImage: itemImage,
                     borrowerId: "",
                     message: row.message,
                     createdAt: date ?? Date(),
@@ -544,6 +562,21 @@ enum NotificationType {
     case pickupConfirmed
     case newRequest
     case nearbyItem
+
+    /// Key used for deduplication — same key = same logical notification
+    var deduplicationKey: String {
+        switch self {
+        case .extensionRequest: return "extension"
+        case .returnRequest:    return "return"
+        case .requestAccepted:  return "accepted"
+        case .requestRejected:  return "rejected"
+        case .paymentReceived:  return "pay_recv"
+        case .paymentConfirmed: return "pay_conf"
+        case .pickupConfirmed:  return "pickup"
+        case .newRequest:       return "new_req"
+        case .nearbyItem:       return "nearby"
+        }
+    }
     
     var icon: String {
         switch self {
@@ -562,7 +595,7 @@ enum NotificationType {
     var iconColor: UIColor {
         switch self {
         case .extensionRequest:
-            return UIColor(red: 0.36, green: 0.66, blue: 0.71, alpha: 1.0) // Teal
+            return UIColor(red: 0.36, green: 0.66, blue: 0.71, alpha: 1.0)
         case .returnRequest:
             return UIColor.systemGreen
         case .requestAccepted:

@@ -137,7 +137,11 @@ enum BookingPresentationFormatter {
     }
 
     static func sqlDateString(for date: Date) -> String {
-        sqlDateFormatter.string(from: Calendar.current.startOfDay(for: date))
+        // Do NOT call startOfDay() — it can shift the date by -1 day
+        // when the Date's internal UTC representation is near midnight.
+        // The sqlDateFormatter already has timeZone = .current, so it
+        // extracts the correct local calendar date directly.
+        sqlDateFormatter.string(from: date)
     }
 
     static func sqlDate(from rawValue: String) -> Date? {
