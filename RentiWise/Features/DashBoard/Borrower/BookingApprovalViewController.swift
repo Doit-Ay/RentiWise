@@ -407,40 +407,39 @@ class BookingApprovalViewController: UIViewController {
             }
             let isHistoryMode = await MainActor.run { self.mode == .history }
 
-            // Refresh the request row itself first
-            await refreshRequestFromDBIfPossible()
-            await refreshRentalPaymentState()
-
-            // Load owner name/avatar and address in parallel
+            // Execute network requests completely in parallel to reduce loading latency
+            async let reqRefreshTask: Void = self.refreshRequestFromDBIfPossible()
+            async let payRefreshTask: Void = self.refreshRentalPaymentState()
+            
             async let ownerTask: Void = {
                 let userIdToShow = isHistoryMode ? req.borrower_id : req.owner_id
                 await self.fetchAndDisplayOwnerUnified(for: userIdToShow)
             }()
+            
             async let addressTask: Void = {
                 let userIdForAddress = isHistoryMode ? req.borrower_id : req.owner_id
                 if isHistoryMode {
-                    // Owner always sees borrower address
                     await self.fetchAndDisplayAddress(for: userIdForAddress)
                 } else {
-                    // Borrower: only fetch owner address if request is accepted/approved
+                    // Start address check assuming status might be accepted based on current req state
+                    // The address fetch handles missing data nicely anyway
                     let rawStatus = req.status.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
                     let isAccepted = ["accepted", "approved", "pickup_verified", "active", "completed"].contains(rawStatus)
                     if isAccepted {
                         await self.fetchAndDisplayAddress(for: userIdForAddress)
                     }
-                    // Otherwise placeholder is set by updateOwnerCardInteractivity
                 }
             }()
+            
             async let amountsTask: Void = {
                 let amounts = await self.computeAmounts(for: req)
                 await MainActor.run {
                     self.updateAmountLabels(rental: amounts.rentalFee, deposit: 0, total: amounts.rentalFee)
                 }
             }()
-            // Await all three parallel tasks
-            _ = await (ownerTask, addressTask, amountsTask)
-
-            // Removed payment refresh calls
+            
+            // Wait for all concurrently running tasks
+            _ = await (reqRefreshTask, payRefreshTask, ownerTask, addressTask, amountsTask)
             
             await fetchRequestStatuses()
 
@@ -1575,9 +1574,12 @@ class BookingApprovalViewController: UIViewController {
 
         // Network-dependent data (owner info, address, amounts) is loaded
         // in viewDidAppear so it doesn't block/slow the push animation.
-        let participantFallback = fallbackParticipantName
-        ownNameLabel?.text = mode == .history ? "Loading borrower..." : "Loading lender..."
-        renderOwnerInitials(fullName: participantFallback)
+        // We only set the loading state once, preventing background refreshes from overriding the fetched name.
+        if ownNameLabel?.text == nil || ownNameLabel?.text?.isEmpty == true || ownNameLabel?.text == "Loading lender..." || ownNameLabel?.text == "Loading borrower..." {
+            let participantFallback = fallbackParticipantName
+            ownNameLabel?.text = mode == .history ? "Loading borrower..." : "Loading lender..."
+            renderOwnerInitials(fullName: participantFallback)
+        }
     }
 
     private func selectClause() -> String {
@@ -1889,8 +1891,7 @@ class BookingApprovalViewController: UIViewController {
         let totalText = currencyFormatter.string(from: NSNumber(value: total)) ?? String(format: "%.2f", total)
 
         fee?.text = rentalText
-        seclabel?.text = ""
-        seclabel?.superview?.isHidden = true // Hide the entire stack view (including its label)
+        seclabel?.isHidden = false
         totamountlabel?.text = totalText
     }
 
