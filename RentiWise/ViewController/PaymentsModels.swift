@@ -16,6 +16,7 @@ struct PaymentInsert: Encodable {
 struct PaymentUpdate: Encodable {
     let status: String?           // "succeeded", "failed", "refunded", etc.
     let pickup_code: String?      // set when succeeded
+    let pickupcode_status: String? // "pending", "matched", "not_matched"
     let provider_payment_id: String?
     let provider_receipt_url: String?
     let failure_reason: String?
@@ -34,6 +35,7 @@ struct PaymentRow: Decodable {
     let deposit_amount: Double
     let total_amount: Double
     let pickup_code: String?
+    let pickupcode_status: String?
     let pickup_confirmed: Bool?
     let provider_payment_id: String?
     let provider_receipt_url: String?

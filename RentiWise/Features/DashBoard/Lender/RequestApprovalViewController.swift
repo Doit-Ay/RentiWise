@@ -161,7 +161,8 @@ class RequestApprovalViewController: UIViewController {
                     self.currentSubRequestStatus = request.status.lowercased()
                     self.originalEndDateLabel?.text = "Original End: \(request.original_end_date)"
                     self.newEndDateLabel?.text = "New End: \(request.new_end_date)"
-                    self.additionalDaysLabel?.text = "\(request.additional_days) additional days - ₹\(String(format: "%.0f", request.additional_cost))"
+                    // The unit label will be corrected in fetchBookingDetails once rental_unit is loaded
+                    self.additionalDaysLabel?.text = "\(request.additional_days) additional day\(request.additional_days == 1 ? "" : "s") - ₹\(String(format: "%.0f", request.additional_cost))"
                     self.updateUI()
                 }
             }
@@ -188,6 +189,7 @@ class RequestApprovalViewController: UIViewController {
                 let item_id: String
                 let start_date: String
                 let end_date: String
+                let rental_unit: String?
             }
             
             debugLog("[RequestApproval] Fetching booking with ID: \(bookingId)")
@@ -209,6 +211,11 @@ class RequestApprovalViewController: UIViewController {
             
             await MainActor.run {
                 self.rentalPeriodLabel?.text = "\(booking.start_date) to \(booking.end_date)"
+                if booking.rental_unit == "hour" {
+                    if let text = self.additionalDaysLabel?.text {
+                        self.additionalDaysLabel?.text = text.replacingOccurrences(of: "days", with: "hours")
+                    }
+                }
             }
         } catch {
             debugLog("[RequestApproval] Error fetching booking: \(error)")
@@ -449,54 +456,74 @@ class RequestApprovalViewController: UIViewController {
                 .eq("id", value: requestId)
                 .execute()
             
-            // If accepting an extension request, update the main booking end_date and total_price
+            // If accepting an extension request, update the main booking end_date and return_time
             if requestType == .extensionRequest && status == "accepted" {
                 struct ExtensionRequestData: Decodable {
-                    let new_end_date: String
+                    let new_end_date: String       // "yyyy-MM-dd" (date column)
+                    let new_return_time: String?    // "HH:mm:ss+05:30" (timetz column)
                     let additional_cost: Double
                 }
                 
                 // Fetch extension details needed for the update
                 let extResponse = try await SupabaseManager.shared.client
                     .from("extension_requests")
-                    .select("new_end_date, additional_cost")
+                    .select("new_end_date, new_return_time, additional_cost")
                     .eq("id", value: requestId)
                     .single()
                     .execute()
                     
                 let extData = try JSONDecoder().decode(ExtensionRequestData.self, from: extResponse.data)
                 
-                // Fetch the current booking to get the current total_price
-                struct BookingData: Decodable {
-                    let total_price: Double?
-                }
-                
-                let bookingResponse = try await SupabaseManager.shared.client
-                    .from("requests")
-                    .select("total_price")
-                    .eq("id", value: bookingId)
-                    .single()
-                    .execute()
-                    
-                let currentBooking = try JSONDecoder().decode(BookingData.self, from: bookingResponse.data)
-                let currentTotal = currentBooking.total_price ?? 0.0
-                let newTotal = currentTotal + extData.additional_cost
-                
+                // Update end_date and return_time on the main request
                 struct MainRequestUpdate: Encodable {
                     let end_date: String
-                    let total_price: Double
+                    let return_time: String?
                 }
+                let updateData = MainRequestUpdate(
+                    end_date: extData.new_end_date,
+                    return_time: extData.new_return_time
+                )
                 
-                let updateData = MainRequestUpdate(end_date: extData.new_end_date, total_price: newTotal)
-                
-                // Update main request
                 let _ = try await SupabaseManager.shared.client
                     .from("requests")
                     .update(updateData)
                     .eq("id", value: bookingId)
                     .execute()
                     
-                debugLog("[RequestApproval] Main request \(bookingId) extended to \(extData.new_end_date) with new total: \(newTotal).")
+                // Also update the total_amount & rental_fee in the payments table
+                struct PaymentData: Decodable {
+                    let rental_fee: Double?
+                    let total_amount: Double?
+                }
+                
+                if let paymentResponse = try? await SupabaseManager.shared.client
+                    .from("payments")
+                    .select("rental_fee, total_amount")
+                    .eq("request_id", value: bookingId)
+                    .single()
+                    .execute() {
+                    
+                    if let paymentData = try? JSONDecoder().decode(PaymentData.self, from: paymentResponse.data) {
+                        let currentRental = paymentData.rental_fee ?? 0.0
+                        let currentTotal = paymentData.total_amount ?? 0.0
+                        
+                        let newRental = currentRental + extData.additional_cost
+                        let newTotal = currentTotal + extData.additional_cost
+                        
+                        struct PaymentUpdate: Encodable {
+                            let rental_fee: Double
+                            let total_amount: Double
+                        }
+                        
+                        let _ = try? await SupabaseManager.shared.client
+                            .from("payments")
+                            .update(PaymentUpdate(rental_fee: newRental, total_amount: newTotal))
+                            .eq("request_id", value: bookingId)
+                            .execute()
+                    }
+                }
+                
+                debugLog("[RequestApproval] Main request \(bookingId) extended to \(extData.new_end_date) returnTime=\(extData.new_return_time ?? "nil"), added \(extData.additional_cost) to payment.")
             }
             
             await MainActor.run {

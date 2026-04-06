@@ -97,19 +97,24 @@ final class RentalPaymentStateService {
 
         try await insertEventIfNeeded(paymentId: payment.id, eventType: "payment_received")
 
-        struct StatusUpdate: Encodable {
+        // Auto-generate a 6-digit pickup OTP code
+        let pickupCode = String(format: "%06d", Int.random(in: 0...999_999))
+
+        struct PaymentConfirmPatch: Encodable {
             let status: String
+            let pickup_code: String
+            let pickupcode_status: String
         }
 
-        do {
-            try await client
-                .from("payments")
-                .update(StatusUpdate(status: "succeeded"))
-                .eq("id", value: payment.id)
-                .execute()
-        } catch {
-            debugLog("[RentalPayment] Non-fatal status update failure: \(error.localizedDescription)")
-        }
+        try await client
+            .from("payments")
+            .update(PaymentConfirmPatch(
+                status: "succeeded",
+                pickup_code: pickupCode,
+                pickupcode_status: "pending"
+            ))
+            .eq("id", value: payment.id)
+            .execute()
 
         return try await fetch(requestId: requestId)
     }

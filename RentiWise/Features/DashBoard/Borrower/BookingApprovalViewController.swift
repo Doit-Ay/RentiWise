@@ -247,7 +247,8 @@ class BookingApprovalViewController: UIViewController {
         paymentButton.configuration = nil
         paymentButton.titleLabel?.font = .systemFont(ofSize: 18, weight: .semibold)
         paymentButton.contentHorizontalAlignment = .center
-        paymentStatus?.numberOfLines = 2
+        paymentStatus?.numberOfLines = 0
+        paymentStatus?.lineBreakMode = .byWordWrapping
         paymentStatus?.lineBreakMode = .byWordWrapping
 
         // Style Extend & Return buttons: no SF symbols, height 44, 18pt semibold
@@ -658,7 +659,17 @@ class BookingApprovalViewController: UIViewController {
     }
     
     private func updateExtensionButtonState() {
-        guard status != .completed else { return }
+        if status == .completed || status == .cancelled || status == .rejected {
+            extensionStatusLabel?.isHidden = true
+            return
+        }
+        
+        // If the extend button is hidden (meaning the current state doesn't allow extending),
+        // we should also hide the note/status label.
+        if extendButton?.isHidden == true || extendReturnButtonsStack?.isHidden == true || mode == .history {
+            extensionStatusLabel?.isHidden = true
+            return
+        }
 
         // Clear any attributed title set in Storyboard so setTitle(_:for:) works
         extendButton?.setAttributedTitle(nil, for: .normal)
@@ -677,32 +688,18 @@ class BookingApprovalViewController: UIViewController {
             extensionStatusLabel?.isHidden = false
             if let lbl = extensionStatusLabel { styleStatusLabel(lbl, status: status, isExtension: true) }
             
-            switch status {
-            case "pending":
-                // Button becomes "Cancel Extend"
-                extendButton?.setTitle("Cancel Extend", for: .normal)
-                extendButton?.backgroundColor = .systemRed
-                extendButton?.isEnabled = true
-                extendButton?.alpha = 1.0
-            case "rejected":
-                extendButton?.setTitle("Extend Rental", for: .normal)
-                extendButton?.backgroundColor = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1)
-                extendButton?.isEnabled = true
-                extendButton?.alpha = 1.0
-            case "accepted":
-                // Extension was accepted — re-enable so user can send another extend request
-                extendButton?.setTitle("Extend Rental", for: .normal)
-                extendButton?.backgroundColor = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1)
-                extendButton?.isEnabled = true
-                extendButton?.alpha = 1.0
-            default:
-                extendButton?.setTitle("Extend Rental", for: .normal)
-                extendButton?.isEnabled = true
-                extendButton?.alpha = 1.0
-            }
+            // Disable extend button forever if a request is pending, accepted, or rejected.
+            extendButton?.setTitle("Extend Rental", for: .normal)
+            extendButton?.backgroundColor = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1)
+            extendButton?.isEnabled = false
+            extendButton?.alpha = 0.5
         } else {
-            // No request exists
-            extensionStatusLabel?.isHidden = true
+            // No request exists, active "Extend Rental" functionality.
+            extensionStatusLabel?.isHidden = false
+            extensionStatusLabel?.text = "Note: Extension can only be requested once"
+            extensionStatusLabel?.textColor = .secondaryLabel
+            extensionStatusLabel?.font = .systemFont(ofSize: 12, weight: .regular)
+            
             extendButton?.setTitle("Extend Rental", for: .normal)
             if let teal = extendButton?.backgroundColor, teal == .systemRed {
                 extendButton?.backgroundColor = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1)
@@ -760,6 +757,8 @@ class BookingApprovalViewController: UIViewController {
             label.translatesAutoresizingMaskIntoConstraints = false
             label.font = .systemFont(ofSize: 13, weight: .medium)
             label.textAlignment = .center
+            label.numberOfLines = 0
+            label.lineBreakMode = .byWordWrapping
             label.isHidden = true // Hidden by default
             parentView.addSubview(label)
             
@@ -778,6 +777,8 @@ class BookingApprovalViewController: UIViewController {
             label.translatesAutoresizingMaskIntoConstraints = false
             label.font = .systemFont(ofSize: 13, weight: .medium)
             label.textAlignment = .center
+            label.numberOfLines = 0
+            label.lineBreakMode = .byWordWrapping
             label.isHidden = true // Hidden by default
             parentView.addSubview(label)
             
@@ -1004,20 +1005,21 @@ class BookingApprovalViewController: UIViewController {
     }
     
     @IBAction func extendRentalButtonTapped(_ sender: UIButton) {
-        // If button is in "Cancel Extend" mode (pending state)
-        if currentExtensionRequestStatus == "pending" {
-            cancelExtensionRequest()
-            return
-        }
-
         guard let req = request else { return }
         
         let extendVC = ExtendRentalViewController(nibName: "ExtendRentalViewController", bundle: nil)
         extendVC.request = req
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "yyyy-MM-dd"
-        dateFormatter.timeZone = .current
-        extendVC.originalEndDate = dateFormatter.date(from: req.end_date)
+        // Build full end date+time using BookingPresentationFormatter to handle
+        // DB formats like "04:03:00+05:30" correctly
+        if let returnTimeParsed = BookingPresentationFormatter.parseTime(req.return_time),
+           let endDateParsed = BookingPresentationFormatter.sqlDateFormatter.date(from: req.end_date) {
+            extendVC.originalEndDate = BookingPresentationFormatter.combine(date: endDateParsed, time: returnTimeParsed)
+        } else {
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "yyyy-MM-dd"
+            dateFormatter.timeZone = .current
+            extendVC.originalEndDate = dateFormatter.date(from: req.end_date)
+        }
         
         // Instantly update button state when request is submitted
         extendVC.onRequestSubmitted = { [weak self] in
@@ -1172,41 +1174,7 @@ class BookingApprovalViewController: UIViewController {
             .execute()
     }
 
-    // MARK: - Cancel Extension / Return Requests (while pending)
-
-    private func cancelExtensionRequest() {
-        let alert = UIAlertController(
-            title: "Cancel Extension Request",
-            message: "Are you sure you want to cancel your extension request?",
-            preferredStyle: .alert
-        )
-        alert.addAction(UIAlertAction(title: "No", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Yes, Cancel", style: .destructive) { [weak self] _ in
-            guard let self, let rowId = self.currentExtensionRequestId else { return }
-            Task {
-                do {
-                    _ = try await SupabaseManager.shared.client
-                        .from("extension_requests")
-                        .delete()
-                        .eq("id", value: rowId)
-                        .execute()
-                    await MainActor.run {
-                        self.currentExtensionRequestId = nil
-                        self.currentExtensionRequestStatus = nil
-                        self.updateExtensionButtonState()
-                        self.updateReturnButtonState()
-                    }
-                } catch {
-                    await MainActor.run {
-                        let a = UIAlertController(title: "Error", message: error.localizedDescription, preferredStyle: .alert)
-                        a.addAction(UIAlertAction(title: "OK", style: .default))
-                        self.present(a, animated: true)
-                    }
-                }
-            }
-        })
-        present(alert, animated: true)
-    }
+    // MARK: - Cancel Return Requests (while pending)
 
     private func cancelReturnRequest() {
         let alert = UIAlertController(
@@ -1494,6 +1462,7 @@ class BookingApprovalViewController: UIViewController {
 
         // Update extend/return button titles based on current request status
         updateReturnButtonForRequestStatus()
+        updateExtensionButtonState()
 
         // Update chat/direction/address state based on acceptance
         updateOwnerCardInteractivity()
@@ -1598,6 +1567,29 @@ class BookingApprovalViewController: UIViewController {
 
     private func mapRefreshedRow(_ fresh: RequestWithItem) {
         self.request = fresh
+        
+        // Recompute the presentation to handle extended dates and time
+        if let booking = BookingPresentationFormatter.presentation(from: fresh, pricePerDay: fresh.items?.price_per_day ?? 0) {
+            self.startDate = booking.pickupDateTime
+            self.pickupTime = booking.pickupDateTime
+            self.returnTime = booking.returnDateTime
+        } else {
+            let sqlDateFormatter = BookingPresentationFormatter.sqlDateFormatter
+            self.startDate = sqlDateFormatter.date(from: fresh.start_date)
+            self.returnTime = sqlDateFormatter.date(from: fresh.end_date)
+            self.pickupTime = BookingPresentationFormatter.parseTime(fresh.pickup_time)
+        }
+        
+        self.updateDatesUI()
+        
+        // Also fire off a UI update for the new amounts (so the price breakdown updates)
+        Task { [weak self] in
+            guard let self else { return }
+            let amounts = await self.computeAmounts(for: fresh)
+            await MainActor.run {
+                self.updateAmountLabels(rental: amounts.rentalFee, deposit: 0, total: amounts.rentalFee)
+            }
+        }
     }
 
     private func refreshRequestFromDBIfPossible() async {

@@ -303,11 +303,13 @@ class DashboardLenderRequestViewController: UIViewController {
             self.prodimage?.contentMode = .scaleAspectFit
         }
 
-        ownNameLabel?.text = "Loading borrower..."
-        borrowerMetaLabel?.text = "Borrower"
-        renderBorrowerInitials(fullName: "Borrower")
-        ownRatingLabel?.text = nil
-        ownDistLabel?.text = "Calculating distance..."
+        if ownNameLabel?.text == nil || ownNameLabel?.text?.isEmpty == true || ownNameLabel?.text == "Loading borrower..." {
+            ownNameLabel?.text = "Loading borrower..."
+            borrowerMetaLabel?.text = "Borrower"
+            renderBorrowerInitials(fullName: "Borrower")
+            ownRatingLabel?.text = nil
+            ownDistLabel?.text = "Calculating distance..."
+        }
 
         // Pricing
         computeAndDisplayTotals(rentalFee: booking?.rentalFee)
@@ -392,8 +394,8 @@ class DashboardLenderRequestViewController: UIViewController {
         // Build the list of right bar button items
         var items: [UIBarButtonItem] = []
 
-        // 1) Chat button — visible when status is accepted or approved
-        if current == "accepted" || current == "approved" {
+        // 1) Chat button — visible only when payment is done by borrower
+        if rentalPaymentState.borrowerMarkedPaid {
             let chatItem = UIBarButtonItem(
                 image: UIImage(systemName: "bubble.left.and.bubble.right"),
                 style: .plain,
@@ -1172,40 +1174,24 @@ class DashboardLenderRequestViewController: UIViewController {
 
     @objc private func verifyPickupCodeTapped() {
         guard let req = request else { return }
-        guard let expectedCode = req.pickup_code?.trimmingCharacters(in: .whitespacesAndNewlines), !expectedCode.isEmpty else {
-            let alert = UIAlertController(title: "OTP Missing", message: "A pickup OTP has not been generated for this request yet.", preferredStyle: .alert)
-            alert.addAction(UIAlertAction(title: "OK", style: .default))
-            present(alert, animated: true)
-            return
-        }
 
-        let alert = UIAlertController(
-            title: "Verify Pickup OTP",
-            message: "Ask the borrower for the 6-digit pickup code to confirm the handoff.",
-            preferredStyle: .alert
-        )
-        alert.addTextField { textField in
-            textField.placeholder = "6-digit OTP"
-            textField.keyboardType = .numberPad
-            textField.textContentType = .oneTimeCode
-        }
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Verify", style: .default) { [weak self, weak alert] _ in
-            guard let self else { return }
-            let typed = alert?.textFields?.first?.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            guard typed == expectedCode else {
-                let mismatch = UIAlertController(title: "Incorrect OTP", message: "The code doesn't match the borrower's pickup code.", preferredStyle: .alert)
-                mismatch.addAction(UIAlertAction(title: "OK", style: .default))
-                self.present(mismatch, animated: true)
-                return
-            }
+        let otpVC = LenderOTPInputViewController()
+        otpVC.requestId = req.id
+        otpVC.onVerified = { [weak self] in
+            guard let self, var current = self.request else { return }
+            current.status = "approved"
+            current.pickup_code = nil
+            self.request = current
 
-            Task { [weak self] in
-                guard let self else { return }
-                await self.completePickupVerification()
-            }
-        })
-        present(alert, animated: true)
+            Task { await self.createRentalHistoryIfNeeded(for: current) }
+
+            self.updateButtonsAndStatusUI(status: current.status)
+            self.updateVerificationAction()
+            self.promptForHandoffProof(request: current)
+
+            NotificationCenter.default.post(name: Notification.Name("requestsShouldRefresh"), object: nil)
+        }
+        navigationController?.pushViewController(otpVC, animated: true)
     }
 
     @objc private func confirmPickupWithoutOTPTapped() {

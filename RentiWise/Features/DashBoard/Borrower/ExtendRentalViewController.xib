@@ -18,6 +18,9 @@
                 <outlet property="pricePerDayLabel" destination="Price-Day-Lbl" id="OutPriceDay"/>
                 <outlet property="sendRequestButton" destination="Send-Req-Btn" id="OutSendBtn"/>
                 <outlet property="totalExtensionLabel" destination="Tot-Ext-Lbl" id="OutTotExt"/>
+                <outlet property="additionalDaysTitleLabel" destination="Add-Days-Title" id="OutAddDaysTitle"/>
+                <outlet property="curEndTitleLabel" destination="Cur-End-Title" id="OutCurEndTitle"/>
+                <outlet property="newDateTitleLabel" destination="New-Date-Title" id="OutNewDateTitle"/>
                 <outlet property="view" destination="i5M-Pr-FkT" id="sfx-zR-JGt"/>
             </connections>
         </placeholder>

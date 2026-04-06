@@ -51,7 +51,7 @@ final class SupabaseManager {
     /// Use this in hot paths (e.g. cell configuration) to avoid unnecessary async hops.
     /// Falls back to `nil` if no session is cached yet.
     func currentUserIdSync() -> String? {
-        client.auth.currentUser?.id.uuidString
+        client.auth.currentUser?.id.uuidString.lowercased()
     }
 
     /// Async version — triggers a network refresh of the session if needed.
@@ -59,7 +59,7 @@ final class SupabaseManager {
     func currentUserId() async -> String? {
         do {
             let session = try await client.auth.session
-            return session.user.id.uuidString
+            return session.user.id.uuidString.lowercased()
         } catch {
             return nil
         }

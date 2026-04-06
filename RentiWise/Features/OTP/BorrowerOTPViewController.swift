@@ -2,9 +2,9 @@
 //  BorrowerOTPViewController.swift
 //  RentiWise
 //
-//  Shown to the borrower after the lender confirms UPI payment receipt.
-//  Loads or regenerates the request-backed 6-digit pickup OTP for the borrower
-//  to show the lender at pickup.
+//  Shown to the borrower after payment is confirmed (status = succeeded).
+//  Displays the 6-digit pickup OTP that the borrower shows to the lender at pickup.
+//  The OTP is auto-generated when payment succeeds and stored in the payments table.
 //
 
 import UIKit
@@ -65,6 +65,7 @@ final class BorrowerOTPViewController: UIViewController {
         statusLabel.font = .systemFont(ofSize: 14)
         statusLabel.textColor = .secondaryLabel
         statusLabel.textAlignment = .center
+        statusLabel.numberOfLines = 0
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
 
         // Spinner
@@ -87,27 +88,24 @@ final class BorrowerOTPViewController: UIViewController {
         ])
     }
 
+    // MARK: - Load Pickup OTP
     private func loadPickupOTP() {
         spinner.startAnimating()
         otpLabel.text = "----"
-        statusLabel.text = "Checking payment confirmation..."
+        statusLabel.text = "Loading pickup code..."
         regenerateButton.isHidden = true
         regenerateButton.isEnabled = false
 
         Task {
             do {
-                let paymentState = try await RentalPaymentStateService.shared.fetch(requestId: requestId)
-                guard paymentState.lenderConfirmedReceived else {
-                    await MainActor.run {
-                        self.spinner.stopAnimating()
-                        self.instructionLabel.text = "Your pickup OTP unlocks after the lender confirms they received your UPI payment."
-                        self.statusLabel.text = "Waiting for lender payment confirmation"
-                        self.regenerateButton.isHidden = true
-                    }
-                    return
+                let code = try await PickupOTPService.shared.loadOrCreatePickupCode(requestId: requestId)
+                await MainActor.run {
+                    self.spinner.stopAnimating()
+                    self.otpLabel.text = code
+                    self.regenerateButton.isHidden = false
+                    self.regenerateButton.isEnabled = true
+                    self.statusLabel.text = "Only the borrower can generate this pickup OTP."
                 }
-
-                try await self.displayOrCreatePickupOTP()
             } catch {
                 await MainActor.run {
                     if PickupOTPService.isManualConfirmationRequiredError(error) {
@@ -135,18 +133,7 @@ final class BorrowerOTPViewController: UIViewController {
         regenerateButton.isEnabled = false
     }
 
-    private func displayOrCreatePickupOTP() async throws {
-        let code = try await PickupOTPService.shared.loadOrCreatePickupCode(requestId: requestId)
-        await MainActor.run {
-            self.spinner.stopAnimating()
-            self.regenerateButton.isHidden = false
-            self.regenerateButton.isEnabled = true
-            self.statusLabel.text = nil
-            self.otpLabel.text = code
-        }
-    }
-
-    // MARK: - Generate OTP from request row
+    // MARK: - Regenerate OTP
     private func generateOTP() {
         spinner.startAnimating()
         otpLabel.text = "----"
@@ -162,6 +149,7 @@ final class BorrowerOTPViewController: UIViewController {
                     self.spinner.stopAnimating()
                     self.otpLabel.text = code
                     self.startCooldown()
+                    self.statusLabel.text = "Only the borrower can generate this pickup OTP."
                 }
             } catch {
                 await MainActor.run {
@@ -182,7 +170,6 @@ final class BorrowerOTPViewController: UIViewController {
     private func startCooldown() {
         cooldownSeconds = 30
         regenerateButton.isEnabled = false
-        statusLabel.text = "Regenerate available in \(cooldownSeconds)s"
         cooldownTimer?.invalidate()
         cooldownTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] timer in
             guard let self = self else { timer.invalidate(); return }
@@ -190,9 +177,6 @@ final class BorrowerOTPViewController: UIViewController {
             if self.cooldownSeconds <= 0 {
                 timer.invalidate()
                 self.regenerateButton.isEnabled = true
-                self.statusLabel.text = ""
-            } else {
-                self.statusLabel.text = "Regenerate available in \(self.cooldownSeconds)s"
             }
         }
     }
