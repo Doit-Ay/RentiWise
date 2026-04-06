@@ -729,6 +729,21 @@ class RequestViewController: UIViewController {
         guard hasSelectedReturnTime else {
             return rentalUnit == .day ? "Please choose a return date." : "Please choose a return time."
         }
+        
+        // Enforce 1 hour minimum booking duration
+        if let item = self.item {
+            let booking = BookingPresentationFormatter.presentation(
+                startDate: dateLabel.date,
+                pickupTime: pickuptimeLabel.date,
+                returnSelection: returntimeLabel.date,
+                rentalUnit: rentalUnit == .hour ? .hour : .day,
+                pricePerDay: item.price_per_day
+            )
+            if booking.durationSeconds < 3600 {
+                return "The minimum rental duration is 1 hour."
+            }
+        }
+        
         return nil
     }
 

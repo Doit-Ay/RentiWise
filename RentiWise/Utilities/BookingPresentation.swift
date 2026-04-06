@@ -19,6 +19,7 @@ struct BookingPresentation {
     let durationText: String
     let quantityUnits: Int
     let rentalFee: Double
+    let durationSeconds: TimeInterval
 }
 
 enum BookingPresentationFormatter {
@@ -197,12 +198,28 @@ enum BookingPresentationFormatter {
 
         switch rentalUnit {
         case .hour:
-            quantityUnits = max(1, Int(ceil(duration / 3600.0)))
+            let totalMins = Int(round(duration / 60))
+            let displayHours = totalMins / 60
+            let displayMins = totalMins % 60
+            
+            if displayHours == 0 {
+                durationText = "\(displayMins) Min\(displayMins == 1 ? "" : "s")"
+            } else if displayMins == 0 {
+                durationText = "\(displayHours) Hour\(displayHours == 1 ? "" : "s")"
+            } else {
+                durationText = "\(displayHours) hr \(displayMins) min"
+            }
+
+            // Fee calculation: Minimum 1 hour, then time bound proportional
+            let exactHours = max(1.0, duration / 3600.0)
             let hourlyRate = rounded(pricePerDay / 8.0, places: 2)
-            rentalFee = Double(quantityUnits) * hourlyRate
+            rentalFee = rounded(exactHours * hourlyRate, places: 2)
+            
+            // Provide quantityUnits as integer fallback for legacy dependencies
+            quantityUnits = max(1, Int(ceil(duration / 3600.0)))
+            
             dateText = displayDateFormatter.string(from: pickupDateTime)
             timeText = "\(displayTimeFormatter.string(from: pickupDateTime)) — \(displayTimeFormatter.string(from: returnDateTime))"
-            durationText = "\(quantityUnits) Hour\(quantityUnits == 1 ? "" : "s")"
         case .day:
             quantityUnits = max(1, Int(ceil(duration / 86400.0)))
             rentalFee = Double(quantityUnits) * pricePerDay
@@ -223,7 +240,8 @@ enum BookingPresentationFormatter {
             timeText: timeText,
             durationText: durationText,
             quantityUnits: quantityUnits,
-            rentalFee: rentalFee
+            rentalFee: rentalFee,
+            durationSeconds: duration
         )
     }
 

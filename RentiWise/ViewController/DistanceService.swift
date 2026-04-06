@@ -48,11 +48,19 @@ final class DistanceService {
         directionsCache.totalCostLimit = 2 * 1024 * 1024 // 2 MB
     }
 
+    // MARK: - Device GPS cache
+    /// Cached device GPS coordinate — populated on first resolve and updated periodically.
+    private var cachedDeviceGPS: CLLocation?
+    private var gpsLastFetchDate: Date?
+    private let gpsCacheTTL: TimeInterval = 300 // re-fetch device GPS every 5 minutes
+
     // MARK: - Public API
 
     /// Returns the viewer's resolved coordinate from the persistent cache, or nil if not yet resolved.
     /// Useful for fast, synchronous straight-line distance sorting without async geocoding.
     func cachedViewerCoordinate() -> CLLocation? {
+        // Prefer device GPS if available
+        if let gps = cachedDeviceGPS { return gps }
         let viewerAddressString = SavedAddressesStore.shared.getDefaultSelectedAddress()?.trimmingCharacters(in: .whitespacesAndNewlines)
         let viewerAddress = (viewerAddressString?.isEmpty == false) ? viewerAddressString! : defaultViewerAddress
         return getCachedUserCoordinates(for: viewerAddress)
@@ -83,12 +91,13 @@ final class DistanceService {
             return cached
         }
 
-        guard let targetCoord = await resolvedTargetCoordinate(for: item) else {
-            return Double.greatestFiniteMagnitude
-        }
-
+        let targetCoord = await resolvedTargetCoordinate(for: item)
         let viewerCoord = await resolveViewerCoordinate(for: viewerAddress)
-        return viewerCoord.distance(from: targetCoord)
+        if let target = targetCoord {
+            return viewerCoord.distance(from: target)
+        }
+        // No owner coords — sort last but not infinitely
+        return 999_999
     }
 
     /// Computes the viewer's distance to another user, typically used on lender/borrower cards.
@@ -101,8 +110,11 @@ final class DistanceService {
             return "Your address"
         }
 
-        guard let targetCoord = await fetchOwnerCoordinate(ownerId: userId) else {
-            return "Distance unavailable"
+        let targetCoord = await fetchOwnerCoordinate(ownerId: userId)
+        guard let targetCoord else {
+            // No coordinates for this user — try to show their city
+            let cityText = await fetchOwnerCityText(ownerId: userId)
+            return cityText ?? "Location not set"
         }
 
         let viewerCoord = await resolveViewerCoordinate(for: viewerAddress)
@@ -132,9 +144,9 @@ final class DistanceService {
         let viewerUserId = await SupabaseManager.shared.currentUserId()
         let cacheItemId = itemHasSpecificLocation(item) ? item.id : nil
 
-        // If the viewer is the owner of the item, distance is natively zero.
+        // If the viewer is the owner of the item, show "Your item".
         if let viewerUserId, viewerUserId.lowercased() == item.owner_id.lowercased() {
-            return "0 km"
+            return "Your item"
         }
 
         // 1) FAST PATH: DB cache (logged-in users)
@@ -151,9 +163,12 @@ final class DistanceService {
             }
         }
 
-        // 2) Resolve item/owner coordinate (with wide fallbacks — never nil after this)
-        guard let ownerCoord = await resolvedTargetCoordinate(for: item) else {
-            return "Distance unavailable"
+        // 2) Resolve item/owner coordinate
+        let ownerCoord = await resolvedTargetCoordinate(for: item)
+        guard let ownerCoord else {
+            // No coordinates available — show the owner's city text or a fallback
+            let cityText = await fetchOwnerCityText(ownerId: item.owner_id)
+            return cityText ?? "Location not set"
         }
 
         // 3) Resolve viewer coordinate — only persist THIS to the user coord cache
@@ -225,7 +240,11 @@ final class DistanceService {
         if let itemCoordinate = await fetchItemCoordinate(item) {
             return itemCoordinate
         }
-        return await fetchOwnerCoordinate(ownerId: item.owner_id)
+        if let ownerCoord = await fetchOwnerCoordinate(ownerId: item.owner_id) {
+            return ownerCoord
+        }
+        // Last resort: use the owner's profile city/state to geocode
+        return nil
     }
 
     private func fetchItemCoordinate(_ item: Item) async -> CLLocation? {
@@ -248,12 +267,13 @@ final class DistanceService {
     }
 
     private func fetchOwnerCoordinate(ownerId: String) async -> CLLocation? {
-        // Try user_default_address view first (use limit+first, NOT .single() — avoids error when no row)
+        // Try addresses table first (order by is_default to get default)
         do {
             let response = try await client
-                .from("user_default_address")
+                .from("addresses")
                 .select("user_id,latitude,longitude,city,state,country")
                 .eq("user_id", value: ownerId)
+                .order("is_default", ascending: false)
                 .limit(1)
                 .execute()
 
@@ -273,27 +293,48 @@ final class DistanceService {
                 }
             }
         } catch {
-            // table/view may not exist — fall through
+            print("[DistanceService] fetchOwnerCoordinate error (addresses): \(error)")
         }
 
-        // Fallback: try users table for city/state
+        return nil
+    }
+
+    /// Returns the owner's city/state as a display string (e.g. "Chennai, TN") when no coords exist.
+    private func fetchOwnerCityText(ownerId: String) async -> String? {
+        // Try addresses first
         do {
-            struct UsersCityRow: Decodable { let city: String?; let state: String? }
+            struct CityRow: Decodable { let city: String?; let state: String?; let country: String? }
             let response = try await client
-                .from("users")
-                .select("city,state")
-                .eq("id", value: ownerId)
+                .from("addresses")
+                .select("city,state,country")
+                .eq("user_id", value: ownerId)
+                .order("is_default", ascending: false)
                 .limit(1)
                 .execute()
-            let rows = try JSONDecoder().decode([UsersCityRow].self, from: response.data)
+            let rows = try JSONDecoder().decode([CityRow].self, from: response.data)
             if let row = rows.first {
                 let parts = [row.city, row.state]
                     .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
                     .filter { !$0.isEmpty }
-                    .joined(separator: ", ")
-                if !parts.isEmpty, let geocoded = await geocodeAddressString(parts) {
-                    return geocoded
-                }
+                if !parts.isEmpty { return parts.joined(separator: ", ") }
+            }
+        } catch { }
+
+        // Fallback: try user_profiles for city
+        do {
+            struct ProfileRow: Decodable { let city: String?; let state: String? }
+            let response = try await client
+                .from("user_profiles")
+                .select("city,state")
+                .eq("id", value: ownerId)
+                .limit(1)
+                .execute()
+            let rows = try JSONDecoder().decode([ProfileRow].self, from: response.data)
+            if let row = rows.first {
+                let parts = [row.city, row.state]
+                    .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+                if !parts.isEmpty { return parts.joined(separator: ", ") }
             }
         } catch { }
 
@@ -301,10 +342,18 @@ final class DistanceService {
     }
 
     private func resolveViewerCoordinate(for address: String) async -> CLLocation {
+        // 1) Try device GPS first (most accurate, no geocoding needed)
+        if let gps = await fetchDeviceGPS() {
+            saveUserCoordinates(gps, for: address)
+            return gps
+        }
+
+        // 2) Persistent cache from a previous session
         if let cached = getCachedUserCoordinates(for: address) {
             return cached
         }
 
+        // 3) Geocode the user's saved/default address
         var viewerCoord = await geocodeAddressString(address)
         if viewerCoord == nil {
             viewerCoord = await geocodeAddressString(defaultViewerAddress)
@@ -313,6 +362,27 @@ final class DistanceService {
         let resolvedViewerCoord = viewerCoord ?? fallbackOwnerCoordinate
         saveUserCoordinates(resolvedViewerCoord, for: address)
         return resolvedViewerCoord
+    }
+
+    /// Fetches the device's GPS location via AppLocationManager.
+    /// Caches the result for `gpsCacheTTL` seconds to avoid hammering the GPS.
+    private func fetchDeviceGPS() async -> CLLocation? {
+        // Return cached GPS if fresh enough
+        if let cached = cachedDeviceGPS,
+           let fetchDate = gpsLastFetchDate,
+           Date().timeIntervalSince(fetchDate) < gpsCacheTTL {
+            return cached
+        }
+
+        // Try to get device location (non-blocking — returns nil if no permission)
+        if let coord = await AppLocationManager.shared.currentCoordinates() {
+            let loc = CLLocation(latitude: coord.latitude, longitude: coord.longitude)
+            cachedDeviceGPS = loc
+            gpsLastFetchDate = Date()
+            return loc
+        }
+
+        return nil
     }
 
     // MARK: - Viewer geocoding with persistent caching
@@ -503,7 +573,10 @@ final class DistanceService {
     // MARK: - Formatting
 
     private func formatDistance(meters: Double) -> String {
-        if meters >= 1000 {
+        if meters < 100 {
+            // Very close — don't show misleading "0 km"
+            return "Nearby"
+        } else if meters >= 1000 {
             let km = meters / 1000.0
             return String(format: "%.1f km", km)
         } else {

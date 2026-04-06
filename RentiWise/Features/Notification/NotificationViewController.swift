@@ -92,14 +92,9 @@ class NotificationViewController: UIViewController {
             let session = try await SupabaseManager.shared.client.auth.session
             let userId = session.user.id.uuidString
             
-            // Fetch extension requests
-            let extensionRequests = try await fetchExtensionRequests(for: userId)
-            
-            // Fetch return requests  
-            let returnRequests = try await fetchReturnRequests(for: userId)
-
-            // Fetch general notifications (accept/reject/payment/pickup)
-            let generalNotifications = try await fetchGeneralNotifications(for: userId)
+            let extensionRequests = (try? await fetchExtensionRequests(for: userId)) ?? []
+            let returnRequests = (try? await fetchReturnRequests(for: userId)) ?? []
+            let generalNotifications = (try? await fetchGeneralNotifications(for: userId)) ?? []
             
             // Combine and sort by date
             var allNotifications = extensionRequests + returnRequests + generalNotifications
@@ -111,7 +106,7 @@ class NotificationViewController: UIViewController {
                 self.updateEmptyState()
             }
         } catch {
-            debugLog("[Notifications] Error loading notifications: \(error)")
+            print("[Notifications] EXACT ERROR: \(error)") // Helps debugging
             await MainActor.run {
                 self.updateEmptyState()
             }
@@ -266,43 +261,51 @@ class NotificationViewController: UIViewController {
             let created_at: String
         }
 
-        let response: [GeneralNotificationRow] = try await SupabaseManager.shared.client
-            .from("notifications")
-            .select("id, type, title, message, request_id, item_id, is_read, created_at")
-            .eq("user_id", value: userId)
-            .order("created_at", ascending: false)
-            .limit(50)
-            .execute()
-            .value
+        do {
+            let response: [GeneralNotificationRow] = try await SupabaseManager.shared.client
+                .from("notifications")
+                .select("id, type, title, message, request_id, item_id, is_read, created_at")
+                .eq("user_id", value: userId)
+                .order("created_at", ascending: false)
+                .limit(50)
+                .execute()
+                .value
+            
+            return response.map { row in
+                let dateFormatter = ISO8601DateFormatter()
+                // Sometimes Supabase returns fractional seconds which ISO8601DateFormatter fails on without options
+                dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                var date = dateFormatter.date(from: row.created_at)
+                if date == nil {
+                    let fallbackFormatter = ISO8601DateFormatter()
+                    date = fallbackFormatter.date(from: row.created_at) ?? Date()
+                }
 
-        return response.map { row in
-            let dateFormatter = ISO8601DateFormatter()
-            let date = dateFormatter.date(from: row.created_at) ?? Date()
+                let notifType: NotificationType
+                switch row.type {
+                case "request_accepted":  notifType = .requestAccepted
+                case "request_rejected":  notifType = .requestRejected
+                case "payment_received":  notifType = .paymentReceived
+                case "payment_confirmed": notifType = .paymentConfirmed
+                case "pickup_confirmed":  notifType = .pickupConfirmed
+                case "new_request":       notifType = .newRequest
+                case "nearby_item_posted": notifType = .nearbyItem
+                default:                  notifType = .requestAccepted
+                }
 
-            let notifType: NotificationType
-            switch row.type {
-            case "request_accepted":  notifType = .requestAccepted
-            case "request_rejected":  notifType = .requestRejected
-            case "payment_received":  notifType = .paymentReceived
-            case "payment_confirmed": notifType = .paymentConfirmed
-            case "pickup_confirmed":  notifType = .pickupConfirmed
-            case "new_request":       notifType = .newRequest
-            case "nearby_item_posted": notifType = .nearbyItem
-            default:                  notifType = .requestAccepted
+                return NotificationItem(
+                    id: row.id,
+                    type: notifType,
+                    requestId: row.request_id ?? "",
+                    itemId: row.item_id,
+                    itemTitle: row.title,
+                    itemImage: nil,
+                    borrowerId: "",
+                    message: row.message,
+                    createdAt: date ?? Date(),
+                    isRead: row.is_read ?? false
+                )
             }
-
-            return NotificationItem(
-                id: row.id,
-                type: notifType,
-                requestId: row.request_id ?? "",
-                itemId: row.item_id,
-                itemTitle: row.title,
-                itemImage: nil,
-                borrowerId: "",
-                message: row.message,
-                createdAt: date,
-                isRead: row.is_read ?? false
-            )
         }
     }
     

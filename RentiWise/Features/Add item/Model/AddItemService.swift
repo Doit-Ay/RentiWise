@@ -9,6 +9,7 @@ import Foundation
 import Supabase
 import UIKit
 import CoreGraphics
+import CoreLocation
 import ImageIO
 import MobileCoreServices
 
@@ -81,9 +82,10 @@ final class AddItemService: AddItemServicing {
             throw wrap(error, category: "Storage", hint: "Image upload failed (network/bucket/policy).")
         }
 
-        // 3) Insert into public.items and return the created row
+        // 3) Fetch location
         status?("Saving item…")
         let listingLocation = await fetchListingLocation(for: ownerId)
+        
         do {
             let item = try await insertItemRecord(
                 ownerId: ownerId,
@@ -131,6 +133,7 @@ final class AddItemService: AddItemServicing {
 
         status?("Updating item…")
         let listingLocation = await fetchListingLocation(for: ownerId)
+        
         do {
             let declaredValue = try await updateItemRecord(
                 itemId: itemId,
@@ -489,22 +492,26 @@ final class AddItemService: AddItemServicing {
 
         do {
             let rows: [DefaultAddressRow] = try await client
-                .from("user_default_address")
+                .from("addresses")
                 .select("latitude,longitude,city,state,country")
                 .eq("user_id", value: ownerId)
+                .order("is_default", ascending: false)
                 .limit(1)
                 .execute()
                 .value
 
-            guard let row = rows.first else { return nil }
+            guard let row = rows.first else {
+                return nil
+            }
             let parts = [row.city, row.state, row.country]
                 .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
                 .filter { !$0.isEmpty }
+            let addressText = parts.isEmpty ? nil : parts.joined(separator: ", ")
 
             return ListingLocation(
                 latitude: row.latitude,
                 longitude: row.longitude,
-                locationAddress: parts.isEmpty ? nil : parts.joined(separator: ", ")
+                locationAddress: addressText
             )
         } catch {
             debugLog("[AddItem] Failed to fetch listing location: \(error.localizedDescription)")

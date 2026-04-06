@@ -310,7 +310,7 @@ class DashboardLenderRequestViewController: UIViewController {
         ownDistLabel?.text = "Calculating distance..."
 
         // Pricing
-        computeAndDisplayTotals(durationUnits: durationUnits, pricePerDay: req.items?.price_per_day, rentalUnit: req.rental_unit)
+        computeAndDisplayTotals(rentalFee: booking?.rentalFee)
 
         // Buttons vs status row
         updateButtonsAndStatusUI(status: req.status)
@@ -869,21 +869,14 @@ class DashboardLenderRequestViewController: UIViewController {
 
     // MARK: - Pricing
 
-    private func computeAndDisplayTotals(durationUnits: Int?, pricePerDay: Double?, rentalUnit: String?) {
+    private func computeAndDisplayTotals(rentalFee: Double?) {
         secRateLabel?.text = "Direct via UPI"
 
-        guard let units = durationUnits, let p = pricePerDay else {
+        guard let rentalFee = rentalFee else {
             if totalLabel?.text?.isEmpty ?? true {
                 totalLabel?.text = nil
             }
             return
-        }
-
-        let rentalFee: Double
-        if rentalUnit == "hour" {
-            rentalFee = Double(units) * (p / 8.0)
-        } else {
-            rentalFee = Double(units) * p
         }
         
         totalLabel?.text = currencyFormatter.string(from: NSNumber(value: rentalFee))
