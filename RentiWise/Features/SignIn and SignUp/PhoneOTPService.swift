@@ -14,6 +14,12 @@ final class PhoneOTPService {
 
     private let client: SupabaseClient
 
+    private struct SendOTPResponse: Decodable {
+        let success: Bool?
+        let message: String?
+        let error: String?
+    }
+
     init(client: SupabaseClient = SupabaseManager.shared.client) {
         self.client = client
     }
@@ -30,10 +36,23 @@ final class PhoneOTPService {
             "phone": phone,
             "user_id": userId
         ]
-        let _ = try await client.functions.invoke(
+        let response: SendOTPResponse = try await client.functions.invoke(
             "send-phone-otp",
             options: .init(body: body)
         )
+
+        if let error = response.error?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !error.isEmpty {
+            throw NSError(domain: "PhoneOTP", code: 6, userInfo: [NSLocalizedDescriptionKey: error])
+        }
+
+        guard response.success == true else {
+            throw NSError(
+                domain: "PhoneOTP",
+                code: 7,
+                userInfo: [NSLocalizedDescriptionKey: response.message ?? "Failed to send OTP. Please try again."]
+            )
+        }
     }
 
     // MARK: - Verify OTP

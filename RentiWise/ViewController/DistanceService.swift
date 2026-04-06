@@ -58,6 +58,68 @@ final class DistanceService {
         return getCachedUserCoordinates(for: viewerAddress)
     }
 
+    /// Returns a stable numeric distance for ranking lists, preferring cached road distance and
+    /// otherwise falling back to a straight-line estimate. Missing target locations sort last.
+    func rankingDistanceMeters(for item: Item) async -> Double {
+        let viewerAddressString = SavedAddressesStore.shared.getDefaultSelectedAddress()?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let viewerAddress = (viewerAddressString?.isEmpty == false) ? viewerAddressString! : defaultViewerAddress
+        let viewerAddressHash = normalizeAddressKey(viewerAddress)
+        let viewerUserId = await SupabaseManager.shared.currentUserId()
+        let cacheItemId = itemHasSpecificLocation(item) ? item.id : nil
+
+        if let viewerUserId, viewerUserId.lowercased() == item.owner_id.lowercased() {
+            return 0
+        }
+
+        if let viewerUserId,
+           let cached = await fetchCachedDistanceMeters(
+                viewerUserId: viewerUserId,
+                ownerUserId: item.owner_id,
+                itemId: cacheItemId,
+                viewerAddressHash: viewerAddressHash,
+                transportType: "automobile",
+                ttl: ttl
+           ) {
+            return cached
+        }
+
+        guard let targetCoord = await resolvedTargetCoordinate(for: item) else {
+            return Double.greatestFiniteMagnitude
+        }
+
+        let viewerCoord = await resolveViewerCoordinate(for: viewerAddress)
+        return viewerCoord.distance(from: targetCoord)
+    }
+
+    /// Computes the viewer's distance to another user, typically used on lender/borrower cards.
+    func distanceText(toUserId userId: String) async -> String {
+        let viewerAddressString = SavedAddressesStore.shared.getDefaultSelectedAddress()?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let viewerAddress = (viewerAddressString?.isEmpty == false) ? viewerAddressString! : defaultViewerAddress
+        let viewerUserId = await SupabaseManager.shared.currentUserId()
+
+        if let viewerUserId, viewerUserId.lowercased() == userId.lowercased() {
+            return "Your address"
+        }
+
+        guard let targetCoord = await fetchOwnerCoordinate(ownerId: userId) else {
+            return "Distance unavailable"
+        }
+
+        let viewerCoord = await resolveViewerCoordinate(for: viewerAddress)
+        let straight = viewerCoord.distance(from: targetCoord)
+        let memKey = directionsCacheKey(viewer: viewerCoord, owner: targetCoord, transport: transportType)
+        if let cached = directionsCache.object(forKey: memKey as NSString)?.doubleValue {
+            return formatDistance(meters: cached)
+        }
+
+        if let meters = await routeDistanceMeters(from: viewerCoord, to: targetCoord, transport: transportType) {
+            directionsCache.setObject(NSNumber(value: meters), forKey: memKey as NSString)
+            return formatDistance(meters: meters)
+        }
+
+        return formatDistance(meters: straight)
+    }
+
     /// Returns a formatted distance string like "2.3 km" or "850 m".
     /// Owner-level cache (item_id = null).
     /// - Parameter progressiveUpdate: Optional closure called on the **Main thread** when
@@ -90,21 +152,12 @@ final class DistanceService {
         }
 
         // 2) Resolve item/owner coordinate (with wide fallbacks — never nil after this)
-        let itemCoordinate = await fetchItemCoordinate(item)
-        let resolvedOwnerCoordinate: CLLocation?
-        if let itemCoordinate {
-            resolvedOwnerCoordinate = itemCoordinate
-        } else {
-            resolvedOwnerCoordinate = await fetchOwnerCoordinate(ownerId: item.owner_id)
+        guard let ownerCoord = await resolvedTargetCoordinate(for: item) else {
+            return "Distance unavailable"
         }
-        let ownerCoord = resolvedOwnerCoordinate ?? fallbackOwnerCoordinate
 
         // 3) Resolve viewer coordinate — only persist THIS to the user coord cache
-        var viewerCoord = await geocodeAddressString(viewerAddress)
-        if viewerCoord == nil { viewerCoord = await geocodeAddressString(defaultViewerAddress) }
-        let resolvedViewerCoord = viewerCoord ?? fallbackOwnerCoordinate
-        // Persist the viewer's resolved coordinate so future launches skip geocoding
-        saveUserCoordinates(resolvedViewerCoord, for: viewerAddress)
+        let resolvedViewerCoord = await resolveViewerCoordinate(for: viewerAddress)
 
         // 4) INSTANT straight-line distance — guarantees we always return something
         let straight = resolvedViewerCoord.distance(from: ownerCoord)
@@ -166,6 +219,13 @@ final class DistanceService {
 
         let locationAddress = item.location_address?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return !locationAddress.isEmpty
+    }
+
+    private func resolvedTargetCoordinate(for item: Item) async -> CLLocation? {
+        if let itemCoordinate = await fetchItemCoordinate(item) {
+            return itemCoordinate
+        }
+        return await fetchOwnerCoordinate(ownerId: item.owner_id)
     }
 
     private func fetchItemCoordinate(_ item: Item) async -> CLLocation? {
@@ -238,6 +298,21 @@ final class DistanceService {
         } catch { }
 
         return nil
+    }
+
+    private func resolveViewerCoordinate(for address: String) async -> CLLocation {
+        if let cached = getCachedUserCoordinates(for: address) {
+            return cached
+        }
+
+        var viewerCoord = await geocodeAddressString(address)
+        if viewerCoord == nil {
+            viewerCoord = await geocodeAddressString(defaultViewerAddress)
+        }
+
+        let resolvedViewerCoord = viewerCoord ?? fallbackOwnerCoordinate
+        saveUserCoordinates(resolvedViewerCoord, for: address)
+        return resolvedViewerCoord
     }
 
     // MARK: - Viewer geocoding with persistent caching

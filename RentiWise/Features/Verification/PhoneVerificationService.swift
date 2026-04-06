@@ -48,9 +48,15 @@ final class PhoneVerificationService {
             throw VerificationError.serverError("Failed to reach OTP service: \(error.localizedDescription)")
         }
             
-        if let errString = edgeResp.error, !errString.isEmpty {
+        if let errString = edgeResp.error?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !errString.isEmpty {
             debugLog("[PhoneOTP] Server error: \(errString)")
             throw VerificationError.serverError(errString)
+        }
+
+        guard edgeResp.success == true else {
+            let message = edgeResp.message?.trimmingCharacters(in: .whitespacesAndNewlines)
+            throw VerificationError.serverError(message?.isEmpty == false ? message! : "Failed to send OTP. Please try again.")
         }
 
         debugLog("[PhoneOTP] SMS sent successfully to \(e164)")

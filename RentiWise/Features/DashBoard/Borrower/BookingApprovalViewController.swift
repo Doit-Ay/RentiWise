@@ -156,7 +156,7 @@ class BookingApprovalViewController: UIViewController {
     private lazy var sqlDateFormatter: DateFormatter = {
         let df = DateFormatter()
         df.calendar = Calendar(identifier: .gregorian)
-        df.timeZone = TimeZone(secondsFromGMT: 0)
+        df.timeZone = .current
         df.dateFormat = "yyyy-MM-dd"
         return df
     }()
@@ -191,6 +191,9 @@ class BookingApprovalViewController: UIViewController {
     private var refreshTimer: Timer?
     private let brandTeal = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1)
     private let statusWarningColor = UIColor(red: 0xBD/255.0, green: 0x83/255.0, blue: 0x2F/255.0, alpha: 1)
+    private var loadingOverlay: UIView?
+    private let loadingIndicator = UIActivityIndicatorView(style: .large)
+    private let loadingLabel = UILabel()
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -267,10 +270,14 @@ class BookingApprovalViewController: UIViewController {
         // Ensure owner image is circular
         ownerProfileImage?.clipsToBounds = true
         ownerProfileImage?.contentMode = .scaleAspectFill
+        ownNameLabel?.numberOfLines = 2
+        ownNameLabel?.lineBreakMode = .byTruncatingTail
 
         // Round product image corners
         imageprod?.clipsToBounds = true
         imageprod?.layer.cornerRadius = 16
+
+        setupLoadingOverlay()
 
         // Address label: allow full multi-line text without ellipses
         addressLabel.numberOfLines = 0
@@ -309,6 +316,10 @@ class BookingApprovalViewController: UIViewController {
 
         // Ensure wrapping uses the current width for intrinsic sizing
         addressLabel.preferredMaxLayoutWidth = addressLabel.bounds.width
+
+        if let overlay = loadingOverlay, !overlay.isHidden {
+            view.bringSubviewToFront(overlay)
+        }
     }
     
     override func viewWillAppear(_ animated: Bool) {
@@ -391,6 +402,9 @@ class BookingApprovalViewController: UIViewController {
         // Everything requiring a network call is deferred to here.
         Task { [weak self] in
             guard let self, let req = self.request else { return }
+            await MainActor.run {
+                self.setLoading(true, message: "Loading booking details...")
+            }
             let isHistoryMode = await MainActor.run { self.mode == .history }
 
             // Refresh the request row itself first
@@ -432,6 +446,7 @@ class BookingApprovalViewController: UIViewController {
 
             // Start periodic refresh after initial load completes
             await MainActor.run {
+                self.setLoading(false)
                 self.startRefreshTimer()
             }
         }
@@ -624,8 +639,7 @@ class BookingApprovalViewController: UIViewController {
                 returnButton?.isEnabled = true
                 returnButton?.alpha = 1.0
             case "accepted":
-                // Extension/return was accepted — re-enable so user can extend again or return
-                returnButton?.setTitle(fallbackTitle, for: .normal)
+                returnButton?.setTitle("Verify Return", for: .normal)
                 returnButton?.backgroundColor = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1)
                 returnButton?.isEnabled = true
                 returnButton?.alpha = 1.0
@@ -651,9 +665,8 @@ class BookingApprovalViewController: UIViewController {
         extendButton?.setAttributedTitle(nil, for: .normal)
         extendButton?.setTitleColor(.white, for: .normal)
 
-        // CROSS-DISABLE: If return is pending, extending is not allowed
-        // (Once return is accepted, both buttons re-enable so user can extend again or return)
-        if currentReturnRequestStatus == "pending" {
+        // CROSS-DISABLE: If a return handoff is in progress, extending is not allowed.
+        if currentReturnRequestStatus == "pending" || currentReturnRequestStatus == "accepted" {
             extendButton?.setTitle("Extend Rental", for: .normal)
             extendButton?.isEnabled = false
             extendButton?.alpha = 0.5
@@ -713,8 +726,11 @@ class BookingApprovalViewController: UIViewController {
             if isExtension {
                 label.text = "Status: Request Accepted ✓"
             } else {
-                label.text = "Status: Accepted\nDeposit Credited ✓"
+                label.text = "Status: Return Approved\nEnter lender code"
             }
+            label.textColor = .systemGreen
+        case "completed":
+            label.text = "Status: Completed ✓"
             label.textColor = .systemGreen
         case "rejected":
             label.text = "Status: Rejected"
@@ -1001,7 +1017,7 @@ class BookingApprovalViewController: UIViewController {
         extendVC.request = req
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
-        dateFormatter.timeZone = TimeZone(secondsFromGMT: 0)
+        dateFormatter.timeZone = .current
         extendVC.originalEndDate = dateFormatter.date(from: req.end_date)
         
         // Instantly update button state when request is submitted
@@ -1028,6 +1044,25 @@ class BookingApprovalViewController: UIViewController {
         // If return is pending → act as "Cancel Return"
         if currentReturnRequestStatus == "pending" {
             cancelReturnRequest()
+            return
+        }
+
+        if currentReturnRequestStatus == "accepted" {
+            let otpVC = BorrowerReturnOTPInputViewController()
+            otpVC.requestId = req.id
+            otpVC.onVerified = { [weak self] in
+                guard let self else { return }
+                self.currentReturnRequestStatus = "completed"
+                if var currentRequest = self.request {
+                    currentRequest.status = "completed"
+                    self.request = currentRequest
+                }
+                self.status = .completed
+                self.updateReturnButtonState()
+                self.updateExtensionButtonState()
+                NotificationCenter.default.post(name: Notification.Name("requestsShouldRefresh"), object: nil)
+            }
+            navigationController?.pushViewController(otpVC, animated: true)
             return
         }
 
@@ -1540,6 +1575,9 @@ class BookingApprovalViewController: UIViewController {
 
         // Network-dependent data (owner info, address, amounts) is loaded
         // in viewDidAppear so it doesn't block/slow the push animation.
+        let participantFallback = fallbackParticipantName
+        ownNameLabel?.text = mode == .history ? "Loading borrower..." : "Loading lender..."
+        renderOwnerInitials(fullName: participantFallback)
     }
 
     private func selectClause() -> String {
@@ -1887,6 +1925,20 @@ class BookingApprovalViewController: UIViewController {
             }
 
             if let profilesData = try? await client
+                .from("user_profiles")
+                .select("full_name,avatar_url")
+                .eq("id", value: ownerId)
+                .single()
+                .execute()
+                .data as? Data {
+                let dto = try JSONDecoder().decode(ProfilesDTO.self, from: profilesData)
+                await MainActor.run { [weak self] in
+                    self?.renderOwner(fullName: dto.full_name, avatarURLString: dto.avatar_url)
+                }
+                return
+            }
+
+            if let profilesData = try? await client
                 .from("profiles")
                 .select("full_name,avatar_url")
                 .eq("id", value: ownerId)
@@ -1901,17 +1953,17 @@ class BookingApprovalViewController: UIViewController {
             }
 
             await MainActor.run { [weak self] in
-                self?.renderOwner(fullName: "Owner", avatarURLString: nil)
+                self?.renderOwner(fullName: self?.fallbackParticipantName, avatarURLString: nil)
             }
         } catch {
             await MainActor.run { [weak self] in
-                self?.renderOwner(fullName: "Owner", avatarURLString: nil)
+                self?.renderOwner(fullName: self?.fallbackParticipantName, avatarURLString: nil)
             }
         }
     }
 
     private func renderOwner(fullName: String?, avatarURLString: String?) {
-        let name = (fullName?.isEmpty == false) ? fullName! : "Owner"
+        let name = formattedDisplayName(fullName, fallback: fallbackParticipantName)
         ownNameLabel?.text = name
 
         if let avatar = avatarURLString, !avatar.isEmpty, let url = urlForAvatarPath(avatar) {
@@ -1955,6 +2007,23 @@ class BookingApprovalViewController: UIViewController {
         return combined.isEmpty ? "?" : combined
     }
 
+    private var fallbackParticipantName: String {
+        mode == .history ? "Borrower" : "Lender"
+    }
+
+    private func formattedDisplayName(_ rawValue: String?, fallback: String) -> String {
+        let cleaned = rawValue?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .split(whereSeparator: \.isWhitespace)
+            .map { token in
+                let lowercased = token.lowercased()
+                return lowercased.prefix(1).uppercased() + lowercased.dropFirst()
+            }
+            .joined(separator: " ") ?? ""
+
+        return cleaned.isEmpty ? fallback : cleaned
+    }
+
     private func drawInitialsImage(initials: String, size: CGSize) -> UIImage? {
         let rect = CGRect(origin: .zero, size: size)
         let renderer = UIGraphicsImageRenderer(size: size, format: UIGraphicsImageRendererFormat.default())
@@ -1982,6 +2051,59 @@ class BookingApprovalViewController: UIViewController {
             return URL(string: path)
         } else {
             return StorageURLBuilder.publicFileURL(for: path)
+        }
+    }
+
+    private func setupLoadingOverlay() {
+        guard loadingOverlay == nil else { return }
+
+        let overlay = UIView()
+        overlay.translatesAutoresizingMaskIntoConstraints = false
+        overlay.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.92)
+        overlay.isHidden = true
+
+        loadingIndicator.translatesAutoresizingMaskIntoConstraints = false
+        loadingIndicator.hidesWhenStopped = true
+        loadingIndicator.color = brandTeal
+
+        loadingLabel.translatesAutoresizingMaskIntoConstraints = false
+        loadingLabel.font = .systemFont(ofSize: 15, weight: .medium)
+        loadingLabel.textColor = .secondaryLabel
+        loadingLabel.textAlignment = .center
+        loadingLabel.text = "Loading booking details..."
+
+        overlay.addSubview(loadingIndicator)
+        overlay.addSubview(loadingLabel)
+        view.addSubview(overlay)
+
+        NSLayoutConstraint.activate([
+            overlay.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            overlay.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            overlay.topAnchor.constraint(equalTo: view.topAnchor),
+            overlay.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+
+            loadingIndicator.centerXAnchor.constraint(equalTo: overlay.centerXAnchor),
+            loadingIndicator.centerYAnchor.constraint(equalTo: overlay.centerYAnchor, constant: -12),
+
+            loadingLabel.topAnchor.constraint(equalTo: loadingIndicator.bottomAnchor, constant: 12),
+            loadingLabel.centerXAnchor.constraint(equalTo: overlay.centerXAnchor),
+            loadingLabel.leadingAnchor.constraint(greaterThanOrEqualTo: overlay.leadingAnchor, constant: 24),
+            loadingLabel.trailingAnchor.constraint(lessThanOrEqualTo: overlay.trailingAnchor, constant: -24)
+        ])
+
+        loadingOverlay = overlay
+    }
+
+    private func setLoading(_ loading: Bool, message: String = "Loading booking details...") {
+        loadingLabel.text = message
+        loadingOverlay?.isHidden = !loading
+        if loading {
+            loadingIndicator.startAnimating()
+            if let overlay = loadingOverlay {
+                view.bringSubviewToFront(overlay)
+            }
+        } else {
+            loadingIndicator.stopAnimating()
         }
     }
 

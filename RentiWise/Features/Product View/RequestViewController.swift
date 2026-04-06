@@ -665,39 +665,21 @@ class RequestViewController: UIViewController {
         )
         
         do {
-            _ = try await SupabaseManager.shared.client
+            struct RequestIdRow: Decodable { let id: String }
+
+            let insertedRequest: RequestIdRow = try await SupabaseManager.shared.client
                 .from("requests")
                 .insert(row)
+                .select("id")
+                .single()
                 .execute()
-            
-            // Notify the lender about the new rental request
-            // Fetch the just-created request ID so the notification links correctly
-            do {
-                struct RequestIdRow: Decodable { let id: String }
-                let recentRows: [RequestIdRow] = try await SupabaseManager.shared.client
-                    .from("requests")
-                    .select("id")
-                    .eq("item_id", value: itemObj.id)
-                    .eq("borrower_id", value: currentUserId)
-                    .eq("status", value: "pending")
-                    .order("created_at", ascending: false)
-                    .limit(1)
-                    .execute()
-                    .value
-                let newRequestId = recentRows.first?.id ?? ""
-                RemoteNotificationService.sendNewRequest(
-                    requestId: newRequestId,
-                    ownerId: itemObj.owner_id,
-                    itemTitle: itemObj.title
-                )
-            } catch {
-                // Fire-and-forget: still send notification without request ID
-                RemoteNotificationService.sendNewRequest(
-                    requestId: "",
-                    ownerId: itemObj.owner_id,
-                    itemTitle: itemObj.title
-                )
-            }
+                .value
+
+            RemoteNotificationService.sendNewRequest(
+                requestId: insertedRequest.id,
+                ownerId: itemObj.owner_id,
+                itemTitle: itemObj.title
+            )
             
             NotificationCenter.default.post(name: Notification.Name("rentalRequestCreated"), object: nil, userInfo: ["item_id": itemObj.id])
 

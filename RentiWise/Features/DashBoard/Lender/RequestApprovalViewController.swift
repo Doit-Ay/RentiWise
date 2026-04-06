@@ -21,6 +21,7 @@ class RequestApprovalViewController: UIViewController {
     private var requestId: String = ""
     private var bookingId: String = ""
     private var requestData: [String: Any] = [:]
+    private var currentSubRequestStatus: String = "pending"
     
     // MARK: - IBOutlets
     
@@ -132,6 +133,7 @@ class RequestApprovalViewController: UIViewController {
                 debugLog("[RequestApproval] Return request loaded: \(request.id)")
                 
                 await MainActor.run {
+                    self.currentSubRequestStatus = request.status.lowercased()
                     self.returnNotesLabel?.text = request.notes?.isEmpty == false ? request.notes : "No notes provided"
                     
                     if let proofMedia = request.proof_media, let firstImage = proofMedia.first {
@@ -156,6 +158,7 @@ class RequestApprovalViewController: UIViewController {
                 debugLog("[RequestApproval] Extension request loaded: \(request.id)")
                 
                 await MainActor.run {
+                    self.currentSubRequestStatus = request.status.lowercased()
                     self.originalEndDateLabel?.text = "Original End: \(request.original_end_date)"
                     self.newEndDateLabel?.text = "New End: \(request.new_end_date)"
                     self.additionalDaysLabel?.text = "\(request.additional_days) additional days - ₹\(String(format: "%.0f", request.additional_cost))"
@@ -284,6 +287,46 @@ class RequestApprovalViewController: UIViewController {
             returnDetailsView?.isHidden = true
             extensionDetailsView?.isHidden = false
         }
+
+        updateActionButtons()
+    }
+
+    private func updateActionButtons() {
+        guard let acceptButton, let rejectButton else { return }
+
+        acceptButton.isHidden = false
+        acceptButton.isEnabled = true
+        acceptButton.alpha = 1
+        rejectButton.isHidden = false
+        rejectButton.isEnabled = true
+        rejectButton.alpha = 1
+
+        if requestType == .extensionRequest {
+            acceptButton.setTitle("Accept", for: .normal)
+            rejectButton.setTitle("Reject", for: .normal)
+            return
+        }
+
+        switch currentSubRequestStatus {
+        case "accepted":
+            acceptButton.setTitle("Show Return Code", for: .normal)
+            rejectButton.isHidden = true
+            rejectButton.isEnabled = false
+        case "completed":
+            acceptButton.setTitle("Return Verified", for: .normal)
+            acceptButton.isEnabled = false
+            acceptButton.alpha = 0.6
+            rejectButton.isHidden = true
+            rejectButton.isEnabled = false
+        case "rejected":
+            acceptButton.setTitle("Accept Return", for: .normal)
+            rejectButton.setTitle("Rejected", for: .normal)
+            rejectButton.isEnabled = false
+            rejectButton.alpha = 0.6
+        default:
+            acceptButton.setTitle("Accept Return", for: .normal)
+            rejectButton.setTitle("Reject", for: .normal)
+        }
     }
     
     private func setupProofImageView(with path: String) {
@@ -342,17 +385,30 @@ class RequestApprovalViewController: UIViewController {
     // MARK: - Actions
     
     @IBAction func acceptButtonTapped(_ sender: UIButton) {
+        if requestType == .returnRequest {
+            if currentSubRequestStatus == "completed" {
+                showAlert(title: "Return Completed", message: "This return has already been verified and completed.")
+                return
+            }
+
+            let borrowerName = borrowerNameLabel?.text ?? "borrower"
+            let title = currentSubRequestStatus == "accepted" ? "Show Return Code?" : "Accept Return?"
+            let msg = currentSubRequestStatus == "accepted"
+                ? "Open the return code screen for \(borrowerName) so they can complete the handoff."
+                : "Approve this return for \(borrowerName) and generate a return code for the handoff."
+
+            showConfirmation(title: title, message: msg) { [weak self] in
+                self?.openReturnCodeScreen()
+            }
+            return
+        }
+
         let borrowerName = borrowerNameLabel?.text ?? "borrower"
         let title: String
         let msg: String
         
-        if requestType == .extensionRequest {
-            title = "Accept Extension?"
-            msg = "Are you sure you want to accept this extension by - \(borrowerName)?"
-        } else {
-            title = "Accept Return?"
-            msg = "Are you sure? Deposit will be released for - \(borrowerName)."
-        }
+        title = "Accept Extension?"
+        msg = "Are you sure you want to accept this extension by - \(borrowerName)?"
         
         showConfirmation(title: title, message: msg) {
             Task {
@@ -392,31 +448,6 @@ class RequestApprovalViewController: UIViewController {
                 .update(["status": status])
                 .eq("id", value: requestId)
                 .execute()
-            
-            // If accepting a return request, also complete the main booking
-            if requestType == .returnRequest && status == "accepted" {
-                struct BookingItemRow: Decodable {
-                    let item_id: String
-                    let owner_id: String
-                }
-
-                let _ = try await SupabaseManager.shared.client
-                    .from("requests")
-                    .update(["status": "completed"])
-                    .eq("id", value: bookingId)
-                    .execute()
-
-                if let bookingData = try? await SupabaseManager.shared.client
-                    .from("requests")
-                    .select("item_id,owner_id")
-                    .eq("id", value: bookingId)
-                    .single()
-                    .execute(),
-                   let booking = try? JSONDecoder().decode(BookingItemRow.self, from: bookingData.data) {
-                    try await syncItemAvailabilityIfPossible(itemId: booking.item_id, ownerId: booking.owner_id, isActive: true)
-                }
-                debugLog("[RequestApproval] Main request \(bookingId) marked as completed.")
-            }
             
             // If accepting an extension request, update the main booking end_date and total_price
             if requestType == .extensionRequest && status == "accepted" {
@@ -469,19 +500,12 @@ class RequestApprovalViewController: UIViewController {
             }
             
             await MainActor.run {
+                self.currentSubRequestStatus = status.lowercased()
+                self.updateActionButtons()
                 let message = status == "accepted" ? "Request has been accepted" : "Request has been rejected"
 
                 // Notify all observers (LenderView, BookingApprovalVC) so they refresh
                 NotificationCenter.default.post(name: Notification.Name("requestsShouldRefresh"), object: nil)
-
-                // If return was accepted, also fire the booking-completed notification
-                if self.requestType == .returnRequest && status == "accepted" {
-                    NotificationCenter.default.post(
-                        name: BookingApprovalViewController.requestCancelledNotification,
-                        object: nil,
-                        userInfo: ["requestId": self.bookingId, "status": "completed"]
-                    )
-                }
 
                 self.showAlert(title: "Success", message: message) {
                     self.navigationController?.popViewController(animated: true)
@@ -493,6 +517,18 @@ class RequestApprovalViewController: UIViewController {
                 self.showAlert(title: "Error", message: "Failed to update request status")
             }
         }
+    }
+
+    private func openReturnCodeScreen() {
+        let otpVC = LenderReturnOTPViewController()
+        otpVC.requestId = bookingId
+        otpVC.borrowerName = borrowerNameLabel?.text ?? "Borrower"
+        otpVC.onCodeGenerated = { [weak self] in
+            guard let self else { return }
+            self.currentSubRequestStatus = "accepted"
+            NotificationCenter.default.post(name: Notification.Name("requestsShouldRefresh"), object: nil)
+        }
+        navigationController?.pushViewController(otpVC, animated: true)
     }
     
     // MARK: - Helpers

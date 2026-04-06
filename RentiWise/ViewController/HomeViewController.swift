@@ -177,6 +177,7 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
     // MARK: - Trending collection
     var trendingCollectionView: UICollectionView?
     var trendingItems: [Item] = []
+    var trendingSortGeneration: UUID?
 
     // Owner name cache for trending items
     var ownerNameCache: [String: String] = [:]

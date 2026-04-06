@@ -14,6 +14,7 @@ final class LenderReturnOTPViewController: UIViewController {
     // MARK: - Inputs
     var requestId: String = ""
     var borrowerName: String = ""
+    var onCodeGenerated: (() -> Void)?
 
     // MARK: - UI
     private let otpLabel = UILabel()
@@ -87,6 +88,7 @@ final class LenderReturnOTPViewController: UIViewController {
     private func generateOTP() {
         spinner.startAnimating()
         otpLabel.text = "----"
+        statusLabel.text = "Generating return code..."
         regenerateButton.isEnabled = false
 
         Task {
@@ -95,8 +97,18 @@ final class LenderReturnOTPViewController: UIViewController {
                     .invoke("generate-otp", options: .init(body: GenerateReturnOTPRequest(request_id: requestId, type: "return")))
 
                 await MainActor.run {
+                    if let errorMessage = result.error?.trimmingCharacters(in: .whitespacesAndNewlines),
+                       !errorMessage.isEmpty {
+                        self.spinner.stopAnimating()
+                        self.otpLabel.text = "Error"
+                        self.statusLabel.text = errorMessage
+                        self.regenerateButton.isEnabled = true
+                        return
+                    }
+
                     self.spinner.stopAnimating()
                     self.otpLabel.text = result.otp
+                    self.onCodeGenerated?()
                     self.startCooldown()
                 }
             } catch {
@@ -141,4 +153,7 @@ private struct GenerateReturnOTPRequest: Encodable {
 
 private struct GenerateOTPResponse: Decodable {
     let otp: String
+    let success: Bool?
+    let error: String?
+    let expires_at: String?
 }

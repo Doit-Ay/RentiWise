@@ -348,7 +348,7 @@ final class PickupOTPService {
 
         let sqlDateFormatter = DateFormatter()
         sqlDateFormatter.calendar = Calendar(identifier: .gregorian)
-        sqlDateFormatter.timeZone = TimeZone(secondsFromGMT: 0)
+        sqlDateFormatter.timeZone = .current
         sqlDateFormatter.dateFormat = "yyyy-MM-dd"
 
         var dayCount = 1

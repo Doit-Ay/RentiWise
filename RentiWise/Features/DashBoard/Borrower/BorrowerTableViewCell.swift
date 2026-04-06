@@ -163,7 +163,7 @@ class BorrowerTableViewCell: UITableViewCell {
             // No price available -> show date range
             let sql = DateFormatter()
             sql.calendar = Calendar(identifier: .gregorian)
-            sql.timeZone = TimeZone(secondsFromGMT: 0)
+            sql.timeZone = .current
             sql.dateFormat = "yyyy-MM-dd"
 
             let display = DateFormatter()

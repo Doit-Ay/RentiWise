@@ -168,6 +168,7 @@ class NotificationViewController: UIViewController {
                 id: ext.id,
                 type: .extensionRequest,
                 requestId: ext.request_id,
+                itemId: nil,
                 itemTitle: ext.requests.items.title,
                 itemImage: ext.requests.items.images.first,
                 borrowerId: ext.requests.borrower_id,
@@ -235,6 +236,7 @@ class NotificationViewController: UIViewController {
                 id: ret.id,
                 type: .returnRequest,
                 requestId: ret.request_id,
+                itemId: nil,
                 itemTitle: ret.requests.items.title,
                 itemImage: itemImage,
                 borrowerId: ret.requests.borrower_id,
@@ -259,13 +261,14 @@ class NotificationViewController: UIViewController {
             let title: String
             let message: String
             let request_id: String?
+            let item_id: String?
             let is_read: Bool?
             let created_at: String
         }
 
         let response: [GeneralNotificationRow] = try await SupabaseManager.shared.client
             .from("notifications")
-            .select("id, type, title, message, request_id, is_read, created_at")
+            .select("id, type, title, message, request_id, item_id, is_read, created_at")
             .eq("user_id", value: userId)
             .order("created_at", ascending: false)
             .limit(50)
@@ -292,6 +295,7 @@ class NotificationViewController: UIViewController {
                 id: row.id,
                 type: notifType,
                 requestId: row.request_id ?? "",
+                itemId: row.item_id,
                 itemTitle: row.title,
                 itemImage: nil,
                 borrowerId: "",
@@ -379,8 +383,9 @@ extension NotificationViewController: UITableViewDelegate {
                 openLenderRequestScreen(requestId: notification.requestId)
             }
         case .nearbyItem:
-            if !notification.requestId.isEmpty {
-                openProductScreen(itemId: notification.requestId)
+            let itemId = notification.itemId ?? notification.requestId
+            if !itemId.isEmpty {
+                openProductScreen(itemId: itemId)
             }
         }
     }
@@ -517,6 +522,7 @@ struct NotificationItem {
     let id: String
     let type: NotificationType
     let requestId: String
+    let itemId: String?
     let itemTitle: String
     let itemImage: String?
     let borrowerId: String

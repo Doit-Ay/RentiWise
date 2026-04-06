@@ -55,7 +55,7 @@ final class MyRentalsViewController: UIViewController {
     private lazy var sqlDateFormatter: DateFormatter = {
         let df = DateFormatter()
         df.calendar = Calendar(identifier: .gregorian)
-        df.timeZone = TimeZone(secondsFromGMT: 0)
+        df.timeZone = .current
         df.dateFormat = "yyyy-MM-dd"
         return df
     }()

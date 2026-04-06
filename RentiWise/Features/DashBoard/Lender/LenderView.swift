@@ -594,7 +594,7 @@ extension LenderView: UITableViewDataSource {
             } else {
                 let sql = DateFormatter()
                 sql.calendar = Calendar(identifier: .gregorian)
-                sql.timeZone = TimeZone(secondsFromGMT: 0)
+                sql.timeZone = .current
                 sql.dateFormat = "yyyy-MM-dd"
                 let display = DateFormatter()
                 display.calendar = Calendar(identifier: .gregorian)

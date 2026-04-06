@@ -46,28 +46,44 @@ extension HomeViewController {
     }
 
     func updateTrendingItems(from items: [Item]) {
-        let sorted = items.sorted { lhs, rhs in
-            let lhsRating = lhs.average_rating ?? 0
-            let rhsRating = rhs.average_rating ?? 0
-            if lhsRating != rhsRating {
-                return lhsRating > rhsRating
-            }
+        let requestGeneration = UUID()
+        trendingSortGeneration = requestGeneration
 
-            let lhsReviews = lhs.review_count ?? 0
-            let rhsReviews = rhs.review_count ?? 0
-            if lhsReviews != rhsReviews {
-                return lhsReviews > rhsReviews
-            }
-
-            if lhs.hasActiveBoost != rhs.hasActiveBoost {
-                return lhs.hasActiveBoost && !rhs.hasActiveBoost
-            }
-
-            return (lhs.created_at ?? .distantPast) > (rhs.created_at ?? .distantPast)
-        }
-
-        trendingItems = Array(sorted.prefix(6))
+        let fallbackSorted = items.sorted(by: isPreferredTrendingItem(_:over:))
+        trendingItems = Array(fallbackSorted.prefix(6))
         trendingCollectionView?.reloadData()
+
+        Task { [weak self] in
+            guard let self else { return }
+
+            let rankedItems = await withTaskGroup(of: (Item, Double).self, returning: [(Item, Double)].self) { group in
+                for item in items {
+                    group.addTask {
+                        let distance = await DistanceService.shared.rankingDistanceMeters(for: item)
+                        return (item, distance)
+                    }
+                }
+
+                var results: [(Item, Double)] = []
+                for await result in group {
+                    results.append(result)
+                }
+                return results
+            }
+
+            let distanceSorted = rankedItems.sorted { lhs, rhs in
+                if lhs.1 != rhs.1 {
+                    return lhs.1 < rhs.1
+                }
+                return self.isPreferredTrendingItem(lhs.0, over: rhs.0)
+            }.map(\.0)
+
+            await MainActor.run {
+                guard self.trendingSortGeneration == requestGeneration else { return }
+                self.trendingItems = Array(distanceSorted.prefix(6))
+                self.trendingCollectionView?.reloadData()
+            }
+        }
     }
 
     func resolveTrendingOwnerName(for ownerId: String, completion: @escaping (String) -> Void) {
@@ -87,6 +103,26 @@ extension HomeViewController {
             ownerNameCache[ownerId] = display
             completion(display)
         }
+    }
+
+    private func isPreferredTrendingItem(_ lhs: Item, over rhs: Item) -> Bool {
+        let lhsRating = lhs.average_rating ?? 0
+        let rhsRating = rhs.average_rating ?? 0
+        if lhsRating != rhsRating {
+            return lhsRating > rhsRating
+        }
+
+        let lhsReviews = lhs.review_count ?? 0
+        let rhsReviews = rhs.review_count ?? 0
+        if lhsReviews != rhsReviews {
+            return lhsReviews > rhsReviews
+        }
+
+        if lhs.hasActiveBoost != rhs.hasActiveBoost {
+            return lhs.hasActiveBoost && !rhs.hasActiveBoost
+        }
+
+        return (lhs.created_at ?? .distantPast) > (rhs.created_at ?? .distantPast)
     }
 }
 

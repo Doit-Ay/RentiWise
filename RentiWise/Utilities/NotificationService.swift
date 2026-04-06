@@ -80,7 +80,7 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
             guard let self else { return }
             let formatter = DateFormatter()
             formatter.calendar = Calendar(identifier: .gregorian)
-            formatter.timeZone = TimeZone(secondsFromGMT: 0)
+            formatter.timeZone = .current
             formatter.dateFormat = "yyyy-MM-dd"
 
             guard let endDate = formatter.date(from: endDateString) else { return }

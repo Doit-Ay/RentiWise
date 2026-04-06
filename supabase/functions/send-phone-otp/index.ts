@@ -6,19 +6,72 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+const json = (payload: Record<string, unknown>, status = 200) =>
+  new Response(JSON.stringify(payload), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+
 serve(async (req: Request) => {
+  if (req.method !== "POST") {
+    return json({ error: "Method not allowed" }, 405);
+  }
+
   try {
     const { phone, user_id } = await req.json();
     if (!phone || !user_id) {
-      return new Response(JSON.stringify({ error: "phone and user_id required" }), {
-        status: 400,
-        headers: { "Content-Type": "application/json" },
-      });
+      return json({ error: "phone and user_id required" }, 400);
     }
 
-    console.log(`[send-phone-otp] Sending OTP to ${phone} for user ${user_id}`);
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return json({ error: "Missing authorization token" }, 401);
+    }
 
-    // Generate 6-digit OTP
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!supabaseUrl || !anonKey || !serviceKey) {
+      return json({ error: "Supabase environment variables are not configured." }, 500);
+    }
+
+    const authClient = createClient(supabaseUrl, anonKey, {
+      global: {
+        headers: {
+          Authorization: authHeader,
+        },
+      },
+    });
+
+    const {
+      data: { user },
+      error: authError,
+    } = await authClient.auth.getUser();
+
+    if (authError || !user) {
+      console.error("[send-phone-otp] Auth error:", authError?.message ?? "Unauthorized");
+      return json({ error: "Unauthorized" }, 401);
+    }
+
+    if (user.id !== user_id) {
+      return json({ error: "Authenticated user does not match the requested user." }, 403);
+    }
+
+    const cleanPhone = String(phone).trim().replace(/^\+/, "");
+    if (!/^\d{10,15}$/.test(cleanPhone)) {
+      return json({ error: "Phone number must include 10 to 15 digits." }, 400);
+    }
+
+    console.log(`[send-phone-otp] Sending OTP to ${cleanPhone} for user ${user_id}`);
+
+    const msg91AuthKey = Deno.env.get("MSG91_AUTH_KEY");
+    const msg91TemplateId = Deno.env.get("MSG91_TEMPLATE_ID");
+
+    if (!msg91AuthKey || !msg91TemplateId) {
+      console.error("[send-phone-otp] MSG91 secrets are not configured.");
+      return json({ error: "MSG91 secrets are not configured." }, 500);
+    }
+
     const otp = String(Math.floor(100000 + Math.random() * 900000));
 
     // SHA-256 hash
@@ -30,45 +83,6 @@ serve(async (req: Request) => {
 
     // Expiry: 5 minutes from now
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
-
-    // Store hash in users table
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, serviceKey);
-
-    const { error: dbError } = await supabase
-      .from("users")
-      .update({
-        phone: phone,
-        phone_otp_hash: otpHash,
-        phone_otp_expires_at: expiresAt,
-      })
-      .eq("id", user_id);
-
-    if (dbError) {
-      console.error("[send-phone-otp] DB error:", dbError.message);
-      return new Response(JSON.stringify({ error: "DB error: " + dbError.message }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-
-    // Send SMS via MSG91
-    const msg91AuthKey = Deno.env.get("MSG91_AUTH_KEY") || "505958A7DLtRhHn69d1653bP1";
-    // IMPORTANT: Set MSG91_TEMPLATE_ID to your actual numeric template ID from MSG91 dashboard
-    // e.g. "6612a1234d6fc812345678ab" — NOT the template name
-    const msg91TemplateId = Deno.env.get("MSG91_TEMPLATE_ID") || "69d1730dfc71fe9096014012";
-
-    if (!msg91TemplateId) {
-      console.error("[send-phone-otp] MSG91_TEMPLATE_ID is not set!");
-      return new Response(JSON.stringify({ error: "MSG91 template ID not configured. Set MSG91_TEMPLATE_ID in Edge Function secrets." }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-
-    // Clean phone number — MSG91 requires country code but NO '+' sign (e.g., 919999999999)
-    const cleanPhone = phone.replace("+", "");
 
     console.log(`[send-phone-otp] Calling MSG91 OTP API for ${cleanPhone}, template=${msg91TemplateId}`);
 
@@ -105,28 +119,33 @@ serve(async (req: Request) => {
 
     if (!msg91Ok) {
       console.error("[send-phone-otp] MSG91 error:", respText);
-      return new Response(JSON.stringify({ error: `MSG91 Error: ${respText}` }), {
-        status: 200, // Return 200 so Swift can parse the JSON error
-        headers: { "Content-Type": "application/json" },
-      });
+      return json({ error: `MSG91 Error: ${respText}` }, 502);
+    }
+
+    const supabase = createClient(supabaseUrl, serviceKey);
+    const { error: dbError } = await supabase
+      .from("users")
+      .update({
+        phone: `+${cleanPhone}`,
+        phone_otp_hash: otpHash,
+        phone_otp_expires_at: expiresAt,
+      })
+      .eq("id", user.id);
+
+    if (dbError) {
+      console.error("[send-phone-otp] DB error:", dbError.message);
+      return json({ error: "DB error: " + dbError.message }, 500);
     }
 
     console.log(`[send-phone-otp] OTP sent successfully to ${cleanPhone}`);
 
-    return new Response(JSON.stringify({ 
-      success: true, 
+    return json({
+      success: true,
       message: "OTP sent via SMS",
-      msg91_response: respText 
-    }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
     });
 
   } catch (err) {
     console.error("[send-phone-otp] Unexpected error:", err);
-    return new Response(JSON.stringify({ error: (err as Error).message }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
+    return json({ error: (err as Error).message }, 500);
   }
 });

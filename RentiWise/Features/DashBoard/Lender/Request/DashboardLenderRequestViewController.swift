@@ -73,7 +73,7 @@ class DashboardLenderRequestViewController: UIViewController {
     private let sqlDateFormatter: DateFormatter = {
         let df = DateFormatter()
         df.calendar = Calendar(identifier: .gregorian)
-        df.timeZone = TimeZone(secondsFromGMT: 0)
+        df.timeZone = .current
         df.dateFormat = "yyyy-MM-dd"
         return df
     }()
@@ -103,6 +103,13 @@ class DashboardLenderRequestViewController: UIViewController {
         return f
     }()
 
+    private let brandTeal = UIColor(hex: "5DA9B6")
+    private var loadingOverlay: UIView?
+    private let loadingIndicator = UIActivityIndicatorView(style: .large)
+    private let loadingLabel = UILabel()
+    private var borrowerMetaLabel: UILabel?
+    private var loadedSupplementaryRequestId: String?
+
     override func viewDidLoad() {
         super.viewDidLoad()
         title = "Details"
@@ -116,7 +123,19 @@ class DashboardLenderRequestViewController: UIViewController {
         // Basic defaults
         prodimage?.image = UIImage(systemName: "photo")
         prodimage?.tintColor = .secondaryLabel
-        prodimage?.contentMode = .scaleAspectFit
+        prodimage?.contentMode = .scaleAspectFill
+        prodimage?.clipsToBounds = true
+        prodimage?.layer.cornerRadius = 18
+        initial?.clipsToBounds = true
+        initial?.contentMode = .scaleAspectFill
+        ownNameLabel?.numberOfLines = 2
+        ownNameLabel?.lineBreakMode = .byTruncatingTail
+        ownDistLabel?.textColor = .secondaryLabel
+        ownDistLabel?.font = .systemFont(ofSize: 15, weight: .medium)
+        categoryLabel?.textColor = .secondaryLabel
+
+        setupBorrowerMetaLabel()
+        setupLoadingOverlay()
 
         // Prepare status row (hidden by default) and its background
         ensureStatusRow()
@@ -126,9 +145,14 @@ class DashboardLenderRequestViewController: UIViewController {
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
+        initial?.layer.cornerRadius = (initial?.bounds.height ?? 0) / 2
+        initial?.layer.masksToBounds = true
         // Keep the status background above other content
         if let bg = statusBackgroundView {
             view.bringSubviewToFront(bg)
+        }
+        if let overlay = loadingOverlay, !overlay.isHidden {
+            view.bringSubviewToFront(overlay)
         }
     }
 
@@ -224,9 +248,11 @@ class DashboardLenderRequestViewController: UIViewController {
             ownNameLabel?.text = ""
             ownRatingLabel?.text = ""
             ownDistLabel?.text = ""
+            borrowerMetaLabel?.text = nil
             feerentLabel?.text = ""
             secRateLabel?.text = ""
             totalLabel?.text = ""
+            loadingOverlay?.isHidden = true
             updateButtonsAndStatusUI(status: nil)
             updateVerificationAction()
             return
@@ -244,16 +270,7 @@ class DashboardLenderRequestViewController: UIViewController {
         if let cat = req.items?.category, !cat.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             categoryLabel?.text = cat
         } else {
-            categoryLabel?.text = "—"
-            // Fallback: fetch category directly if missing in the injected request
-            Task { [weak self] in
-                guard let self = self else { return }
-                if let fresh = await self.fetchItemCategory(itemId: req.item_id) {
-                    await MainActor.run {
-                        self.categoryLabel?.text = fresh
-                    }
-                }
-            }
+            categoryLabel?.text = "Loading category..."
         }
 
         let booking = BookingPresentationFormatter.presentation(
@@ -269,9 +286,6 @@ class DashboardLenderRequestViewController: UIViewController {
         } else {
             feerentLabel?.text = ""
         }
-
-        // Owner name: fetch from users, fallback to profiles. NOW fetching borrower name!
-        resolveBorrowerName(for: req.borrower_id)
 
         // Image from joined item
         if let path = req.items?.images.first,
@@ -289,19 +303,11 @@ class DashboardLenderRequestViewController: UIViewController {
             self.prodimage?.contentMode = .scaleAspectFit
         }
 
-        // Owner placeholders (ratings/distance can be refined later)
-        if ownRatingLabel?.text?.isEmpty ?? true { ownRatingLabel?.text = "★ 4.7" }
-
-        // Distance: compute via DistanceService using a lightweight Item built from the request
-        ownDistLabel?.text = "..."
-        Task { [weak self] in
-            guard let self = self, let req = self.request else { return }
-            let shim = self.makeShimItem(from: req)
-            let text = await DistanceService.shared.distanceText(for: shim)
-            await MainActor.run {
-                self.ownDistLabel?.text = text
-            }
-        }
+        ownNameLabel?.text = "Loading borrower..."
+        borrowerMetaLabel?.text = "Borrower"
+        renderBorrowerInitials(fullName: "Borrower")
+        ownRatingLabel?.text = nil
+        ownDistLabel?.text = "Calculating distance..."
 
         // Pricing
         computeAndDisplayTotals(durationUnits: durationUnits, pricePerDay: req.items?.price_per_day, rentalUnit: req.rental_unit)
@@ -310,7 +316,7 @@ class DashboardLenderRequestViewController: UIViewController {
         updateButtonsAndStatusUI(status: req.status)
         updateVerificationAction()
         Task { [weak self] in
-            await self?.refreshRentalPaymentState()
+            await self?.loadSupplementaryData(for: req)
         }
     }
 
@@ -559,66 +565,282 @@ class DashboardLenderRequestViewController: UIViewController {
         return date
     }
 
-    // MARK: - Borrower name resolution
+    // MARK: - Borrower details
 
-    private func resolveBorrowerName(for borrowerId: String) {
-        Task {
-            // Try user_profiles table
-            if let name = try? await fetchName(from: "user_profiles", ownerId: borrowerId), !name.isEmpty {
-                await MainActor.run { self.ownNameLabel?.text = capitalizingFirstLetter(name) }
-                return
+    private struct UsersIdentityDTO: Decodable {
+        let id: String
+        let full_name: String?
+        let profile_photo_url: String?
+    }
+
+    private struct ProfilesIdentityDTO: Decodable {
+        let full_name: String?
+        let avatar_url: String?
+    }
+
+    private struct UserIdentity {
+        let displayName: String
+        let avatarURLString: String?
+    }
+
+    private func loadSupplementaryData(for req: RequestWithItem) async {
+        let shouldShowLoader = loadedSupplementaryRequestId != req.id
+        if shouldShowLoader {
+            await MainActor.run {
+                self.setLoading(true, message: "Loading booking details...")
             }
-            await MainActor.run { self.ownNameLabel?.text = "Borrower" }
+        }
+        defer {
+            if shouldShowLoader {
+                Task { @MainActor [weak self] in
+                    self?.setLoading(false)
+                }
+            }
+        }
+
+        async let borrowerIdentityTask = fetchUserIdentity(userId: req.borrower_id, fallbackName: "Borrower")
+        async let distanceTask = DistanceService.shared.distanceText(toUserId: req.borrower_id)
+        async let categoryTask = fetchItemCategory(itemId: req.item_id)
+        async let paymentStateTask = fetchRentalPaymentState(requestId: req.id)
+
+        let borrowerIdentity = await borrowerIdentityTask
+        let distanceText = await distanceTask
+        let fetchedCategory = await categoryTask
+        let paymentState = await paymentStateTask
+
+        await MainActor.run {
+            guard self.request?.id == req.id else { return }
+
+            self.renderBorrower(identity: borrowerIdentity)
+            if let fetchedCategory, !fetchedCategory.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                self.categoryLabel?.text = fetchedCategory
+            } else if (self.categoryLabel?.text?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+                || self.categoryLabel?.text == "Loading category..." {
+                self.categoryLabel?.text = "—"
+            }
+
+            self.ownDistLabel?.text = distanceText
+            if let paymentState {
+                self.rentalPaymentState = paymentState
+                self.updateButtonsAndStatusUI(status: self.request?.status)
+                self.updateVerificationAction()
+            }
+
+            self.loadedSupplementaryRequestId = req.id
         }
     }
 
-    private func fetchName(from table: String, ownerId: String) async throws -> String? {
-        struct NameDTO: Decodable { let full_name: String? }
-        let response = try await SupabaseManager.shared.client
-            .from("user_profiles")
-            .select("full_name")
-            .eq("id", value: ownerId)
+    private func fetchRentalPaymentState(requestId: String) async -> RentalPaymentState? {
+        do {
+            return try await RentalPaymentStateService.shared.fetch(requestId: requestId)
+        } catch {
+            debugLog("[LenderRequest] Failed to refresh payment state: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    private func fetchUserIdentity(userId: String, fallbackName: String) async -> UserIdentity {
+        let client = SupabaseManager.shared.client
+
+        if let data = try? await client
+            .from("users")
+            .select("id,full_name,profile_photo_url")
+            .eq("id", value: userId)
             .single()
             .execute()
-
-        if let data = response.data as? Data {
-            let dto = try JSONDecoder().decode(NameDTO.self, from: data)
-            return dto.full_name
+            .data as? Data,
+           let dto = try? JSONDecoder().decode(UsersIdentityDTO.self, from: data) {
+            let displayName = formattedDisplayName(dto.full_name, fallback: fallbackName)
+            if !displayName.isEmpty {
+                return UserIdentity(displayName: displayName, avatarURLString: dto.profile_photo_url)
+            }
         }
-        return nil
+
+        if let data = try? await client
+            .from("user_profiles")
+            .select("full_name,avatar_url")
+            .eq("id", value: userId)
+            .single()
+            .execute()
+            .data as? Data,
+           let dto = try? JSONDecoder().decode(ProfilesIdentityDTO.self, from: data) {
+            let displayName = formattedDisplayName(dto.full_name, fallback: fallbackName)
+            if !displayName.isEmpty {
+                return UserIdentity(displayName: displayName, avatarURLString: dto.avatar_url)
+            }
+        }
+
+        if let data = try? await client
+            .from("profiles")
+            .select("full_name,avatar_url")
+            .eq("id", value: userId)
+            .single()
+            .execute()
+            .data as? Data,
+           let dto = try? JSONDecoder().decode(ProfilesIdentityDTO.self, from: data) {
+            let displayName = formattedDisplayName(dto.full_name, fallback: fallbackName)
+            if !displayName.isEmpty {
+                return UserIdentity(displayName: displayName, avatarURLString: dto.avatar_url)
+            }
+        }
+
+        return UserIdentity(displayName: fallbackName, avatarURLString: nil)
     }
 
-    private func capitalizingFirstLetter(_ s: String) -> String {
-        guard let first = s.unicodeScalars.first else { return s }
-        let firstChar = String(first).uppercased()
-        let remainder = String(s.unicodeScalars.dropFirst())
-        return firstChar + remainder
+    private func renderBorrower(identity: UserIdentity) {
+        ownNameLabel?.text = identity.displayName
+        borrowerMetaLabel?.text = "Borrower"
+
+        if let avatarURLString = identity.avatarURLString,
+           let url = urlForAvatarPath(avatarURLString) {
+            UIImageView.rw_loadImage(from: url) { [weak self] image in
+                DispatchQueue.main.async {
+                    if let image {
+                        self?.initial?.image = image
+                        self?.initial?.contentMode = .scaleAspectFill
+                        self?.initial?.clipsToBounds = true
+                        self?.initial?.layer.cornerRadius = (self?.initial?.bounds.height ?? 0) / 2
+                    } else {
+                        self?.renderBorrowerInitials(fullName: identity.displayName)
+                    }
+                }
+            }
+        } else {
+            renderBorrowerInitials(fullName: identity.displayName)
+        }
     }
 
-    // MARK: - Build a lightweight Item to feed DistanceService
+    private func renderBorrowerInitials(fullName: String) {
+        let size = initial?.bounds.size == .zero || initial == nil
+            ? CGSize(width: 56, height: 56)
+            : initial!.bounds.size
+        initial?.image = drawInitialsImage(initials: makeInitials(from: fullName), size: size)
+        initial?.contentMode = .scaleAspectFill
+        initial?.clipsToBounds = true
+        initial?.layer.cornerRadius = (initial?.bounds.height ?? 0) / 2
+        initial?.backgroundColor = .clear
+    }
 
-    private func makeShimItem(from req: RequestWithItem) -> Item {
-        // Fill from joined item when available; otherwise minimal safe defaults
-        let title = req.items?.title ?? req.item_id
-        let images = req.items?.images ?? []
-        let pricePerDay = req.items?.price_per_day ?? 0
-        // Item requires many fields; populate sensible defaults where unknown
-        return Item(
-            id: req.item_id,
-            owner_id: req.owner_id,
-            title: title,
-            description: nil,
-            category: req.items?.category,
-            condition: nil,
-            price_per_day: pricePerDay,
-            deposit_amount: 0,
-            images: images,
-            is_active: true,
-            created_at: nil,
-            updated_at: nil,
-            average_rating: nil,
-            review_count: nil
-        )
+    private func formattedDisplayName(_ rawValue: String?, fallback: String) -> String {
+        let cleaned = rawValue?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .split(whereSeparator: \.isWhitespace)
+            .map { token in
+                let lowercased = token.lowercased()
+                return lowercased.prefix(1).uppercased() + lowercased.dropFirst()
+            }
+            .joined(separator: " ") ?? ""
+
+        return cleaned.isEmpty ? fallback : cleaned
+    }
+
+    private func makeInitials(from name: String) -> String {
+        let parts = name.split(separator: " ").filter { !$0.isEmpty }
+        let first = parts.first?.first.map { String($0).uppercased() } ?? ""
+        let last = parts.dropFirst().last?.first.map { String($0).uppercased() } ?? ""
+        let combined = first + last
+        return combined.isEmpty ? "?" : combined
+    }
+
+    private func drawInitialsImage(initials: String, size: CGSize) -> UIImage? {
+        let rect = CGRect(origin: .zero, size: size)
+        let renderer = UIGraphicsImageRenderer(size: size, format: UIGraphicsImageRendererFormat.default())
+        return renderer.image { _ in
+            UIColor.systemGray5.setFill()
+            UIBezierPath(ovalIn: rect).fill()
+
+            let attributes: [NSAttributedString.Key: Any] = [
+                .font: UIFont.systemFont(ofSize: min(size.width, size.height) * 0.38, weight: .semibold),
+                .foregroundColor: UIColor.label
+            ]
+            let textSize = (initials as NSString).size(withAttributes: attributes)
+            let textRect = CGRect(
+                x: (size.width - textSize.width) / 2.0,
+                y: (size.height - textSize.height) / 2.0,
+                width: textSize.width,
+                height: textSize.height
+            )
+            (initials as NSString).draw(in: textRect, withAttributes: attributes)
+        }
+    }
+
+    private func urlForAvatarPath(_ path: String) -> URL? {
+        if path.lowercased().hasPrefix("http://") || path.lowercased().hasPrefix("https://") {
+            return URL(string: path)
+        }
+        return StorageURLBuilder.publicFileURL(for: path)
+    }
+
+    private func setupBorrowerMetaLabel() {
+        guard borrowerMetaLabel == nil, let ownCard, let ownNameLabel else { return }
+
+        let label = UILabel()
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.font = .systemFont(ofSize: 13, weight: .medium)
+        label.textColor = .secondaryLabel
+        label.text = "Borrower"
+
+        ownCard.addSubview(label)
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(equalTo: ownNameLabel.leadingAnchor),
+            label.topAnchor.constraint(equalTo: ownNameLabel.bottomAnchor, constant: 4),
+            label.trailingAnchor.constraint(lessThanOrEqualTo: ownCard.trailingAnchor, constant: -16)
+        ])
+
+        borrowerMetaLabel = label
+    }
+
+    private func setupLoadingOverlay() {
+        guard loadingOverlay == nil else { return }
+
+        let overlay = UIView()
+        overlay.translatesAutoresizingMaskIntoConstraints = false
+        overlay.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.92)
+        overlay.isHidden = true
+
+        loadingIndicator.translatesAutoresizingMaskIntoConstraints = false
+        loadingIndicator.hidesWhenStopped = true
+        loadingIndicator.color = brandTeal
+
+        loadingLabel.translatesAutoresizingMaskIntoConstraints = false
+        loadingLabel.font = .systemFont(ofSize: 15, weight: .medium)
+        loadingLabel.textColor = .secondaryLabel
+        loadingLabel.textAlignment = .center
+        loadingLabel.text = "Loading booking details..."
+
+        overlay.addSubview(loadingIndicator)
+        overlay.addSubview(loadingLabel)
+        view.addSubview(overlay)
+
+        NSLayoutConstraint.activate([
+            overlay.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            overlay.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            overlay.topAnchor.constraint(equalTo: view.topAnchor),
+            overlay.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+
+            loadingIndicator.centerXAnchor.constraint(equalTo: overlay.centerXAnchor),
+            loadingIndicator.centerYAnchor.constraint(equalTo: overlay.centerYAnchor, constant: -12),
+
+            loadingLabel.topAnchor.constraint(equalTo: loadingIndicator.bottomAnchor, constant: 12),
+            loadingLabel.centerXAnchor.constraint(equalTo: overlay.centerXAnchor),
+            loadingLabel.leadingAnchor.constraint(greaterThanOrEqualTo: overlay.leadingAnchor, constant: 24),
+            loadingLabel.trailingAnchor.constraint(lessThanOrEqualTo: overlay.trailingAnchor, constant: -24)
+        ])
+
+        loadingOverlay = overlay
+    }
+
+    private func setLoading(_ loading: Bool, message: String = "Loading booking details...") {
+        loadingLabel.text = message
+        loadingOverlay?.isHidden = !loading
+        if loading {
+            loadingIndicator.startAnimating()
+            if let overlay = loadingOverlay {
+                view.bringSubviewToFront(overlay)
+            }
+        } else {
+            loadingIndicator.stopAnimating()
+        }
     }
 
     // MARK: - Category fallback fetch
@@ -1037,7 +1259,7 @@ class DashboardLenderRequestViewController: UIViewController {
         // Compute total amount
         let sqlDF = DateFormatter()
         sqlDF.calendar = Calendar(identifier: .gregorian)
-        sqlDF.timeZone = TimeZone(secondsFromGMT: 0)
+        sqlDF.timeZone = .current
         sqlDF.dateFormat = "yyyy-MM-dd"
         var days = 1
         if let s = sqlDF.date(from: req.start_date), let e = sqlDF.date(from: req.end_date) {
@@ -1110,7 +1332,7 @@ class DashboardLenderRequestViewController: UIViewController {
                 .from("return_requests")
                 .select("id, status, created_at")
                 .eq("request_id", value: requestId)
-                .eq("status", value: "pending")
+                .in("status", values: ["pending", "accepted"])
                 .order("created_at", ascending: false)
                 .execute()
             returnRequests = try JSONDecoder().decode([PendingSubRequest].self, from: resp.data)
@@ -1133,13 +1355,15 @@ class DashboardLenderRequestViewController: UIViewController {
         }
 
         await MainActor.run {
-            self.displayPendingSubRequests(returnRequests: returnRequests.map { ($0.id, "return") },
-                                           extensionRequests: extensionRequests.map { ($0.id, "extension") })
+            self.displayPendingSubRequests(
+                returnRequests: returnRequests.map { (id: $0.id, type: "return", status: $0.status) },
+                extensionRequests: extensionRequests.map { (id: $0.id, type: "extension", status: $0.status) }
+            )
         }
     }
 
-    private func displayPendingSubRequests(returnRequests: [(id: String, type: String)],
-                                            extensionRequests: [(id: String, type: String)]) {
+    private func displayPendingSubRequests(returnRequests: [(id: String, type: String, status: String)],
+                                            extensionRequests: [(id: String, type: String, status: String)]) {
         // Remove existing section if any
         pendingSubRequestsStack?.removeFromSuperview()
         pendingSubRequestsStack = nil
@@ -1151,7 +1375,7 @@ class DashboardLenderRequestViewController: UIViewController {
 
         // Section header
         let headerLabel = UILabel()
-        headerLabel.text = "📋 Pending Requests"
+        headerLabel.text = "Request Actions"
         headerLabel.font = .systemFont(ofSize: 16, weight: .bold)
         headerLabel.textColor = .label
 
@@ -1176,13 +1400,21 @@ class DashboardLenderRequestViewController: UIViewController {
             icon.heightAnchor.constraint(equalToConstant: 24).isActive = true
 
             let label = UILabel()
-            label.text = pending.type == "return" ? "Return Request" : "Extension Request"
+            if pending.type == "return" {
+                label.text = pending.status == "accepted" ? "Return Handoff" : "Return Request"
+            } else {
+                label.text = "Extension Request"
+            }
             label.font = .systemFont(ofSize: 15, weight: .medium)
             label.textColor = .label
             label.translatesAutoresizingMaskIntoConstraints = false
 
             let reviewButton = UIButton(type: .system)
-            reviewButton.setTitle("Review", for: .normal)
+            if pending.type == "return" && pending.status == "accepted" {
+                reviewButton.setTitle("Show Code", for: .normal)
+            } else {
+                reviewButton.setTitle("Review", for: .normal)
+            }
             reviewButton.titleLabel?.font = .systemFont(ofSize: 14, weight: .semibold)
             reviewButton.tintColor = .white
             reviewButton.backgroundColor = tealColor
@@ -1191,7 +1423,7 @@ class DashboardLenderRequestViewController: UIViewController {
             reviewButton.contentEdgeInsets = UIEdgeInsets(top: 6, left: 14, bottom: 6, right: 14)
             reviewButton.translatesAutoresizingMaskIntoConstraints = false
             // Tag encodes the request type and ID for the action handler
-            reviewButton.accessibilityIdentifier = "\(pending.type)|\(pending.id)"
+            reviewButton.accessibilityIdentifier = "\(pending.type)|\(pending.id)|\(pending.status)"
             reviewButton.addTarget(self, action: #selector(didTapReviewSubRequest(_:)), for: .touchUpInside)
 
             rowView.addSubview(icon)
@@ -1228,7 +1460,7 @@ class DashboardLenderRequestViewController: UIViewController {
         guard let identifier = sender.accessibilityIdentifier,
               let requestId = request?.id else { return }
         let parts = identifier.split(separator: "|")
-        guard parts.count == 2 else { return }
+        guard parts.count >= 2 else { return }
         let typeName = String(parts[0])
         let subRequestId = String(parts[1])
 

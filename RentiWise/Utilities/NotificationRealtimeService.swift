@@ -72,7 +72,8 @@ final class NotificationRealtimeService {
             userInfo: [
                 "notification_id": row.id,
                 "notification_type": row.type,
-                "request_id": row.request_id ?? ""
+                "request_id": row.request_id ?? "",
+                "item_id": row.item_id ?? ""
             ]
         )
     }
@@ -95,4 +96,5 @@ private struct LiveNotificationRow: Decodable {
     let title: String
     let message: String
     let request_id: String?
+    let item_id: String?
 }

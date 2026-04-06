@@ -25,7 +25,9 @@ enum BookingPresentationFormatter {
     static let sqlDateFormatter: DateFormatter = {
         let df = DateFormatter()
         df.calendar = Calendar(identifier: .gregorian)
-        df.timeZone = TimeZone(secondsFromGMT: 0)
+        // Requests store calendar dates, not absolute UTC instants.
+        // Using the current timezone preserves the exact local day the user selected.
+        df.timeZone = .current
         df.dateFormat = "yyyy-MM-dd"
         return df
     }()
@@ -135,6 +137,10 @@ enum BookingPresentationFormatter {
 
     static func sqlDateString(for date: Date) -> String {
         sqlDateFormatter.string(from: Calendar.current.startOfDay(for: date))
+    }
+
+    static func sqlDate(from rawValue: String) -> Date? {
+        sqlDateFormatter.date(from: rawValue)
     }
 
     static func sqlTimeString(for date: Date) -> String {

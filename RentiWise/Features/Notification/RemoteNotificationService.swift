@@ -2,12 +2,12 @@
 // RentiWise
 //
 // Centralized service for creating in-app notifications for both lender and borrower.
-// Writes to the `notifications` table in Supabase.
+// Uses the `create_notification` RPC in Supabase.
 
 import Foundation
 import Supabase
 
-/// Lightweight service that inserts rows into the `notifications` table.
+/// Lightweight service that creates rows in `notifications` via a secure RPC.
 /// Every method is static and fire-and-forget — callers don't need to await results.
 enum RemoteNotificationService {
 
@@ -95,40 +95,69 @@ enum RemoteNotificationService {
             type: "nearby_item_posted",
             title: "New Item Nearby",
             message: "\"\(itemTitle)\" was just listed near you (\(distanceText)).",
-            requestId: itemId
+            itemId: itemId
         )
     }
 
     // MARK: - Private
 
-    private struct NotificationInsert: Encodable {
-        let user_id: String
-        let type: String
-        let title: String
-        let message: String
-        let request_id: String?
-        let is_read: Bool
+    private struct NotificationRPCPayload: Encodable {
+        let target_user_id: String
+        let notification_type: String
+        let notification_title: String
+        let notification_message: String
+        let request_ref_id: String?
+        let item_ref_id: String?
     }
 
-    private static func insert(userId: String, type: String, title: String, message: String, requestId: String?) {
+    private static func insert(
+        userId: String,
+        type: String,
+        title: String,
+        message: String,
+        requestId: String? = nil,
+        itemId: String? = nil
+    ) {
         Task {
             do {
-                let payload = NotificationInsert(
-                    user_id: userId,
-                    type: type,
-                    title: title,
-                    message: message,
-                    request_id: requestId,
-                    is_read: false
+                let trimmedUserId = userId.trimmingCharacters(in: .whitespacesAndNewlines)
+                let trimmedRequestId = requestId?.trimmingCharacters(in: .whitespacesAndNewlines)
+                let trimmedItemId = itemId?.trimmingCharacters(in: .whitespacesAndNewlines)
+
+                guard !trimmedUserId.isEmpty else {
+                    debugLog("[NotificationService] Skipped \(type): missing target user id")
+                    return
+                }
+
+                if type == "nearby_item_posted" {
+                    guard let trimmedItemId, !trimmedItemId.isEmpty else {
+                        debugLog("[NotificationService] Skipped nearby_item_posted: missing item id")
+                        return
+                    }
+                } else {
+                    guard let trimmedRequestId, !trimmedRequestId.isEmpty else {
+                        debugLog("[NotificationService] Skipped \(type): missing request id")
+                        return
+                    }
+                }
+
+                let payload = NotificationRPCPayload(
+                    target_user_id: trimmedUserId,
+                    notification_type: type,
+                    notification_title: title,
+                    notification_message: message,
+                    request_ref_id: trimmedRequestId?.isEmpty == false ? trimmedRequestId : nil,
+                    item_ref_id: trimmedItemId?.isEmpty == false ? trimmedItemId : nil
                 )
+
                 _ = try await SupabaseManager.shared.client
-                    .from("notifications")
-                    .insert(payload)
+                    .rpc("create_notification", params: payload)
                     .execute()
-                if SupabaseManager.shared.currentUserIdSync()?.lowercased() == userId.lowercased() {
+
+                if SupabaseManager.shared.currentUserIdSync()?.lowercased() == trimmedUserId.lowercased() {
                     NotificationCenter.default.post(name: .notificationsDidUpdate, object: nil)
                 }
-                debugLog("[NotificationService] Sent \(type) to user \(userId)")
+                debugLog("[NotificationService] Sent \(type) to user \(trimmedUserId)")
             } catch {
                 // Fire-and-forget: log but don't crash
                 debugLog("[NotificationService] Failed to send \(type): \(error.localizedDescription)")

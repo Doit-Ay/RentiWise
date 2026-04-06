@@ -142,7 +142,7 @@ class ExtendRentalViewController: UIViewController {
         // Format new end date for database
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
-        dateFormatter.timeZone = TimeZone(secondsFromGMT: 0)
+        dateFormatter.timeZone = .current
         let newEndDateString = dateFormatter.string(from: newEndDate)
         
         do {

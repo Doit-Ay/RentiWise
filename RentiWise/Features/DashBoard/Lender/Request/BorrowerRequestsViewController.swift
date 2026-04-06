@@ -305,7 +305,7 @@ extension BorrowerRequestsViewController: UITableViewDataSource {
         } else {
             let sql = DateFormatter()
             sql.calendar = .init(identifier: .gregorian)
-            sql.timeZone = TimeZone(secondsFromGMT: 0)
+            sql.timeZone = .current
             sql.dateFormat = "yyyy-MM-dd"
             let display = DateFormatter()
             display.calendar = .init(identifier: .gregorian)

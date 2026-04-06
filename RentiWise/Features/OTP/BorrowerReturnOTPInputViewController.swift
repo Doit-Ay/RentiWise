@@ -154,6 +154,7 @@ final class BorrowerReturnOTPInputViewController: UIViewController, UITextFieldD
                     self.spinner.stopAnimating()
                     self.confirmButton.isEnabled = true
                     if result.success {
+                        NotificationCenter.default.post(name: Notification.Name("requestsShouldRefresh"), object: nil)
                         self.showSuccess()
                     } else {
                         self.attemptCount += 1
@@ -168,7 +169,7 @@ final class BorrowerReturnOTPInputViewController: UIViewController, UITextFieldD
                 await MainActor.run {
                     self.spinner.stopAnimating()
                     self.confirmButton.isEnabled = true
-                    self.showError("Network error: \(error.localizedDescription)")
+                    self.showError(error.localizedDescription)
                 }
             }
         }
