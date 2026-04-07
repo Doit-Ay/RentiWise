@@ -93,7 +93,7 @@ final class DashboardViewControllerTests: XCTestCase {
     }
 
     func testStatusDisplayUnknown() {
-        XCTAssertEqual(displayStatus(for: "some_status"), "Some_status")
+        XCTAssertEqual(displayStatus(for: "some_status"), "Some_Status")
     }
 
     // MARK: - Date Formatting for Display

@@ -20,6 +20,7 @@ class BorrowerTableViewCell: UITableViewCell {
     private var didInstallCardConstraints = false
     private var imageLoadTask: URLSessionDataTask?
     private var distanceWorkItem: Task<Void, Never>?
+    private var currentImageURL: URL?
 
     // Toggle shadow on/off if you prefer a completely flat card
     private let showsShadow: Bool = true
@@ -93,6 +94,7 @@ class BorrowerTableViewCell: UITableViewCell {
         super.prepareForReuse()
         imageLoadTask?.cancel()
         imageLoadTask = nil
+        currentImageURL = nil
         distanceWorkItem?.cancel()
         distanceWorkItem = nil
 
@@ -203,6 +205,7 @@ class BorrowerTableViewCell: UITableViewCell {
     // MARK: - Image loading
     private func setImage(from url: URL) {
         imageLoadTask?.cancel()
+        currentImageURL = url
 
         if let cached = BorrowerImageCache.shared.image(forKey: url.absoluteString) {
             borrowerItemImage?.image = cached
@@ -215,8 +218,10 @@ class BorrowerTableViewCell: UITableViewCell {
             guard let self = self,
                   let data = data,
                   let image = UIImage(data: data) else { return }
+            guard self.currentImageURL == url else { return }
             BorrowerImageCache.shared.setImage(image, forKey: url.absoluteString)
             DispatchQueue.main.async {
+                guard self.currentImageURL == url else { return }
                 self.borrowerItemImage?.image = image
                 self.borrowerItemImage?.contentMode = .scaleAspectFill
             }

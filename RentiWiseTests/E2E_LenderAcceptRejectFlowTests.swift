@@ -193,6 +193,8 @@ final class E2E_LenderAcceptRejectFlowTests: XCTestCase {
             pickup_time: nil,
             status: status,
             created_at: "2025-12-24T10:00:00Z",
+            rental_unit: nil,
+            return_time: nil,
             items: nil
         )
     }

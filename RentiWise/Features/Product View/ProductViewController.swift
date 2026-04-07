@@ -620,13 +620,12 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
                         .single()
                         .execute()
 
-                    if let data = response.data as? Data {
-                        struct NameDTO: Decodable { let full_name: String?; let profile_photo_url: String? }
-                        if let dto = try? JSONDecoder().decode(NameDTO.self, from: data) {
-                            let name = (dto.full_name?.isEmpty == false) ? dto.full_name! : "Me"
-                            let initials = self.makeInitials(from: name)
-                            return (name, initials, dto.profile_photo_url)
-                        }
+                    let data = response.data
+                    struct NameDTO: Decodable { let full_name: String?; let profile_photo_url: String? }
+                    if let dto = try? JSONDecoder().decode(NameDTO.self, from: data) {
+                        let name = (dto.full_name?.isEmpty == false) ? dto.full_name! : "Me"
+                        let initials = self.makeInitials(from: name)
+                        return (name, initials, dto.profile_photo_url)
                     }
                 } catch {
                     // Fall through to default
@@ -736,12 +735,7 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
                 .single()
                 .execute()
 
-            guard let data = response.data as? Data else {
-                await MainActor.run { [weak self] in
-                    self?.renderOwner(fullName: nil, avatarURLString: nil)
-                }
-                return
-            }
+            let data = response.data
 
             let dto = try JSONDecoder().decode(OwnerDTO.self, from: data)
             await MainActor.run { [weak self] in
@@ -795,7 +789,9 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
 
     private func renderOwnerInitials(fullName: String) {
         let initials = makeInitials(from: fullName)
-        let size = ownerAvatarImageView?.bounds.size == .zero || ownerAvatarImageView?.bounds.size == nil ? CGSize(width: 60, height: 60) : ownerAvatarImageView!.bounds.size
+        let size = ownerAvatarImageView?.bounds.size == .zero
+            ? CGSize(width: 60, height: 60)
+            : (ownerAvatarImageView?.bounds.size ?? CGSize(width: 60, height: 60))
         ownerAvatarImageView?.image = drawInitialsImage(initials: initials, size: size)
         ownerAvatarImageView?.contentMode = .scaleAspectFill
         ownerAvatarImageView?.clipsToBounds = true
@@ -1053,13 +1049,8 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
             .eq("id", value: userId)
             .single()
             .execute()
-        if let data = resp.data as? Data {
-            let dto = try JSONDecoder().decode(ReviewerDTO.self, from: data)
-            reviewerCache[userId] = dto
-            return dto
-        }
-        // Fallback empty
-        let dto = ReviewerDTO(full_name: nil, profile_photo_url: nil)
+        let data = resp.data
+        let dto = try JSONDecoder().decode(ReviewerDTO.self, from: data)
         reviewerCache[userId] = dto
         return dto
     }
@@ -1558,8 +1549,8 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
     }
     
     @objc private func bottomRentButtonTapped() {
-        // Reuse existing rent action
-        didTapRentNow(bottomRentButton!)
+        guard let button = bottomRentButton else { return }
+        didTapRentNow(button)
     }
 
     // MARK: - Actions

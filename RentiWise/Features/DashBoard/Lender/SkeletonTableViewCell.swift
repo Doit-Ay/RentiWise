@@ -15,14 +15,21 @@ private final class ShimmerLayer: CAGradientLayer {
 
     override init() {
         super.init()
+        configureBaseAppearance()
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        configureBaseAppearance()
+    }
+
+    private func configureBaseAppearance() {
         startPoint  = CGPoint(x: 0, y: 0.5)
         endPoint    = CGPoint(x: 1, y: 0.5)
         locations   = [-1.0, -0.5, 0.0]
         colors      = [ShimmerLayer.shimmerBase, ShimmerLayer.shimmerLight, ShimmerLayer.shimmerBase]
         speed       = 0   // driven manually
     }
-
-    required init?(coder: NSCoder) { fatalError() }
 
     func startShimmering() {
         let animation        = CABasicAnimation(keyPath: "locations")
@@ -47,11 +54,18 @@ private final class SkeletonBlock: UIView {
 
     init(cornerRadius: CGFloat = 8) {
         super.init(frame: .zero)
+        configureBaseAppearance(cornerRadius: cornerRadius)
+    }
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        configureBaseAppearance(cornerRadius: 8)
+    }
+
+    private func configureBaseAppearance(cornerRadius: CGFloat) {
         backgroundColor = UIColor.secondarySystemFill
         layer.cornerRadius = cornerRadius
         layer.masksToBounds = true
     }
-    required init?(coder: NSCoder) { fatalError() }
 
     override func layoutSubviews() {
         super.layoutSubviews()
@@ -84,7 +98,10 @@ final class SkeletonTableViewCell: UITableViewCell {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
         setup()
     }
-    required init?(coder: NSCoder) { fatalError() }
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        setup()
+    }
 
     private func setup() {
         backgroundColor = .clear

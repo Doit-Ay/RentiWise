@@ -369,7 +369,13 @@ extension NotificationViewController: UITableViewDataSource {
     }
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: NotificationCell.reuseID, for: indexPath) as! NotificationCell
+        guard let cell = tableView.dequeueReusableCell(withIdentifier: NotificationCell.reuseID, for: indexPath) as? NotificationCell else {
+            assertionFailure("Could not dequeue NotificationCell")
+            return UITableViewCell()
+        }
+        guard indexPath.row < notifications.count else {
+            return cell
+        }
         let notification = notifications[indexPath.row]
         cell.configure(with: notification)
         return cell
@@ -381,6 +387,7 @@ extension NotificationViewController: UITableViewDataSource {
 extension NotificationViewController: UITableViewDelegate {
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
+        guard indexPath.row < notifications.count else { return }
         
         let notification = notifications[indexPath.row]
         
@@ -613,7 +620,8 @@ class NotificationCell: UITableViewCell {
     }
     
     required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
+        super.init(coder: coder)
+        setupUI()
     }
     
     override func prepareForReuse() {

@@ -1725,7 +1725,7 @@ class BookingApprovalViewController: UIViewController {
                 .eq("is_default", value: true)
                 .single()
                 .execute()
-                .data as? Data {
+                .data {
                 let row = try JSONDecoder().decode(OwnerAddressRow.self, from: data)
                 let full = formatFullAddress(line1: row.address_line1, line2: row.address_line2, city: row.city, state: row.state, postal: row.postal_code, country: row.country)
                 await MainActor.run { self.addressLabel?.text = full }
@@ -1740,7 +1740,7 @@ class BookingApprovalViewController: UIViewController {
                 .limit(1)
                 .single()
                 .execute()
-                .data as? Data {
+                .data {
                 let row = try JSONDecoder().decode(OwnerAddressRow.self, from: data)
                 let full = formatFullAddress(line1: row.address_line1, line2: row.address_line2, city: row.city, state: row.state, postal: row.postal_code, country: row.country)
                 await MainActor.run { self.addressLabel?.text = full }
@@ -1759,24 +1759,23 @@ class BookingApprovalViewController: UIViewController {
                 .single()
                 .execute()
 
-            if let data = response.data as? Data {
-                let row = try JSONDecoder().decode(OwnerDefaultAddressRow.self, from: data)
+            let data = response.data
+            let row = try JSONDecoder().decode(OwnerDefaultAddressRow.self, from: data)
 
-                let parts = [row.city, row.state, row.country]
-                    .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
-                    .filter { !$0.isEmpty }
-                let compact = parts.isEmpty ? nil : parts.joined(separator: ", ")
+            let parts = [row.city, row.state, row.country]
+                .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+            let compact = parts.isEmpty ? nil : parts.joined(separator: ", ")
 
-                if let compact {
-                    await MainActor.run { self.addressLabel?.text = compact }
-                    return
-                }
+            if let compact {
+                await MainActor.run { self.addressLabel?.text = compact }
+                return
+            }
 
-                if let lat = row.latitude, let lon = row.longitude {
-                    let display = await reverseGeocodeIfNeeded(lat: lat, lon: lon, fallbackText: "Address unavailable")
-                    await MainActor.run { self.addressLabel?.text = display }
-                    return
-                }
+            if let lat = row.latitude, let lon = row.longitude {
+                let display = await reverseGeocodeIfNeeded(lat: lat, lon: lon, fallbackText: "Address unavailable")
+                await MainActor.run { self.addressLabel?.text = display }
+                return
             }
 
             await MainActor.run { self.addressLabel?.text = "Address unavailable" }
@@ -1907,7 +1906,7 @@ class BookingApprovalViewController: UIViewController {
                 .eq("id", value: ownerId)
                 .single()
                 .execute()
-                .data as? Data {
+                .data {
                 let dto = try JSONDecoder().decode(UsersDTO.self, from: usersData)
                 await MainActor.run { [weak self] in
                     self?.renderOwner(fullName: dto.full_name, avatarURLString: dto.profile_photo_url)
@@ -1921,7 +1920,7 @@ class BookingApprovalViewController: UIViewController {
                 .eq("id", value: ownerId)
                 .single()
                 .execute()
-                .data as? Data {
+                .data {
                 let dto = try JSONDecoder().decode(ProfilesDTO.self, from: profilesData)
                 await MainActor.run { [weak self] in
                     self?.renderOwner(fullName: dto.full_name, avatarURLString: dto.avatar_url)
@@ -1935,7 +1934,7 @@ class BookingApprovalViewController: UIViewController {
                 .eq("id", value: ownerId)
                 .single()
                 .execute()
-                .data as? Data {
+                .data {
                 let dto = try JSONDecoder().decode(ProfilesDTO.self, from: profilesData)
                 await MainActor.run { [weak self] in
                     self?.renderOwner(fullName: dto.full_name, avatarURLString: dto.avatar_url)
@@ -1978,9 +1977,9 @@ class BookingApprovalViewController: UIViewController {
 
     private func renderOwnerInitials(fullName: String) {
         let initials = makeInitials(from: fullName)
-        let size = ownerProfileImage?.bounds.size == .zero || ownerProfileImage == nil
+        let size = ownerProfileImage?.bounds.size == .zero
             ? CGSize(width: 60, height: 60)
-            : ownerProfileImage!.bounds.size
+            : (ownerProfileImage?.bounds.size ?? CGSize(width: 60, height: 60))
 
         ownerProfileImage?.image = drawInitialsImage(initials: initials, size: size)
         ownerProfileImage?.contentMode = .scaleAspectFill

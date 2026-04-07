@@ -98,7 +98,7 @@ final class CollegeVerificationService {
 
             // Clear OTP
             struct Clear: Encodable { let email_otp_hash: String?; let email_otp_expires_at: String? }
-            try? await SupabaseManager.shared.client
+            _ = try? await SupabaseManager.shared.client
                 .from("users")
                 .update(Clear(email_otp_hash: nil, email_otp_expires_at: nil))
                 .eq("id", value: userId)

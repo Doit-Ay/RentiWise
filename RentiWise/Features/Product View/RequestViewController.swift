@@ -221,18 +221,13 @@ class RequestViewController: UIViewController {
                 .single()
                 .execute()
             
-            if let data = response.data as? Data {
-                let decoder = JSONDecoder()
-                decoder.keyDecodingStrategy = .convertFromSnakeCase
-                decoder.dateDecodingStrategy = .iso8601
-                let fetched = try decoder.decode(Item.self, from: data)
-                self.item = fetched
-                await populateUI()
-            } else {
-                await MainActor.run { [weak self] in
-                    self?.presentMissingItemAlert()
-                }
-            }
+            let data = response.data
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+            decoder.dateDecodingStrategy = .iso8601
+            let fetched = try decoder.decode(Item.self, from: data)
+            self.item = fetched
+            await populateUI()
         } catch {
             await MainActor.run { [weak self] in
                 self?.presentMissingItemAlert()
@@ -308,7 +303,9 @@ class RequestViewController: UIViewController {
     
     private func renderOwnerInitials(fullName: String) {
         let initials = makeInitials(from: fullName)
-        let size = ownerImage?.bounds.size == .zero || ownerImage?.bounds.size == nil ? CGSize(width: 60, height: 60) : ownerImage!.bounds.size
+        let size = ownerImage?.bounds.size == .zero
+            ? CGSize(width: 60, height: 60)
+            : (ownerImage?.bounds.size ?? CGSize(width: 60, height: 60))
         ownerImage?.image = drawInitialsImage(initials: initials, size: size)
         ownerImage?.contentMode = .scaleAspectFill
         ownerImage?.clipsToBounds = true
@@ -357,7 +354,7 @@ class RequestViewController: UIViewController {
                 .eq("id", value: ownerId)
                 .single()
                 .execute()
-                .data as? Data {
+                .data {
                 
                 struct UsersDTO: Decodable {
                     let id: String
@@ -376,7 +373,7 @@ class RequestViewController: UIViewController {
                 .eq("id", value: ownerId)
                 .single()
                 .execute()
-                .data as? Data {
+                .data {
                 
                 let dto = try JSONDecoder().decode(ProfilesDTO.self, from: profilesData)
                 renderOwner(fullName: dto.full_name, avatarURLString: dto.avatar_url)

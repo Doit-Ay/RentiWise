@@ -232,6 +232,10 @@ extension LocationSelectorViewController: UITableViewDataSource {
                 }
             } else {
                 // Saved addresses section (backend)
+                guard indexPath.row < saved.count else {
+                    cell.contentConfiguration = config
+                    return cell
+                }
                 let address = saved[indexPath.row]
                 let title: String
                 if let label = address.label, !label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -288,6 +292,7 @@ extension LocationSelectorViewController: UITableViewDelegate {
             }
         } else {
             // Pick a saved address from backend — dismiss first, then callback
+            guard indexPath.row < saved.count else { return }
             let address = saved[indexPath.row]
             dismissThen { [weak self] in
                 guard let self = self else { return }

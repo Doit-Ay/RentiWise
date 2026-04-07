@@ -22,6 +22,7 @@ final class UPIProfileTests: XCTestCase {
             phone: "1234567890",
             phoneVerified: true,
             kycStatus: "approved",
+            isLenderPro: false,
             upiId: upiId,
             collegeEmail: collegeEmail,
             isCollegeVerified: isCollegeVerified,
@@ -102,6 +103,7 @@ final class UserProfileModelTests: XCTestCase {
             phone: "1234567890",
             phoneVerified: true,
             kycStatus: "approved",
+            isLenderPro: false,
             upiId: "test@upi",
             collegeEmail: "",
             isCollegeVerified: false,
@@ -120,6 +122,7 @@ final class UserProfileModelTests: XCTestCase {
             phone: "1234567890",
             phoneVerified: false,
             kycStatus: "pending",
+            isLenderPro: false,
             upiId: "",
             collegeEmail: "",
             isCollegeVerified: false,
@@ -139,7 +142,7 @@ final class UserProfileModelTests: XCTestCase {
         }
         """.data(using: .utf8)!
 
-        let row = try JSONDecoder().decode(DBUserProfileRow.self, from: json)
+        let row = try JSONDecoder().decode(DBUserRow.self, from: json)
         XCTAssertEqual(row.upi_id, "test@ybl", "DBUserRow should decode upi_id")
     }
 
@@ -152,7 +155,7 @@ final class UserProfileModelTests: XCTestCase {
         }
         """.data(using: .utf8)!
 
-        let row = try JSONDecoder().decode(DBUserProfileRow.self, from: json)
+        let row = try JSONDecoder().decode(DBUserRow.self, from: json)
         XCTAssertNil(row.upi_id, "DBUserRow should handle null upi_id")
     }
 }

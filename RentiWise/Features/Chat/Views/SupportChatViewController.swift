@@ -500,7 +500,14 @@ final class SupportChatViewController: UIViewController {
                     }
                 } else {
                     // Send message to existing ticket
-                    _ = try await chatService.sendSupportMessage(ticketId: currentTicket!.id, text: text)
+                    guard let ticketId = currentTicket?.id else {
+                        throw NSError(
+                            domain: "SupportChat",
+                            code: 0,
+                            userInfo: [NSLocalizedDescriptionKey: "Unable to find the current support ticket."]
+                        )
+                    }
+                    _ = try await chatService.sendSupportMessage(ticketId: ticketId, text: text)
                 }
                 
                 // Simulate bot response (in production, this would come from server)
@@ -581,7 +588,13 @@ extension SupportChatViewController: UITableViewDataSource {
     }
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: SupportMessageCell.reuseIdentifier, for: indexPath) as! SupportMessageCell
+        guard let cell = tableView.dequeueReusableCell(withIdentifier: SupportMessageCell.reuseIdentifier, for: indexPath) as? SupportMessageCell else {
+            assertionFailure("Could not dequeue SupportMessageCell")
+            return UITableViewCell()
+        }
+        guard indexPath.row < messages.count else {
+            return cell
+        }
         let message = messages[indexPath.row]
         cell.configure(with: message)
         return cell

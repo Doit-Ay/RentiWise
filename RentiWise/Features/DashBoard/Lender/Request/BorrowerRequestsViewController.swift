@@ -285,10 +285,17 @@ extension BorrowerRequestsViewController: UITableViewDataSource {
     func tableView(_ tableView: UITableView,
                    cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         if isLoading {
-            return tableView.dequeueReusableCell(withIdentifier: SkeletonTableViewCell.reuseID, for: indexPath) as! SkeletonTableViewCell
+            guard let cell = tableView.dequeueReusableCell(withIdentifier: SkeletonTableViewCell.reuseID, for: indexPath) as? SkeletonTableViewCell else {
+                assertionFailure("Could not dequeue SkeletonTableViewCell")
+                return UITableViewCell()
+            }
+            return cell
         }
         guard let cell = tableView.dequeueReusableCell(withIdentifier: "Request", for: indexPath) as? LenderRequestTableViewCell else {
             return UITableViewCell()
+        }
+        guard indexPath.section < filteredRows.count else {
+            return cell
         }
 
         let req = filteredRows[indexPath.section]
@@ -352,6 +359,7 @@ extension BorrowerRequestsViewController: UITableViewDelegate {
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         guard !isLoading else { return }
+        guard indexPath.section < filteredRows.count else { return }
 
         let selected = filteredRows[indexPath.section]
 

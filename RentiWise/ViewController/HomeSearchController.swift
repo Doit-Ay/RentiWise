@@ -225,7 +225,13 @@ extension HomeSearchController: UITableViewDataSource, UITableViewDelegate {
 
     func tableView(_ tableView: UITableView,
                    cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: ResultCell.reuseID, for: indexPath) as! ResultCell
+        guard let cell = tableView.dequeueReusableCell(withIdentifier: ResultCell.reuseID, for: indexPath) as? ResultCell else {
+            assertionFailure("Could not dequeue ResultCell")
+            return UITableViewCell()
+        }
+        guard indexPath.section < results.count else {
+            return cell
+        }
         let item = results[indexPath.section]
         cell.configure(with: item, currencyFormatter: currencyFormatter)
         // Backgrounds
@@ -244,6 +250,7 @@ extension HomeSearchController: UITableViewDataSource, UITableViewDelegate {
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
+        guard indexPath.section < results.count else { return }
         let item = results[indexPath.section]
         onSelectItem?(item)
     }

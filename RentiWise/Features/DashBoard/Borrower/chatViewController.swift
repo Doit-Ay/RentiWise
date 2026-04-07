@@ -620,9 +620,16 @@ extension ChatThreadViewController: UITableViewDataSource, UITableViewDelegate {
 
     func tableView(_ tableView: UITableView,
                    cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: BubbleCell.reuseID, for: indexPath) as! BubbleCell
+        guard let cell = tableView.dequeueReusableCell(withIdentifier: BubbleCell.reuseID, for: indexPath) as? BubbleCell else {
+            assertionFailure("Could not dequeue BubbleCell")
+            return UITableViewCell()
+        }
+        guard indexPath.row < messages.count else {
+            cell.configure(text: "", isCurrentUser: false)
+            return cell
+        }
         let msg = messages[indexPath.row]
-        let isMe = (currentUserId != nil) ? (msg.sender_id.lowercased() == currentUserId!.lowercased()) : false
+        let isMe = (msg.sender_id.lowercased() == (currentUserId?.lowercased() ?? ""))
         cell.configure(text: msg.text, isCurrentUser: isMe)
         return cell
     }

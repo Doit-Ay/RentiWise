@@ -17,6 +17,7 @@ final class ProfileModelTests: XCTestCase {
             phone: phone,
             phoneVerified: true,
             kycStatus: "approved",
+            isLenderPro: false,
             upiId: upiId,
             collegeEmail: "",
             isCollegeVerified: false,

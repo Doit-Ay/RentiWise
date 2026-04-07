@@ -17,7 +17,7 @@ final class CollegeVerificationTests: XCTestCase {
         let vc = CollegeVerificationViewController()
         vc.loadViewIfNeeded()
         XCTAssertNotNil(vc.view)
-        XCTAssertEqual(vc.title, "Verify Your ID")
+        XCTAssertEqual(vc.title, "Verify Email")
     }
 
     // TC-CV-02: onVerificationComplete callback is settable

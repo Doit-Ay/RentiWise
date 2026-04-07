@@ -29,6 +29,8 @@
 	<string>Rentiwise</string>
 	<key>GIDClientID</key>
 	<string>1077911784517-bdqkvofusmbagv4nrdlbk8bessohh8fj.apps.googleusercontent.com</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>upi</string>

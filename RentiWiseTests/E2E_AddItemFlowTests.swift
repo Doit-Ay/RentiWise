@@ -8,7 +8,7 @@ import XCTest
 /// Step 3 → Pricing (price per day, deposit amount) set
 /// Step 4 → Published to Supabase
 ///
-/// Note: ItemInsertPayload does NOT have latitude/longitude fields (verified from ItemModels.swift)
+/// Note: ItemInsertPayload includes declared value and optional location metadata.
 final class E2E_AddItemFlowTests: XCTestCase {
 
     // MARK: - Step 1: Draft Initialization
@@ -78,7 +78,7 @@ final class E2E_AddItemFlowTests: XCTestCase {
 
     // MARK: - Step 3: Payload Construction
     // Real ItemInsertPayload fields: owner_id, title, description?, category?, condition?,
-    // price_per_day, deposit_amount, images, is_active (NO latitude/longitude)
+    // price_per_day, deposit_amount, declared_value, images, is_active, latitude?, longitude?, location_address?
 
     func test_addItem_insertPayloadBuildsCorrectly() throws {
         let payload = ItemInsertPayload(
@@ -89,11 +89,16 @@ final class E2E_AddItemFlowTests: XCTestCase {
             condition: "Like New",
             price_per_day: 1500.0,
             deposit_amount: 10000.0,
+            declared_value: 120000,
             images: ["item_photos/a7.jpg", "item_photos/a7b.jpg"],
-            is_active: true
+            is_active: true,
+            latitude: nil,
+            longitude: nil,
+            location_address: nil
         )
         XCTAssertEqual(payload.title, "Sony A7 Camera")
         XCTAssertEqual(payload.price_per_day, 1500.0)
+        XCTAssertEqual(payload.declared_value, 120000)
         XCTAssertEqual(payload.images.count, 2)
         XCTAssertTrue(payload.is_active)
     }
@@ -107,8 +112,12 @@ final class E2E_AddItemFlowTests: XCTestCase {
             condition: "Good",
             price_per_day: 500.0,
             deposit_amount: 3000.0,
+            declared_value: 15000,
             images: ["lens.jpg"],
-            is_active: true
+            is_active: true,
+            latitude: 12.9716,
+            longitude: 77.5946,
+            location_address: "Bengaluru, Karnataka"
         )
         let encoder = JSONEncoder()
         let data = try encoder.encode(payload)
@@ -117,6 +126,7 @@ final class E2E_AddItemFlowTests: XCTestCase {
         XCTAssertEqual(json["title"] as? String, "Nikon Lens 50mm")
         XCTAssertEqual(json["price_per_day"] as? Double, 500.0)
         XCTAssertEqual(json["owner_id"] as? String, "owner-uuid-123")
+        XCTAssertEqual(json["declared_value"] as? Int, 15000)
     }
 
     func test_addItem_payloadWithNilDescriptionEncodes() throws {
@@ -128,8 +138,12 @@ final class E2E_AddItemFlowTests: XCTestCase {
             condition: nil,
             price_per_day: 200.0,
             deposit_amount: 500.0,
+            declared_value: 2500,
             images: [],
-            is_active: true
+            is_active: true,
+            latitude: nil,
+            longitude: nil,
+            location_address: nil
         )
         let data = try JSONEncoder().encode(payload)
         XCTAssertFalse(data.isEmpty)

@@ -69,6 +69,7 @@ final class ManageAddressesViewController: UIViewController {
     }
 
     private func deleteAddress(at indexPath: IndexPath) {
+        guard indexPath.row < addresses.count else { return }
         let addr = addresses[indexPath.row]
         Task {
             do {
@@ -102,10 +103,14 @@ extension ManageAddressesViewController: UITableViewDataSource, UITableViewDeleg
 
     func tableView(_ tableView: UITableView,
                    cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        guard indexPath.row < addresses.count else {
+            return tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
+        }
         let addr = addresses[indexPath.row]
         let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
         var config = cell.defaultContentConfiguration()
-        let title = (addr.label?.isEmpty == false ? "\(addr.label!) — " : "") + addr.address_line1
+        let labelPrefix = addr.label?.isEmpty == false ? "\(addr.label ?? "") — " : ""
+        let title = labelPrefix + addr.address_line1
         config.text = title
         config.secondaryText = "\(addr.city), \(addr.state) \(addr.postal_code)"
         cell.contentConfiguration = config
@@ -123,6 +128,7 @@ extension ManageAddressesViewController: UITableViewDataSource, UITableViewDeleg
     // NEW: open detail screen on tap
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
+        guard indexPath.row < addresses.count else { return }
         let addr = addresses[indexPath.row]
         let detail = AddressDetailViewController(address: addr)
         detail.onChanged = { [weak self] _ in
@@ -134,6 +140,7 @@ extension ManageAddressesViewController: UITableViewDataSource, UITableViewDeleg
     // Keep swipe actions: Edit, Delete, Set Default
     func tableView(_ tableView: UITableView,
                    trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
+        guard indexPath.row < addresses.count else { return nil }
         let addr = addresses[indexPath.row]
 
         let delete = UIContextualAction(style: .destructive, title: "Delete") { [weak self] _, _, done in

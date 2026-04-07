@@ -501,7 +501,8 @@ final class LenderView: UIView {
             let mapped: [HistoryRow] = rows.map { r in
                 let title = r.items?.title ?? r.item_id
                 let rate = r.items?.price_per_day ?? 0
-                let borrower = (r.user_profiles?.full_name?.isEmpty == false) ? "To: \(r.user_profiles!.full_name!)" : "To: —"
+                let borrowerName = r.user_profiles?.full_name?.trimmingCharacters(in: .whitespacesAndNewlines)
+                let borrower = (borrowerName?.isEmpty == false) ? "To: \(borrowerName ?? "—")" : "To: —"
                 let imagePath = r.items?.images?.first
                 return HistoryRow(title: title, ratePerDay: rate, borrowerName: borrower, imagePath: imagePath)
             }
@@ -564,6 +565,9 @@ extension LenderView: UITableViewDataSource {
             guard let cell = tableView.dequeueReusableCell(withIdentifier: "Listing", for: indexPath) as? LenderListingTableViewCell else {
                 return UITableViewCell()
             }
+            guard indexPath.section < myItems.count else {
+                return cell
+            }
             let item = myItems[indexPath.section]
             cell.configure(with: item, currencyFormatter: currencyFormatter)
             // Important: keep clear so the internal glass card shows its shadow
@@ -572,7 +576,13 @@ extension LenderView: UITableViewDataSource {
             return cell
 
         case 1:
-            let cell = tableView.dequeueReusableCell(withIdentifier: "Request", for: indexPath) as! LenderRequestTableViewCell
+            guard let cell = tableView.dequeueReusableCell(withIdentifier: "Request", for: indexPath) as? LenderRequestTableViewCell else {
+                assertionFailure("Could not dequeue LenderRequestTableViewCell")
+                return UITableViewCell()
+            }
+            guard indexPath.section < myRequests.count else {
+                return cell
+            }
             let req = myRequests[indexPath.section]
 
             // Name: prefer item title, fallback to item_id
@@ -666,7 +676,13 @@ extension LenderView: UITableViewDataSource {
             return cell
 
         case 2:
-            let cell = tableView.dequeueReusableCell(withIdentifier: "History", for: indexPath) as! LenderHistoryTableViewCell
+            guard let cell = tableView.dequeueReusableCell(withIdentifier: "History", for: indexPath) as? LenderHistoryTableViewCell else {
+                assertionFailure("Could not dequeue LenderHistoryTableViewCell")
+                return UITableViewCell()
+            }
+            guard indexPath.section < myHistory.count else {
+                return cell
+            }
             let row = myHistory[indexPath.section]
 
             // Title
@@ -728,10 +744,12 @@ extension LenderView: UITableViewDelegate {
         switch selectedInnerIndex {
         case 0:
             // Listing: open product view in own-item mode via delegate
+            guard indexPath.section < myItems.count else { return }
             let item = myItems[indexPath.section]
             delegate?.lenderView(self, didSelectItem: item)
         case 1:
             // Request section selection
+            guard indexPath.section < myRequests.count else { return }
             delegate?.lenderView(self, didSelectRequestAt: indexPath.section)
         default:
             break

@@ -94,7 +94,7 @@ final class PhoneVerificationService {
 
             // Clear OTP
             struct Clear: Encodable { let phone_otp_hash: String?; let phone_otp_expires_at: String? }
-            try? await SupabaseManager.shared.client
+            _ = try? await SupabaseManager.shared.client
                 .from("users")
                 .update(Clear(phone_otp_hash: nil, phone_otp_expires_at: nil))
                 .eq("id", value: userId)

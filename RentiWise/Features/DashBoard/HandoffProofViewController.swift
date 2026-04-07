@@ -673,10 +673,14 @@ extension HandoffProofViewController: UICollectionViewDataSource, UICollectionVi
 
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         if indexPath.item < selectedMediaURLs.count {
-            let cell = collectionView.dequeueReusableCell(withReuseIdentifier: HandoffMediaCell.reuseID, for: indexPath) as! HandoffMediaCell
+            guard let cell = collectionView.dequeueReusableCell(withReuseIdentifier: HandoffMediaCell.reuseID, for: indexPath) as? HandoffMediaCell else {
+                assertionFailure("Could not dequeue HandoffMediaCell")
+                return UICollectionViewCell()
+            }
             cell.configure(with: selectedMediaURLs[indexPath.item])
             cell.onDelete = { [weak self] in
                 guard let self else { return }
+                guard indexPath.item < self.selectedMediaURLs.count else { return }
                 self.selectedMediaURLs.remove(at: indexPath.item)
                 self.collectionView.reloadData()
                 self.updateSubmitState()
@@ -766,7 +770,27 @@ private final class HandoffMediaCell: UICollectionViewCell {
         ])
     }
 
-    required init?(coder: NSCoder) { fatalError() }
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        contentView.layer.cornerRadius = 12
+        contentView.layer.masksToBounds = true
+        contentView.backgroundColor = .systemGray6
+
+        contentView.addSubview(imageView)
+        contentView.addSubview(deleteButton)
+
+        NSLayoutConstraint.activate([
+            imageView.topAnchor.constraint(equalTo: contentView.topAnchor),
+            imageView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            imageView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            imageView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+
+            deleteButton.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 4),
+            deleteButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -4),
+            deleteButton.widthAnchor.constraint(equalToConstant: 24),
+            deleteButton.heightAnchor.constraint(equalToConstant: 24),
+        ])
+    }
 
     override func prepareForReuse() {
         super.prepareForReuse()
@@ -822,7 +846,25 @@ private final class HandoffAddMediaCell: UICollectionViewCell {
         ])
     }
 
-    required init?(coder: NSCoder) { fatalError() }
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        contentView.layer.cornerRadius = 12
+        contentView.layer.borderWidth = 2
+        contentView.layer.borderColor = UIColor.systemGray4.cgColor
+        contentView.backgroundColor = .systemGray6
+
+        contentView.addSubview(iconView)
+        contentView.addSubview(label)
+
+        NSLayoutConstraint.activate([
+            iconView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            iconView.centerYAnchor.constraint(equalTo: contentView.centerYAnchor, constant: -10),
+            iconView.widthAnchor.constraint(equalToConstant: 36),
+            iconView.heightAnchor.constraint(equalToConstant: 36),
+            label.topAnchor.constraint(equalTo: iconView.bottomAnchor, constant: 4),
+            label.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+        ])
+    }
 }
 
 // MARK: - Presentation Helper

@@ -358,16 +358,24 @@ extension ReturnProofViewController: UICollectionViewDelegate, UICollectionViewD
     
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         if indexPath.item < proofMediaURLs.count {
-            let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "MediaCell", for: indexPath) as! MediaCell
+            guard let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "MediaCell", for: indexPath) as? MediaCell else {
+                assertionFailure("Could not dequeue MediaCell")
+                return UICollectionViewCell()
+            }
             cell.configure(with: proofMediaURLs[indexPath.item])
             cell.onDelete = { [weak self] in
-                self?.proofMediaURLs.remove(at: indexPath.item)
-                self?.mediaCollectionView.reloadData()
-                self?.updateMediaCount()
+                guard let self else { return }
+                guard indexPath.item < self.proofMediaURLs.count else { return }
+                self.proofMediaURLs.remove(at: indexPath.item)
+                self.mediaCollectionView.reloadData()
+                self.updateMediaCount()
             }
             return cell
         } else {
-            let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "AddMediaCell", for: indexPath) as! AddMediaCell
+            guard let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "AddMediaCell", for: indexPath) as? AddMediaCell else {
+                assertionFailure("Could not dequeue AddMediaCell")
+                return UICollectionViewCell()
+            }
             return cell
         }
     }
@@ -418,7 +426,8 @@ class MediaCell: UICollectionViewCell {
     }
     
     required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
+        super.init(coder: coder)
+        setupViews()
     }
     
     private func setupViews() {
@@ -475,7 +484,8 @@ class AddMediaCell: UICollectionViewCell {
     }
     
     required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
+        super.init(coder: coder)
+        setupViews()
     }
     
     private func setupViews() {

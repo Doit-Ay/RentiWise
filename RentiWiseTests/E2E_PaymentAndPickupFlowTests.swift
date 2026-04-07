@@ -63,6 +63,7 @@ final class E2E_PaymentAndPickupFlowTests: XCTestCase {
         let update = PaymentUpdate(
             status: "succeeded",
             pickup_code: "A7B3X9",
+            pickupcode_status: "pending",
             provider_payment_id: "pi_3Mx9LL2eZvKYlo2C",
             provider_receipt_url: "https://receipt.example.com/receipt_001",
             failure_reason: nil
@@ -77,6 +78,7 @@ final class E2E_PaymentAndPickupFlowTests: XCTestCase {
         let update = PaymentUpdate(
             status: "failed",
             pickup_code: nil,
+            pickupcode_status: nil,
             provider_payment_id: nil,
             provider_receipt_url: nil,
             failure_reason: "Insufficient funds"

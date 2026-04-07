@@ -683,7 +683,7 @@ class DashboardLenderRequestViewController: UIViewController {
             .eq("id", value: userId)
             .single()
             .execute()
-            .data as? Data,
+            .data,
            let dto = try? JSONDecoder().decode(UsersIdentityDTO.self, from: data) {
             let displayName = formattedDisplayName(dto.full_name, fallback: fallbackName)
             if !displayName.isEmpty {
@@ -697,7 +697,7 @@ class DashboardLenderRequestViewController: UIViewController {
             .eq("id", value: userId)
             .single()
             .execute()
-            .data as? Data,
+            .data,
            let dto = try? JSONDecoder().decode(ProfilesIdentityDTO.self, from: data) {
             let displayName = formattedDisplayName(dto.full_name, fallback: fallbackName)
             if !displayName.isEmpty {
@@ -711,7 +711,7 @@ class DashboardLenderRequestViewController: UIViewController {
             .eq("id", value: userId)
             .single()
             .execute()
-            .data as? Data,
+            .data,
            let dto = try? JSONDecoder().decode(ProfilesIdentityDTO.self, from: data) {
             let displayName = formattedDisplayName(dto.full_name, fallback: fallbackName)
             if !displayName.isEmpty {
@@ -746,9 +746,9 @@ class DashboardLenderRequestViewController: UIViewController {
     }
 
     private func renderBorrowerInitials(fullName: String) {
-        let size = initial?.bounds.size == .zero || initial == nil
+        let size = initial?.bounds.size == .zero
             ? CGSize(width: 56, height: 56)
-            : initial!.bounds.size
+            : (initial?.bounds.size ?? CGSize(width: 56, height: 56))
         initial?.image = drawInitialsImage(initials: makeInitials(from: fullName), size: size)
         initial?.contentMode = .scaleAspectFill
         initial?.clipsToBounds = true
@@ -890,11 +890,10 @@ class DashboardLenderRequestViewController: UIViewController {
                 .execute()
 
             struct Row: Decodable { let category: String? }
-            if let data = response.data as? Data {
-                let row = try JSONDecoder().decode(Row.self, from: data)
-                if let cat = row.category, !cat.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    return cat
-                }
+            let data = response.data
+            let row = try JSONDecoder().decode(Row.self, from: data)
+            if let cat = row.category, !cat.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return cat
             }
         } catch {
             // ignore; keep "—"

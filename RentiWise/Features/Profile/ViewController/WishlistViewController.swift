@@ -146,7 +146,10 @@ class WishlistViewController: UITableViewController {
     
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         if isLoading {
-            let cell = tableView.dequeueReusableCell(withIdentifier: SkeletonTableViewCell.reuseID, for: indexPath) as! SkeletonTableViewCell
+            guard let cell = tableView.dequeueReusableCell(withIdentifier: SkeletonTableViewCell.reuseID, for: indexPath) as? SkeletonTableViewCell else {
+                assertionFailure("Could not dequeue SkeletonTableViewCell")
+                return UITableViewCell()
+            }
             cell.preservesSuperviewLayoutMargins = false
             cell.layoutMargins = .zero
             return cell
@@ -219,11 +222,17 @@ class WishlistViewController: UITableViewController {
             return cell
         }
         
-        let cell = tableView.dequeueReusableCell(withIdentifier: "WishlistCell", for: indexPath) as! WishlistCell
+        guard let cell = tableView.dequeueReusableCell(withIdentifier: "WishlistCell", for: indexPath) as? WishlistCell else {
+            assertionFailure("Could not dequeue WishlistCell")
+            return UITableViewCell()
+        }
         // Remove inherited margins so the card’s own 20pt is the only side gap
         cell.preservesSuperviewLayoutMargins = false
         cell.layoutMargins = .zero
         cell.directionalLayoutMargins = .zero
+        guard indexPath.row < items.count else {
+            return cell
+        }
         
         let item = items[indexPath.row]
         cell.configure(with: item, brandTeal: brandTeal)
@@ -274,7 +283,8 @@ private class WishlistCell: UITableViewCell {
     }
     
     required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
+        super.init(coder: coder)
+        setupUI()
     }
     
     private func setupUI() {

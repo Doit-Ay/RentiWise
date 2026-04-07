@@ -741,7 +741,10 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
 
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         if collectionView === trendingCollectionView {
-            let cell = collectionView.dequeueReusableCell(withReuseIdentifier: TrendingItemCell.reuseID, for: indexPath) as! TrendingItemCell
+            guard let cell = collectionView.dequeueReusableCell(withReuseIdentifier: TrendingItemCell.reuseID, for: indexPath) as? TrendingItemCell else {
+                assertionFailure("Could not dequeue TrendingItemCell")
+                return UICollectionViewCell()
+            }
             let item = trendingItems[indexPath.item]
             cell.configure(with: item, currencyFormatter: currencyFormatter)
             cell.onRentTapped = { [weak self] in

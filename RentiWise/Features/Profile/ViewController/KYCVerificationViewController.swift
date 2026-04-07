@@ -189,8 +189,15 @@ final class KYCVerificationViewController: UIViewController {
                 let session = try await SupabaseManager.shared.client.auth.session
                 let supabaseUrl = Bundle.main.object(forInfoDictionaryKey: "SUPABASE_URL") as? String ?? ""
                 let functionUrl = "\(supabaseUrl)/functions/v1/create-kyc-session"
+                guard let url = URL(string: functionUrl) else {
+                    throw NSError(
+                        domain: "KYC",
+                        code: 0,
+                        userInfo: [NSLocalizedDescriptionKey: "KYC service is not configured correctly."]
+                    )
+                }
 
-                var request = URLRequest(url: URL(string: functionUrl)!)
+                var request = URLRequest(url: url)
                 request.httpMethod = "POST"
                 request.timeoutInterval = 20
                 request.setValue("application/json", forHTTPHeaderField: "Content-Type")

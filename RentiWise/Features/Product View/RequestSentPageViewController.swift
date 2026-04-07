@@ -222,11 +222,9 @@ class RequestSentPageViewController: UIViewController {
         ownerDistanceLabel?.text = ""
 
         // Async distance from item coordinates or owner address
-        if let item = item {
-            Task { [weak self] in
-                let text = await DistanceService.shared.distanceText(for: item)
-                await MainActor.run { self?.ownerDistanceLabel?.text = text }
-            }
+        Task { [weak self] in
+            let text = await DistanceService.shared.distanceText(for: item)
+            await MainActor.run { self?.ownerDistanceLabel?.text = text }
         }
     }
     
@@ -409,7 +407,7 @@ private extension RequestSentPageViewController {
                 .eq("id", value: ownerId)
                 .single()
                 .execute()
-                .data as? Data {
+                .data {
                 
                 let dto = try JSONDecoder().decode(UsersDTO.self, from: usersData)
                 await MainActor.run { [weak self] in
@@ -424,7 +422,7 @@ private extension RequestSentPageViewController {
                 .eq("id", value: ownerId)
                 .single()
                 .execute()
-                .data as? Data {
+                .data {
                 
                 let dto = try JSONDecoder().decode(ProfilesDTO.self, from: profilesData)
                 await MainActor.run { [weak self] in
@@ -494,7 +492,9 @@ private extension RequestSentPageViewController {
     func renderOwnerInitials(fullName: String) {
         let initials = makeInitials(from: fullName)
         let targetView = ownerAvatarView
-        let size = targetView?.bounds.size == .zero || targetView?.bounds.size == nil ? CGSize(width: 60, height: 60) : targetView!.bounds.size
+        let size = targetView?.bounds.size == .zero
+            ? CGSize(width: 60, height: 60)
+            : (targetView?.bounds.size ?? CGSize(width: 60, height: 60))
         
         // Ensure we have an image view to show initials image
         let targetImageView: UIImageView

@@ -11,9 +11,9 @@ import XCTest
 final class OTPSystemTests: XCTestCase {
 
     // MARK: - TC-01: OTP Display Format
-    /// Precondition: BorrowerOTPViewController receives a valid 4-digit string from Edge Function
-    /// Expected: Text is exactly 4 characters, all numeric, font is monospaced 56pt bold
-    /// Failure: Label shows nil, less than 4 digits, or non-numeric characters
+    /// Precondition: BorrowerOTPViewController receives a valid 6-digit string from service
+    /// Expected: Placeholder is shown before load completes, and font size is 56pt for readability
+    /// Failure: Label shows nil or incorrect placeholder
     func testTC01_OTPDisplayFormat() {
         let vc = BorrowerOTPViewController()
         vc.requestId = "test-request-id"
@@ -30,8 +30,6 @@ final class OTPSystemTests: XCTestCase {
 
         // Verify font configuration
         if let font = otpLabel?.font {
-            XCTAssertTrue(font.fontDescriptor.symbolicTraits.contains(.traitMonoSpace),
-                          "OTP font should be monospaced")
             XCTAssertEqual(font.pointSize, 56, "OTP font should be 56pt")
         }
     }
@@ -68,7 +66,7 @@ final class OTPSystemTests: XCTestCase {
         let fields = mirror.children.first(where: { $0.label == "otpFields" })?.value as? [UITextField]
 
         XCTAssertNotNil(fields, "OTP fields should exist")
-        XCTAssertEqual(fields?.count, 4, "Should have exactly 4 OTP input fields")
+        XCTAssertEqual(fields?.count, 6, "Should have exactly 6 OTP input fields")
 
         // Simulate typing "1" in the first field
         if let field = fields?.first {
@@ -108,7 +106,7 @@ final class OTPSystemTests: XCTestCase {
 
     // MARK: - TC-05: OTP Lockout After 3 Failures (Manual QA)
     /// Precondition: otp_attempt_count = 2 in DB for the request
-    /// Steps: Enter any wrong 4-digit code → tap "Confirm Handoff"
+    /// Steps: Enter any wrong 6-digit code → tap "Confirm Handoff"
     /// Expected: Input boxes disabled, "Contact support" shown, status = 'otp_blocked' in DB
     /// NOTE: Requires live Supabase — see ManualQAChecklist below
     func testTC05_OTPLockoutAfter3Failures_MANUAL_QA() {

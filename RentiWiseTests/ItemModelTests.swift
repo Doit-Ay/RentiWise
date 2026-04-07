@@ -176,8 +176,12 @@ final class ItemModelTests: XCTestCase {
             condition: "Good",
             price_per_day: 30.0,
             deposit_amount: 50.0,
+            declared_value: 2500,
             images: ["speaker.jpg"],
-            is_active: true
+            is_active: true,
+            latitude: nil,
+            longitude: nil,
+            location_address: nil
         )
 
         let data = try JSONEncoder().encode(payload)
@@ -185,6 +189,7 @@ final class ItemModelTests: XCTestCase {
         XCTAssertNotNil(dict)
         XCTAssertEqual(dict?["title"] as? String, "Speaker")
         XCTAssertEqual(dict?["price_per_day"] as? Double, 30.0)
+        XCTAssertEqual(dict?["declared_value"] as? Int, 2500)
         XCTAssertEqual(dict?["is_active"] as? Bool, true)
     }
 

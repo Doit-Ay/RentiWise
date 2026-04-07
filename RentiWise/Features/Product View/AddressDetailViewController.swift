@@ -27,7 +27,24 @@ final class AddressDetailViewController: UIViewController {
         super.init(nibName: nil, bundle: nil)
     }
     required init?(coder: NSCoder) {
-        fatalError("Use init(address:)")
+        self.address = Address(
+            id: UUID().uuidString,
+            user_id: "",
+            label: nil,
+            full_name: nil,
+            phone: nil,
+            address_line1: "",
+            address_line2: nil,
+            city: "",
+            state: "",
+            postal_code: "",
+            country: "",
+            is_default: false,
+            created_at: nil,
+            latitude: nil,
+            longitude: nil
+        )
+        super.init(coder: coder)
     }
 
     // MARK: - Lifecycle

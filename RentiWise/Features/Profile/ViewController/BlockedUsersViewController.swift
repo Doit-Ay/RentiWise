@@ -70,6 +70,7 @@ final class BlockedUsersViewController: UITableViewController {
             cell.accessoryType = .none
             return cell
         }
+        guard indexPath.row < blockedUsers.count else { return cell }
 
         let user = blockedUsers[indexPath.row]
         var config = cell.defaultContentConfiguration()

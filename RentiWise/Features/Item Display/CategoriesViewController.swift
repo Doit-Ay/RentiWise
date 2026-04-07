@@ -282,7 +282,10 @@ extension CategoriesViewController: UITableViewDataSource {
     func tableView(_ tableView: UITableView,
                    cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         if isLoading {
-            let cell = tableView.dequeueReusableCell(withIdentifier: SkeletonTableViewCell.reuseID, for: indexPath) as! SkeletonTableViewCell
+            guard let cell = tableView.dequeueReusableCell(withIdentifier: SkeletonTableViewCell.reuseID, for: indexPath) as? SkeletonTableViewCell else {
+                assertionFailure("Could not dequeue SkeletonTableViewCell")
+                return UITableViewCell()
+            }
             cell.backgroundColor = .clear
             return cell
         }
@@ -292,6 +295,9 @@ extension CategoriesViewController: UITableViewDataSource {
         guard let cell = tableView.dequeueReusableCell(withIdentifier: "ItemCell", for: indexPath) as? CategoryItemCell else {
             // Fallback if the storyboard isn’t configured yet
             let fallback = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
+            guard indexPath.row < data.count else {
+                return fallback
+            }
             let item = data[indexPath.row]
             fallback.textLabel?.text = item.title
             fallback.detailTextLabel?.text = formattedPricePerDay(item.price_per_day)
@@ -304,6 +310,9 @@ extension CategoriesViewController: UITableViewDataSource {
             fallback.contentView.clipsToBounds = false
             fallback.clipsToBounds = false
             return fallback
+        }
+        guard indexPath.row < data.count else {
+            return cell
         }
 
         let item = data[indexPath.row]
@@ -333,6 +342,7 @@ extension CategoriesViewController: UITableViewDelegate {
         guard !isLoading else { return }
 
         let data = isFiltering ? filteredItems : items
+        guard indexPath.row < data.count else { return }
         let selectedItem = data[indexPath.row]
 
         let nibName = "ProductViewController"
@@ -367,6 +377,10 @@ extension CategoriesViewController: CategoryItemCellDelegate {
             return
         }
         let data = isFiltering ? filteredItems : items
+        guard indexPath.row < data.count else {
+            debugLog("❌ Invalid row index for current data set")
+            return
+        }
         let item = data[indexPath.row]
         debugLog("📦 Opening RequestVC for item: \(item.title)")
         Task { [weak self] in

@@ -170,7 +170,10 @@ class PaymentHistoryViewController: UITableViewController {
         }
         
         let item = itemsForSection[indexPath.row]
-        let cell = tableView.dequeueReusableCell(withIdentifier: "PaymentCell", for: indexPath) as! PaymentHistoryCell
+        guard let cell = tableView.dequeueReusableCell(withIdentifier: "PaymentCell", for: indexPath) as? PaymentHistoryCell else {
+            assertionFailure("Could not dequeue PaymentHistoryCell")
+            return UITableViewCell()
+        }
         cell.configure(with: item, brandTeal: brandTeal)
         return cell
     }
@@ -229,7 +232,8 @@ private class PaymentHistoryCell: UITableViewCell {
     }
     
     required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
+        super.init(coder: coder)
+        setupUI()
     }
     
     private func setupUI() {

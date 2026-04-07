@@ -6,24 +6,43 @@ import Supabase
 final class SupabaseManager {
     static let shared = SupabaseManager()
 
-    private static func infoPlistValue(for key: String) -> String {
-        guard let val = Bundle.main.object(forInfoDictionaryKey: key) as? String, !val.isEmpty else {
-            fatalError("Missing Info.plist key '\(key)'. Add it to Info.plist (or your .xcconfig).")
-        }
-        return val
+    private static let fallbackSupabaseURL = "https://example.com"
+
+    private static var safeFallbackURL: URL {
+        URL(string: fallbackSupabaseURL) ?? URL(fileURLWithPath: "/")
     }
 
-    private let urlString = SupabaseManager.infoPlistValue(for: "SUPABASE_URL")
-    private let anonKey   = SupabaseManager.infoPlistValue(for: "SUPABASE_ANON_KEY")
+    private static func infoPlistValue(for key: String) -> String? {
+        guard let raw = Bundle.main.object(forInfoDictionaryKey: key) as? String else { return nil }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private let urlString: String
+    private let anonKey: String
 
     let client: SupabaseClient
 
     // Public read-only accessors so other parts (like signed upload helper) can use them.
-    var projectURL: URL { URL(string: urlString)! }
+    var projectURL: URL { URL(string: urlString) ?? Self.safeFallbackURL }
     var publicAnonKey: String { anonKey }
 
     private init() {
-        let url = URL(string: urlString)!
+        let configuredURLString = SupabaseManager.infoPlistValue(for: "SUPABASE_URL")
+        let configuredAnonKey = SupabaseManager.infoPlistValue(for: "SUPABASE_ANON_KEY")
+
+        if configuredURLString == nil || configuredAnonKey == nil {
+            debugLog("[SupabaseManager] Missing SUPABASE_URL and/or SUPABASE_ANON_KEY in Info.plist. Using safe fallback values.")
+        }
+
+        if let configuredURLString, URL(string: configuredURLString) != nil {
+            self.urlString = configuredURLString
+        } else {
+            self.urlString = SupabaseManager.fallbackSupabaseURL
+        }
+        self.anonKey = configuredAnonKey ?? ""
+
+        let url = URL(string: self.urlString) ?? SupabaseManager.safeFallbackURL
 
         let options = SupabaseClientOptions(
             db: .init(),

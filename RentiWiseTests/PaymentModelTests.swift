@@ -20,13 +20,13 @@ final class PaymentModelTests: XCTestCase {
         )
 
         let data = try JSONEncoder().encode(insert)
-        let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        XCTAssertEqual(dict?["request_id"] as? String, "req-1")
-        XCTAssertEqual(dict?["provider"] as? String, "cod")
-        XCTAssertEqual(dict?["status"] as? String, "pending")
-        XCTAssertEqual(dict?["currency"] as? String, "INR")
-        XCTAssertEqual(dict?["rental_fee"] as? Double, 150.00)
-        XCTAssertEqual(dict?["total_amount"] as? Double, 650.00)
+        let dict = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(dict["request_id"] as? String, "req-1")
+        XCTAssertEqual(dict["provider"] as? String, "cod")
+        XCTAssertEqual(dict["status"] as? String, "pending")
+        XCTAssertEqual(dict["currency"] as? String, "INR")
+        XCTAssertEqual(dict["rental_fee"] as? Double, 150.00)
+        XCTAssertEqual(dict["total_amount"] as? Double, 650.00)
     }
 
     // MARK: - PaymentUpdate Encoding
@@ -35,30 +35,33 @@ final class PaymentModelTests: XCTestCase {
         let update = PaymentUpdate(
             status: "succeeded",
             pickup_code: "ABC123",
+            pickupcode_status: "pending",
             provider_payment_id: "pay_xyz",
             provider_receipt_url: "https://receipt.com",
             failure_reason: nil
         )
 
         let data = try JSONEncoder().encode(update)
-        let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        XCTAssertEqual(dict?["status"] as? String, "succeeded")
-        XCTAssertEqual(dict?["pickup_code"] as? String, "ABC123")
-        XCTAssertEqual(dict?["provider_payment_id"] as? String, "pay_xyz")
+        let dict = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(dict["status"] as? String, "succeeded")
+        XCTAssertEqual(dict["pickup_code"] as? String, "ABC123")
+        XCTAssertEqual(dict["pickupcode_status"] as? String, "pending")
+        XCTAssertEqual(dict["provider_payment_id"] as? String, "pay_xyz")
     }
 
     func testPaymentUpdateEncodingNilFields() throws {
         let update = PaymentUpdate(
             status: nil,
             pickup_code: nil,
+            pickupcode_status: nil,
             provider_payment_id: nil,
             provider_receipt_url: nil,
             failure_reason: "Card declined"
         )
 
         let data = try JSONEncoder().encode(update)
-        let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        XCTAssertEqual(dict?["failure_reason"] as? String, "Card declined")
+        let dict = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(dict["failure_reason"] as? String, "Card declined")
     }
 
     // MARK: - PaymentRow Decoding
@@ -135,10 +138,10 @@ final class PaymentModelTests: XCTestCase {
         )
 
         let data = try JSONEncoder().encode(event)
-        let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        XCTAssertEqual(dict?["payment_id"] as? String, "pay-1")
-        XCTAssertEqual(dict?["event_type"] as? String, "created")
-        XCTAssertNotNil(dict?["raw_payload"])
+        let dict = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(dict["payment_id"] as? String, "pay-1")
+        XCTAssertEqual(dict["event_type"] as? String, "created")
+        XCTAssertNotNil(dict["raw_payload"])
     }
 
     func testPaymentEventInsertEncodingNilPayload() throws {
@@ -149,8 +152,8 @@ final class PaymentModelTests: XCTestCase {
         )
 
         let data = try JSONEncoder().encode(event)
-        let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        XCTAssertEqual(dict?["event_type"] as? String, "failed")
+        let dict = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(dict["event_type"] as? String, "failed")
     }
 
     // MARK: - Payment Providers

@@ -596,14 +596,14 @@ final class ManualAddressViewController: UIViewController {
         Task {
             // 1) Build the payload basics
             let label = emptyToNil(labelField.text)
-            let fullName = fullNameField.text!.trimmingCharacters(in: .whitespacesAndNewlines)
-            let phone = phoneField.text!.trimmingCharacters(in: .whitespacesAndNewlines)
-            let line1 = line1Field.text!.trimmingCharacters(in: .whitespacesAndNewlines)
+            let fullName = fullNameField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let phone = phoneField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let line1 = line1Field.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             let line2 = emptyToNil(line2Field.text)
-            let city = cityField.text!.trimmingCharacters(in: .whitespacesAndNewlines)
-            let state = stateField.text!.trimmingCharacters(in: .whitespacesAndNewlines)
-            let postal = postalField.text!.trimmingCharacters(in: .whitespacesAndNewlines)
-            let country = countryField.text!.trimmingCharacters(in: .whitespacesAndNewlines)
+            let city = cityField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let state = stateField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let postal = postalField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let country = countryField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             let isDefault = defaultSwitch.isOn
 
             // 2) Resolve coordinates with robust fallbacks

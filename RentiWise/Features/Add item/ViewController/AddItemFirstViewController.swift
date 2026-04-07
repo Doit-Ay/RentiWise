@@ -282,11 +282,17 @@ class AddItemFirstViewController: UIViewController,
     func collectionView(_ collectionView: UICollectionView,
                         cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         if isAddTile(indexPath: indexPath) {
-            let cell = collectionView.dequeueReusableCell(withReuseIdentifier: reuseAddCell, for: indexPath) as! AddCell
+            guard let cell = collectionView.dequeueReusableCell(withReuseIdentifier: reuseAddCell, for: indexPath) as? AddCell else {
+                assertionFailure("Could not dequeue AddCell")
+                return UICollectionViewCell()
+            }
             cell.configure()
             return cell
         } else {
-            let cell = collectionView.dequeueReusableCell(withReuseIdentifier: reuseImageCell, for: indexPath) as! PhotoCell
+            guard let cell = collectionView.dequeueReusableCell(withReuseIdentifier: reuseImageCell, for: indexPath) as? PhotoCell else {
+                assertionFailure("Could not dequeue PhotoCell")
+                return UICollectionViewCell()
+            }
             let image = images[indexPath.item]
             cell.configure(with: image)
             cell.onDeleteTapped = { [weak self] cell in

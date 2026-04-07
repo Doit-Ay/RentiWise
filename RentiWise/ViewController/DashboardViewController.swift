@@ -48,6 +48,7 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
 
     // New: keep the full requests we fetched for history so we can open details
     private var ownerHistoryRequests: [RequestWithItem] = []
+    private var displayedHistoryRequests: [RequestWithItem] = []
 
     // Loading state — shows skeleton placeholders while fetching
     private var isLoading: Bool = false {
@@ -228,17 +229,19 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
         
         switch activeHistoryFilter {
         case .inProgress:
-            // pending or accepted
-            filteredRequests = ownerHistoryRequests.filter { $0.status == "pending" || $0.status == "accepted" }
+            let inProgressStatuses: Set<String> = ["pending", "accepted", "approved", "active", "in_progress"]
+            filteredRequests = ownerHistoryRequests.filter { inProgressStatuses.contains($0.status.lowercased()) }
         case .completed:
-            // completed or returned (based on application logic, completed is a terminal state)
-            filteredRequests = ownerHistoryRequests.filter { $0.status == "completed" || $0.status == "returned" }
+            let completedStatuses: Set<String> = ["completed", "returned"]
+            filteredRequests = ownerHistoryRequests.filter { completedStatuses.contains($0.status.lowercased()) }
         case .cancelled:
-            filteredRequests = ownerHistoryRequests.filter { $0.status == "cancelled" || $0.status == "rejected" }
+            let cancelledStatuses: Set<String> = ["cancelled", "rejected", "denied"]
+            filteredRequests = ownerHistoryRequests.filter { cancelledStatuses.contains($0.status.lowercased()) }
         case .all:
             filteredRequests = ownerHistoryRequests
         }
-        
+
+        displayedHistoryRequests = filteredRequests
         self.historyRows = filteredRequests.map { req in
             let title = req.items?.title ?? req.item_id
             let rate = req.items?.price_per_day ?? 0
@@ -397,9 +400,20 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
             self.isLoading = true
             self.historyRows = []
             self.ownerHistoryRequests = []
+            self.displayedHistoryRequests = []
         }
 
-        guard let userId = await SupabaseManager.shared.currentUserId() else { return }
+        guard let userId = await SupabaseManager.shared.currentUserId() else {
+            await MainActor.run {
+                self.isLoading = false
+                self.historyRows = []
+                self.ownerHistoryRequests = []
+                self.displayedHistoryRequests = []
+                self.tableView.reloadData()
+                self.loadEmptyStateIfNeeded()
+            }
+            return
+        }
 
         // Mirror Home/Requests select and shape
         let select =
@@ -428,6 +442,7 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
                 self.isLoading = false
                 self.historyRows = []
                 self.ownerHistoryRequests = []
+                self.displayedHistoryRequests = []
                 self.tableView.reloadData()
                 self.loadEmptyStateIfNeeded()
             }
@@ -471,11 +486,17 @@ extension DashboardViewController: UITableViewDataSource {
                    cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         // Show skeleton placeholders while loading
         if isLoading {
-            let cell = tableView.dequeueReusableCell(withIdentifier: SkeletonTableViewCell.reuseID, for: indexPath) as! SkeletonTableViewCell
+            guard let cell = tableView.dequeueReusableCell(withIdentifier: SkeletonTableViewCell.reuseID, for: indexPath) as? SkeletonTableViewCell else {
+                assertionFailure("Could not dequeue SkeletonTableViewCell")
+                return UITableViewCell()
+            }
             return cell
         }
 
         if Segment(rawValue: roleSegmented.selectedSegmentIndex) == .listing {
+            guard indexPath.section < items.count else {
+                return UITableViewCell()
+            }
             guard let cell = tableView.dequeueReusableCell(withIdentifier: "Listing", for: indexPath) as? LenderListingTableViewCell else {
                 return UITableViewCell()
             }
@@ -485,6 +506,9 @@ extension DashboardViewController: UITableViewDataSource {
             cell.contentView.backgroundColor = .clear
             return cell
         } else {
+            guard indexPath.section < historyRows.count else {
+                return UITableViewCell()
+            }
             guard let cell = tableView.dequeueReusableCell(withIdentifier: "History", for: indexPath) as? LenderHistoryTableViewCell else {
                 return UITableViewCell()
             }
@@ -529,6 +553,7 @@ extension DashboardViewController: UITableViewDelegate {
         switch segment {
         case .listing:
             // Open own item detail with 3-dots menu (Edit/Delete)
+            guard indexPath.section < items.count else { return }
             let item = items[indexPath.section]
 
             let nibName = "ProductViewController"
@@ -555,8 +580,8 @@ extension DashboardViewController: UITableViewDelegate {
 
         case .history:
             // New: open BookingApprovalViewController in history mode
-            guard indexPath.section < ownerHistoryRequests.count else { return }
-            let req = ownerHistoryRequests[indexPath.section]
+            guard indexPath.section < displayedHistoryRequests.count else { return }
+            let req = displayedHistoryRequests[indexPath.section]
 
             let nibName = "BookingApprovalViewController"
             let bookingVC: BookingApprovalViewController

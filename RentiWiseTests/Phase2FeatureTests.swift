@@ -92,6 +92,7 @@ final class TrustScoreTests: XCTestCase {
 
 // MARK: - Feature 2: IAP Tests
 
+@MainActor
 final class IAPTests: XCTestCase {
 
     // TC-P2-07: Product IDs are correct
@@ -102,17 +103,19 @@ final class IAPTests: XCTestCase {
     }
 
     // TC-P2-08: IAPManager singleton exists
-    func testIAPManagerSingleton() async {
-        let manager = await IAPManager.shared
+    func testIAPManagerSingleton() {
+        let manager = IAPManager.shared
         XCTAssertNotNil(manager, "IAPManager.shared should be available")
     }
 
-    // TC-P2-09: Product fetch returns empty without App Store Connect config
-    func testProductFetchReturnsEmptyWithoutConfig() async {
-        await IAPManager.shared.fetchProducts()
-        let products = await IAPManager.shared.products
-        // In test environment without App Store Connect, products will be empty
-        XCTAssertTrue(products.isEmpty || !products.isEmpty, "Products fetch should not crash")
+    // TC-P2-09: Supported product catalog remains stable
+    func testSupportedProductCatalogIsUnique() {
+        let productIds = [
+            IAPManager.boostProductId,
+            IAPManager.lenderProProductId,
+            IAPManager.verifiedBadgeProductId
+        ]
+        XCTAssertEqual(Set(productIds).count, 3, "Each supported entitlement should use a unique product ID")
     }
 
     // TC-P2-10: UpgradeProVC loads correctly

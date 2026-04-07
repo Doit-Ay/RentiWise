@@ -28,7 +28,22 @@ class EditProfileViewController: UITableViewController {
     }
     
     required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
+        self.profile = UserProfile(
+            id: "",
+            fullName: "",
+            email: "",
+            phone: "",
+            phoneVerified: false,
+            kycStatus: "unverified",
+            isLenderPro: false,
+            upiId: "",
+            collegeEmail: "",
+            isCollegeVerified: false,
+            averageRating: 0,
+            totalRentalsAsBorrower: 0,
+            borrowFreezeUntil: nil
+        )
+        super.init(coder: coder)
     }
     
     override func viewDidLoad() {

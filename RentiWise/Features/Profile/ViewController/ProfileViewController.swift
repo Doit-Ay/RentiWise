@@ -233,7 +233,10 @@ final class ProfileViewController: UITableViewController {
         let cell: UITableViewCell
         switch sectionType {
         case .account where indexPath.row == 0:
-            let headerCell = tableView.dequeueReusableCell(withIdentifier: "AccountHeaderCell", for: indexPath) as! AccountHeaderCell
+            guard let headerCell = tableView.dequeueReusableCell(withIdentifier: "AccountHeaderCell", for: indexPath) as? AccountHeaderCell else {
+                assertionFailure("Could not dequeue AccountHeaderCell")
+                return UITableViewCell()
+            }
             headerCell.configure(
                 displayName: displayName,
                 email: userEmail,
@@ -659,7 +662,8 @@ private class AccountHeaderCell: UITableViewCell {
     }
     
     required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
+        super.init(coder: coder)
+        setupUI()
     }
     
     private func setupUI() {

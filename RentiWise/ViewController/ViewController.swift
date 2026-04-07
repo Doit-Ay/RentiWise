@@ -24,19 +24,11 @@ class ViewController: UIViewController {
     }
 
     @IBAction func signInTapped(_ sender: UIButton) {
-        let storyboard = UIStoryboard(name: "Main", bundle: nil)
-        let vc = storyboard.instantiateViewController(withIdentifier: "SignViewController") as! SignViewController
-        // Ensure the destination doesn’t show a title
-        vc.title = ""
-        navigationController?.pushViewController(vc, animated: true)
+        openAuthScreen(.signIn(routeContext: .default))
     }
     
     @IBAction func signUpTapped(_ sender: UIButton) {
-        let storyboard = UIStoryboard(name: "Main", bundle: nil)
-        let vc = storyboard.instantiateViewController(withIdentifier: "SignUpViewController") as! SignUpViewController
-        // Ensure the destination doesn’t show a title
-        vc.title = ""
-        navigationController?.pushViewController(vc, animated: true)
+        openAuthScreen(.signUp)
     }
     
 }

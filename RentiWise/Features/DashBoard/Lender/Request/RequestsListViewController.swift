@@ -189,6 +189,9 @@ extension RequestsListViewController: UITableViewDataSource {
         guard let cell = tableView.dequeueReusableCell(withIdentifier: "Request", for: indexPath) as? LenderRequestTableViewCell else {
             return UITableViewCell()
         }
+        guard indexPath.section < rows.count else {
+            return cell
+        }
 
         let req = rows[indexPath.section]
 
@@ -254,6 +257,7 @@ extension RequestsListViewController: UITableViewDelegate {
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
+        guard indexPath.section < rows.count else { return }
 
         let detail = DashboardLenderRequestViewController(nibName: "DashboardLenderRequestViewController", bundle: nil)
         detail.title = "Details"

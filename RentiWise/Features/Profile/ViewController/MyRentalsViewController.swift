@@ -503,10 +503,20 @@ extension MyRentalsViewController: UITableViewDataSource {
     func tableView(_ tableView: UITableView,
                    cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         if isLoading {
-            return tableView.dequeueReusableCell(withIdentifier: SkeletonTableViewCell.reuseID, for: indexPath) as! SkeletonTableViewCell
+            guard let cell = tableView.dequeueReusableCell(withIdentifier: SkeletonTableViewCell.reuseID, for: indexPath) as? SkeletonTableViewCell else {
+                assertionFailure("Could not dequeue SkeletonTableViewCell")
+                return UITableViewCell()
+            }
+            return cell
+        }
+        guard indexPath.section < visibleRequests.count else {
+            return tableView.dequeueReusableCell(withIdentifier: "Borrower", for: indexPath)
         }
         let req = visibleRequests[indexPath.section]
-        let cell = tableView.dequeueReusableCell(withIdentifier: "Borrower", for: indexPath) as! BorrowerTableViewCell
+        guard let cell = tableView.dequeueReusableCell(withIdentifier: "Borrower", for: indexPath) as? BorrowerTableViewCell else {
+            assertionFailure("Could not dequeue BorrowerTableViewCell")
+            return UITableViewCell()
+        }
         cell.configure(with: req, currencyFormatter: currencyFormatter)
         cell.backgroundColor = .clear
         cell.contentView.backgroundColor = .clear
@@ -526,6 +536,7 @@ extension MyRentalsViewController: UITableViewDelegate {
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         guard !isNavigating, !isLoading else { return }
+        guard indexPath.section < visibleRequests.count else { return }
 
         isNavigating = true
         tableView.deselectRow(at: indexPath, animated: true)

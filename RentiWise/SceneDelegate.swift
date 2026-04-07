@@ -1,5 +1,6 @@
 import UIKit
 import Supabase
+import CoreLocation
 #if canImport(GoogleSignIn)
 import GoogleSignIn
 #endif
@@ -58,16 +59,19 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     func sceneDidBecomeActive(_ scene: UIScene) {
-        NotificationService.shared.requestPermissionIfNeeded()
         Task {
-            // 1) Request location permission & get GPS
-            try? await AppLocationManager.shared.ensureWhenInUseAuthorization()
-            let location = try? await AppLocationManager.shared.currentLocation()
+            // Only reuse location if the user already granted access.
+            // This avoids prompting for permissions during app activation.
+            let coordinates = await AppLocationManager.shared.currentCoordinates()
 
-            // 2) Auto-save GPS to addresses table if user is logged in and has no address yet
-            if let location = location,
+            // Auto-save GPS to addresses table if the user is logged in and has no address yet.
+            if let coordinates,
                let userId = await SupabaseManager.shared.currentUserId() {
-                await autoSaveAddressIfNeeded(userId: userId, lat: location.coordinate.latitude, lon: location.coordinate.longitude)
+                await autoSaveAddressIfNeeded(
+                    userId: userId,
+                    lat: coordinates.latitude,
+                    lon: coordinates.longitude
+                )
             }
 
             await PendingItemRemovalSync.shared.syncIfNeeded()
