@@ -219,8 +219,14 @@ class RequestSentPageViewController: UIViewController {
         if ownerstarRating?.text?.isEmpty ?? true {
             ownerstarRating?.text = "No rating"
         }
-        if ownerDistanceLabel?.text?.isEmpty ?? true {
-            ownerDistanceLabel?.text = "— km"
+        ownerDistanceLabel?.text = ""
+
+        // Async distance from item coordinates or owner address
+        if let item = item {
+            Task { [weak self] in
+                let text = await DistanceService.shared.distanceText(for: item)
+                await MainActor.run { self?.ownerDistanceLabel?.text = text }
+            }
         }
     }
     
@@ -448,8 +454,6 @@ private extension RequestSentPageViewController {
         }
         if let d = distanceKm {
             ownerDistanceLabel?.text = String(format: "%.1f km", d)
-        } else if ownerDistanceLabel?.text?.isEmpty ?? true {
-            ownerDistanceLabel?.text = "— km"
         }
         
         if let avatar = avatarURLString, !avatar.isEmpty, let url = urlForAvatarPath(avatar) {

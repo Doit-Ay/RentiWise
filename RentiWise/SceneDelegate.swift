@@ -60,8 +60,46 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     func sceneDidBecomeActive(_ scene: UIScene) {
         NotificationService.shared.requestPermissionIfNeeded()
         Task {
+            // 1) Request location permission & get GPS
+            try? await AppLocationManager.shared.ensureWhenInUseAuthorization()
+            let location = try? await AppLocationManager.shared.currentLocation()
+
+            // 2) Auto-save GPS to addresses table if user is logged in and has no address yet
+            if let location = location,
+               let userId = await SupabaseManager.shared.currentUserId() {
+                await autoSaveAddressIfNeeded(userId: userId, lat: location.coordinate.latitude, lon: location.coordinate.longitude)
+            }
+
             await PendingItemRemovalSync.shared.syncIfNeeded()
             await NotificationRealtimeService.shared.refresh()
+        }
+    }
+
+    /// Inserts a default address row with GPS coordinates if the user has no address yet.
+    private func autoSaveAddressIfNeeded(userId: String, lat: Double, lon: Double) async {
+        struct AddressCheck: Decodable { let id: String }
+        struct AddressInsert: Encodable {
+            let user_id: String
+            let label: String
+            let latitude: Double
+            let longitude: Double
+            let is_default: Bool
+        }
+        do {
+            let existing: [AddressCheck] = try await SupabaseManager.shared.client
+                .from("addresses")
+                .select("id")
+                .eq("user_id", value: userId)
+                .limit(1)
+                .execute()
+                .value
+            guard existing.isEmpty else { return }
+
+            let payload = AddressInsert(user_id: userId, label: "Home", latitude: lat, longitude: lon, is_default: true)
+            _ = try await SupabaseManager.shared.client.from("addresses").insert(payload).execute()
+            debugLog("[SceneDelegate] Auto-saved GPS address for user \(userId)")
+        } catch {
+            debugLog("[SceneDelegate] autoSaveAddressIfNeeded error: \(error.localizedDescription)")
         }
     }
 

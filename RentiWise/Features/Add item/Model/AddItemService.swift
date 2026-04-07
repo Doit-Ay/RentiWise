@@ -490,6 +490,7 @@ final class AddItemService: AddItemServicing {
             let country: String?
         }
 
+        // 1) Try the user's default address from the addresses table
         do {
             let rows: [DefaultAddressRow] = try await client
                 .from("addresses")
@@ -500,23 +501,71 @@ final class AddItemService: AddItemServicing {
                 .execute()
                 .value
 
-            guard let row = rows.first else {
-                return nil
+            if let row = rows.first,
+               let lat = row.latitude, let lon = row.longitude,
+               lat != 0, lon != 0 {
+                let parts = [row.city, row.state, row.country]
+                    .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+                let addressText = parts.isEmpty ? nil : parts.joined(separator: ", ")
+                return ListingLocation(latitude: lat, longitude: lon, locationAddress: addressText)
             }
-            let parts = [row.city, row.state, row.country]
-                .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
-                .filter { !$0.isEmpty }
-            let addressText = parts.isEmpty ? nil : parts.joined(separator: ", ")
-
-            return ListingLocation(
-                latitude: row.latitude,
-                longitude: row.longitude,
-                locationAddress: addressText
-            )
         } catch {
-            debugLog("[AddItem] Failed to fetch listing location: \(error.localizedDescription)")
-            return nil
+            debugLog("[AddItem] Failed to fetch listing location from addresses: \(error.localizedDescription)")
         }
+
+        // 2) Fallback: use device GPS and auto-save to addresses
+        if let location = try? await AppLocationManager.shared.currentLocation() {
+            let lat = location.coordinate.latitude
+            let lon = location.coordinate.longitude
+            // Auto-create an address row so future listings use it
+            await autoSaveAddressFromGPS(userId: ownerId, latitude: lat, longitude: lon)
+            return ListingLocation(latitude: lat, longitude: lon, locationAddress: nil)
+        }
+
+        debugLog("[AddItem] No location available from addresses or GPS")
+        return nil
+    }
+
+    /// Saves the device GPS as the user's default address if they don't have one yet.
+    private func autoSaveAddressFromGPS(userId: String, latitude: Double, longitude: Double) async {
+        struct AddressInsert: Encodable {
+            let user_id: String
+            let label: String
+            let latitude: Double
+            let longitude: Double
+            let is_default: Bool
+        }
+        do {
+            // Check if address already exists
+            let existing: [DefaultAddressRow] = try await client
+                .from("addresses")
+                .select("latitude,longitude,city,state,country")
+                .eq("user_id", value: userId)
+                .limit(1)
+                .execute()
+                .value
+            guard existing.isEmpty else { return }
+
+            let payload = AddressInsert(
+                user_id: userId,
+                label: "Home",
+                latitude: latitude,
+                longitude: longitude,
+                is_default: true
+            )
+            _ = try await client.from("addresses").insert(payload).execute()
+        } catch {
+            debugLog("[AddItem] autoSaveAddressFromGPS failed: \(error.localizedDescription)")
+        }
+    }
+
+    private struct DefaultAddressRow: Decodable {
+        let latitude: Double?
+        let longitude: Double?
+        let city: String?
+        let state: String?
+        let country: String?
     }
 
     // MARK: - Error wrapping for clearer UI

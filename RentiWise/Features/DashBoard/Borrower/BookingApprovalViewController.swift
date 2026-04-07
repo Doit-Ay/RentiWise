@@ -261,10 +261,8 @@ class BookingApprovalViewController: UIViewController {
             b.titleLabel?.font = .systemFont(ofSize: 18, weight: .semibold)
             b.layer.cornerRadius = 8
             b.layer.masksToBounds = true
-            // Remove any existing height constraints and add 44pt
-            for c in b.constraints where c.firstAttribute == .height {
-                c.isActive = false
-            }
+            let heightConstraints = b.constraints.filter { $0.firstAttribute == .height }
+            NSLayoutConstraint.deactivate(heightConstraints)
             b.heightAnchor.constraint(equalToConstant: 44).isActive = true
         }
 

@@ -19,6 +19,7 @@ class BorrowerTableViewCell: UITableViewCell {
     private let cardBackground = UIView()
     private var didInstallCardConstraints = false
     private var imageLoadTask: URLSessionDataTask?
+    private var distanceWorkItem: Task<Void, Never>?
 
     // Toggle shadow on/off if you prefer a completely flat card
     private let showsShadow: Bool = true
@@ -48,17 +49,12 @@ class BorrowerTableViewCell: UITableViewCell {
         cardBackground.removeFromSuperview()
         cardBackground.translatesAutoresizingMaskIntoConstraints = false
 
-        // Solid card fill that matches system background (no blur/tint)
         cardBackground.backgroundColor = .systemBackground
-
-        // Rounded card that clips its content
         cardBackground.layer.cornerRadius = 16
         cardBackground.clipsToBounds = false
 
-        // Insert the card behind content
         contentView.insertSubview(cardBackground, at: 0)
 
-        // 16pt insets so the card “floats” from the edges
         let inset: CGFloat = 16
         NSLayoutConstraint.activate([
             cardBackground.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: inset),
@@ -74,21 +70,18 @@ class BorrowerTableViewCell: UITableViewCell {
             cardBackground.layer.shadowOpacity = 0
             return
         }
-        // Stronger, softer shadow to match Requests page
         cardBackground.layer.masksToBounds = false
         cardBackground.layer.shadowColor = UIColor.black.cgColor
         cardBackground.layer.shadowOpacity = 0.22
         cardBackground.layer.shadowRadius = 12
         cardBackground.layer.shadowOffset = CGSize(width: 0, height: 6)
 
-        // Optional: rasterize for smoother scrolling
         cardBackground.layer.shouldRasterize = true
         cardBackground.layer.rasterizationScale = UIScreen.main.scale
     }
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        // Keep radius and shadow path consistent
         let r: CGFloat = 16
         cardBackground.layer.cornerRadius = r
         if showsShadow {
@@ -100,6 +93,8 @@ class BorrowerTableViewCell: UITableViewCell {
         super.prepareForReuse()
         imageLoadTask?.cancel()
         imageLoadTask = nil
+        distanceWorkItem?.cancel()
+        distanceWorkItem = nil
 
         borrowerItemImage?.image = nil
         borrowerItemName?.text = nil
@@ -118,8 +113,16 @@ class BorrowerTableViewCell: UITableViewCell {
         let amount = NSNumber(value: item.price_per_day)
         let priceText = (currencyFormatter.string(from: amount) ?? "\(item.price_per_day)") + " / day"
         borrowerItemRate?.text = priceText
-        borrowerItemDistance?.text = "1.4 km"
+        borrowerItemDistance?.text = ""
         borrowerItemOwnerName?.text = "By —"
+
+        // Async distance from item lat/lon or owner address
+        distanceWorkItem?.cancel()
+        distanceWorkItem = Task { [weak self] in
+            let text = await DistanceService.shared.distanceText(for: item)
+            guard !Task.isCancelled else { return }
+            await MainActor.run { self?.borrowerItemDistance?.text = text }
+        }
 
         if let firstPath = item.images.first,
            let url = StorageURLBuilder.publicFileURL(for: firstPath) {
@@ -137,7 +140,7 @@ class BorrowerTableViewCell: UITableViewCell {
         let amount = NSNumber(value: lite.price_per_day)
         let priceText = (currencyFormatter.string(from: amount) ?? "\(lite.price_per_day)") + " / day"
         borrowerItemRate?.text = priceText
-        borrowerItemDistance?.text = "1.4 km"
+        borrowerItemDistance?.text = ""
         borrowerItemOwnerName?.text = "By —"
 
         if let firstPath = lite.images.first,
@@ -152,15 +155,12 @@ class BorrowerTableViewCell: UITableViewCell {
 
     // MARK: - Configure with RequestWithItem (borrower requests)
     func configure(with request: RequestWithItem, currencyFormatter: NumberFormatter) {
-        // Title: prefer joined item title, fallback to item_id
         borrowerItemName?.text = request.items?.title ?? request.item_id
 
-        // Price or date range
         if let p = request.items?.price_per_day {
             let amount = NSNumber(value: p)
             borrowerItemRate?.text = (currencyFormatter.string(from: amount) ?? "\(p)") + " / day"
         } else {
-            // No price available -> show date range
             let sql = DateFormatter()
             sql.calendar = Calendar(identifier: .gregorian)
             sql.timeZone = .current
@@ -179,13 +179,17 @@ class BorrowerTableViewCell: UITableViewCell {
             }
         }
 
-        // Status: use the ownerName label slot for status display
-        borrowerItemOwnerName?.text = request.status.capitalized
+        borrowerItemOwnerName?.text = "Status: \(request.status.capitalized)"
 
-        // Distance placeholder
-        borrowerItemDistance?.text = "1.4 km"
+        // Distance from owner's address
+        borrowerItemDistance?.text = ""
+        distanceWorkItem?.cancel()
+        distanceWorkItem = Task { [weak self] in
+            let text = await DistanceService.shared.distanceText(toUserId: request.owner_id)
+            guard !Task.isCancelled else { return }
+            await MainActor.run { self?.borrowerItemDistance?.text = text }
+        }
 
-        // Image: from joined item images
         if let path = request.items?.images.first,
            let url = StorageURLBuilder.publicFileURL(for: path) {
             setImage(from: url)

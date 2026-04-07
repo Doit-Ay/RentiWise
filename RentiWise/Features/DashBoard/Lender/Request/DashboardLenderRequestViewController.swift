@@ -308,7 +308,7 @@ class DashboardLenderRequestViewController: UIViewController {
             borrowerMetaLabel?.text = "Borrower"
             renderBorrowerInitials(fullName: "Borrower")
             ownRatingLabel?.text = nil
-            ownDistLabel?.text = "Calculating distance..."
+            ownDistLabel?.text = ""
         }
 
         // Pricing
