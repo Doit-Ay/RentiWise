@@ -33,7 +33,7 @@ final class AppLocationManager: NSObject {
         case reverseGeocodeFailed
     }
 
-    /// Returns the device's current coordinates, or nil if unavailable.
+    /// Returns the device's current coordinates, or nil if unavailable or outside India.
     /// Does NOT prompt for permission — returns nil if not authorized.
     func currentCoordinates() async -> CLLocationCoordinate2D? {
         let status = manager.authorizationStatus
@@ -45,10 +45,22 @@ final class AppLocationManager: NSObject {
                 self.locationContinuation = continuation
                 self.manager.requestLocation()
             }
+            // Validate: reject simulator/non-India coordinates
+            guard Self.isInIndia(loc.coordinate) else {
+                debugLog("[AppLocationManager] GPS coordinate outside India (\(loc.coordinate.latitude), \(loc.coordinate.longitude)) — ignoring")
+                return nil
+            }
             return loc.coordinate
         } catch {
             return nil
         }
+    }
+
+    /// Checks if a coordinate is roughly within India's bounding box.
+    /// India: latitude ~6.5 to ~37.1, longitude ~68.1 to ~97.4
+    static func isInIndia(_ coord: CLLocationCoordinate2D) -> Bool {
+        return coord.latitude >= 6.0 && coord.latitude <= 38.0
+            && coord.longitude >= 67.0 && coord.longitude <= 98.0
     }
 }
 
@@ -91,11 +103,19 @@ extension AppLocationManager {
     }
 
     // One-shot current location (ensures authorization first).
+    // Returns India-validated location; falls back to Chennai if GPS is outside India.
     func currentLocation() async throws -> CLLocation {
         try await ensureWhenInUseAuthorization()
-        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<CLLocation, Error>) in
+        let loc = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<CLLocation, Error>) in
             self.locationContinuation = continuation
             self.manager.requestLocation()
+        }
+        // Validate: if GPS is outside India (e.g., simulator returns San Francisco), use Chennai
+        if Self.isInIndia(loc.coordinate) {
+            return loc
+        } else {
+            debugLog("[AppLocationManager] GPS outside India (\(loc.coordinate.latitude), \(loc.coordinate.longitude)) — using Chennai fallback")
+            return CLLocation(latitude: 13.0827, longitude: 80.2707) // Chennai city center
         }
     }
 

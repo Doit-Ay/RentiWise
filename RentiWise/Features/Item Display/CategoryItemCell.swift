@@ -255,15 +255,6 @@ final class CategoryItemCell: UITableViewCell {
     }
 
     private func distanceCacheKey(for item: Item) -> String {
-        if let lat = item.latitude, let lon = item.longitude, lat != 0, lon != 0 {
-            return "item:\(item.id)"
-        }
-
-        let locationAddress = item.location_address?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if !locationAddress.isEmpty {
-            return "item:\(item.id)"
-        }
-
         return "owner:\(item.owner_id)"
     }
 

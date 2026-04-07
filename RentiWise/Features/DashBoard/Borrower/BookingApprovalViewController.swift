@@ -1752,27 +1752,34 @@ class BookingApprovalViewController: UIViewController {
 
         do {
             let client = SupabaseManager.shared.client
-            let response = try await client
+            let rows: [OwnerDefaultAddressRow] = try await client
                 .from("user_default_address")
                 .select("user_id,latitude,longitude,city,state,country,is_default,created_at")
                 .eq("user_id", value: userId)
-                .single()
+                .order("is_default", ascending: false)
+                .order("created_at", ascending: false)
                 .execute()
+                .value
 
-            let data = response.data
-            let row = try JSONDecoder().decode(OwnerDefaultAddressRow.self, from: data)
-
-            let parts = [row.city, row.state, row.country]
-                .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
-                .filter { !$0.isEmpty }
-            let compact = parts.isEmpty ? nil : parts.joined(separator: ", ")
-
-            if let compact {
-                await MainActor.run { self.addressLabel?.text = compact }
+            if let row = rows.first(where: { row in
+                let parts = [row.city, row.state, row.country]
+                    .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+                return !parts.isEmpty
+            }) {
+                let parts = [row.city, row.state, row.country]
+                    .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+                await MainActor.run { self.addressLabel?.text = parts.joined(separator: ", ") }
                 return
             }
 
-            if let lat = row.latitude, let lon = row.longitude {
+            if let row = rows.first(where: { row in
+                if let lat = row.latitude, let lon = row.longitude {
+                    return lat != 0 && lon != 0
+                }
+                return false
+            }), let lat = row.latitude, let lon = row.longitude {
                 let display = await reverseGeocodeIfNeeded(lat: lat, lon: lon, fallbackText: "Address unavailable")
                 await MainActor.run { self.addressLabel?.text = display }
                 return

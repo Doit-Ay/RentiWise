@@ -168,3 +168,24 @@ final class PhoneVerificationService {
         return "+91\(localDigits)"
     }
 }
+
+// MARK: - Shared Verification Types
+
+enum VerificationError: LocalizedError {
+    case notLoggedIn
+    case serverError(String)
+    var errorDescription: String? {
+        switch self {
+        case .notLoggedIn: return "You must be logged in to verify."
+        case .serverError(let msg): return msg
+        }
+    }
+}
+
+extension String {
+    func sha256Hex() -> String {
+        let data = Data(self.utf8)
+        let hash = SHA256.hash(data: data)
+        return hash.compactMap { String(format: "%02x", $0) }.joined()
+    }
+}

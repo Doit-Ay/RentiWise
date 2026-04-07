@@ -266,7 +266,38 @@ extension HomeViewController {
         proStack.addArrangedSubview(buyProBtn)
 
         let v = UIStackView(arrangedSubviews: [title, actionsRow])
-        if !isPro {
+        if isPro {
+            // Pro active banner
+            let proActiveStack = UIStackView()
+            proActiveStack.axis = .horizontal
+            proActiveStack.spacing = 8
+            proActiveStack.alignment = .center
+
+            let proGold = UIColor(red: 0.85, green: 0.65, blue: 0.13, alpha: 1.0)
+
+            let crownLabel = UILabel()
+            crownLabel.text = "👑"
+            crownLabel.font = .systemFont(ofSize: 18)
+
+            let proStatusLabel = UILabel()
+            proStatusLabel.text = "Lender Pro Active"
+            proStatusLabel.font = .systemFont(ofSize: 14, weight: .bold)
+            proStatusLabel.textColor = proGold
+
+            let unlimitedLabel = UILabel()
+            unlimitedLabel.text = "Unlimited Listings"
+            unlimitedLabel.font = .systemFont(ofSize: 13, weight: .medium)
+            unlimitedLabel.textColor = .secondaryLabel
+            unlimitedLabel.textAlignment = .right
+            unlimitedLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+            proActiveStack.addArrangedSubview(crownLabel)
+            proActiveStack.addArrangedSubview(proStatusLabel)
+            proActiveStack.addArrangedSubview(UIView()) // spacer
+            proActiveStack.addArrangedSubview(unlimitedLabel)
+
+            v.addArrangedSubview(proActiveStack)
+        } else {
             v.addArrangedSubview(proStack)
         }
         v.axis = .vertical

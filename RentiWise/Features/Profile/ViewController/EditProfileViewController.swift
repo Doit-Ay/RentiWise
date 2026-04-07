@@ -13,7 +13,7 @@ class EditProfileViewController: UITableViewController {
     private let emailField = UITextField()
     private let phoneField = UITextField()
     private let upiIdField = UITextField()
-    private let collegeEmailField = UITextField()
+
     
     private let profile: UserProfile
     
@@ -80,11 +80,6 @@ class EditProfileViewController: UITableViewController {
         upiIdField.autocapitalizationType = .none
         upiIdField.autocorrectionType = .no
         
-        collegeEmailField.text = profile.collegeEmail
-        collegeEmailField.placeholder = "name@college.edu"
-        collegeEmailField.keyboardType = .emailAddress
-        collegeEmailField.autocapitalizationType = .none
-        collegeEmailField.autocorrectionType = .no
     }
     
     @objc private func textFieldChanged() {
@@ -121,18 +116,10 @@ class EditProfileViewController: UITableViewController {
         let trimmedName = fullNameField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let trimmedPhone = phoneField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let trimmedUPI = upiIdField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let trimmedCollegeEmail = collegeEmailField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         
         if !trimmedUPI.isEmpty && !trimmedUPI.contains("@") {
             await MainActor.run {
                 presentInlineError("UPI ID should look like name@bank or name@upi.")
-            }
-            return
-        }
-        
-        if !trimmedCollegeEmail.isEmpty && !AuthValidationService().isValidEmail(trimmedCollegeEmail) {
-            await MainActor.run {
-                presentInlineError("Enter a valid college email address.")
             }
             return
         }
@@ -143,7 +130,7 @@ class EditProfileViewController: UITableViewController {
                     fullName: trimmedName,
                     phone: trimmedPhone,
                     upiId: trimmedUPI,
-                    collegeEmail: trimmedCollegeEmail
+                    collegeEmail: ""
                 )
             )
             
@@ -177,29 +164,17 @@ class EditProfileViewController: UITableViewController {
     }
 
     private func makeSuccessMessage(for profile: UserProfile) -> String {
-        if profile.isCollegeVerified {
-            if profile.upiId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                return "Your college email was verified and now adds trust points to your profile. Add your UPI ID too if you want borrowers to pay you directly."
-            }
-
-            return "Your profile changes were saved and your verified college email now boosts your trust profile."
-        }
-
-        if !profile.collegeEmail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return "Your profile changes were saved. Your college email is on your account as an optional trust feature."
-        }
-
         return "Your profile changes were saved successfully."
     }
     
     // MARK: - TableView DataSource
     
     override func numberOfSections(in tableView: UITableView) -> Int {
-        return errorMessage != nil ? 4 : 3
+        return errorMessage != nil ? 3 : 2
     }
     
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        if errorMessage != nil && section == 3 { return 1 }
+        if errorMessage != nil && section == 2 { return 1 }
         switch section {
         case 0: return 1
         case 1: return 3
@@ -211,15 +186,11 @@ class EditProfileViewController: UITableViewController {
         switch section {
         case 0: return "Name"
         case 1: return "Contact"
-        case 2: return "Optional College Email"
         default: return nil
         }
     }
     
     override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
-        if section == 2 {
-            return "College email is optional. Educational domains are marked as verified automatically in this beta build and add extra trust points."
-        }
         return nil
     }
     
@@ -228,7 +199,7 @@ class EditProfileViewController: UITableViewController {
         cell.selectionStyle = .none
         cell.contentView.subviews.forEach { $0.removeFromSuperview() }
         
-        if errorMessage != nil && indexPath.section == 3 {
+        if errorMessage != nil && indexPath.section == 2 {
             cell.textLabel?.text = errorMessage
             cell.textLabel?.textColor = .systemRed
             cell.textLabel?.font = .preferredFont(forTextStyle: .footnote)
@@ -249,7 +220,7 @@ class EditProfileViewController: UITableViewController {
                 embed(field: upiIdField, in: cell, placeholder: "UPI ID")
             }
         default:
-            embed(field: collegeEmailField, in: cell, placeholder: "College Email")
+            break
         }
         
         return cell

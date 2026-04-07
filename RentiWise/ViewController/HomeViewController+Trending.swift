@@ -253,7 +253,7 @@ final class TrendingItemCell: UICollectionViewCell {
         distanceStack.translatesAutoresizingMaskIntoConstraints = false
 
         let locConfig = UIImage.SymbolConfiguration(pointSize: 14, weight: .regular)
-        distanceIcon.image = UIImage(systemName: "location.fill", withConfiguration: locConfig)
+        distanceIcon.image = UIImage(systemName: "mappin.and.ellipse", withConfiguration: locConfig)
         distanceIcon.tintColor = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0)
         distanceIcon.setContentHuggingPriority(.required, for: .horizontal)
 

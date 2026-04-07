@@ -43,6 +43,7 @@ final class AddressService: AddressServicing {
         if created.is_default {
             try await clearOthersAndKeepDefault(defaultId: created.id)
         }
+        DistanceService.shared.clearViewerAddressCache()
         return created
     }
 
@@ -58,6 +59,7 @@ final class AddressService: AddressServicing {
         if updated.is_default {
             try await clearOthersAndKeepDefault(defaultId: updated.id)
         }
+        DistanceService.shared.clearViewerAddressCache()
         return updated
     }
 
@@ -67,6 +69,7 @@ final class AddressService: AddressServicing {
             .delete()
             .eq("id", value: id)
             .execute()
+        DistanceService.shared.clearViewerAddressCache()
     }
 
     func setDefault(id: String) async throws {
@@ -79,6 +82,7 @@ final class AddressService: AddressServicing {
             .execute()
         // 2) Clear others
         try await clearOthersAndKeepDefault(defaultId: id)
+        DistanceService.shared.clearViewerAddressCache()
     }
 
     // Clear is_default=false for all other rows of the same user.
@@ -102,4 +106,3 @@ final class AddressService: AddressServicing {
             .execute()
     }
 }
-

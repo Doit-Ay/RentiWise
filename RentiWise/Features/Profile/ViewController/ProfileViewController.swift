@@ -35,13 +35,9 @@ final class ProfileViewController: UITableViewController {
         ((Bundle.main.object(forInfoDictionaryKey: "ENABLE_KYC_VERIFICATION") as? NSNumber)?.boolValue) ?? false
     }
 
-    private var borrowingSetupRowIndex: Int {
-        showsAddPhoneRow ? 2 : 1
-    }
-
     private var kycRowIndex: Int? {
         guard showsKYCVerificationRow else { return nil }
-        return showsAddPhoneRow ? 3 : 2
+        return showsAddPhoneRow ? 2 : 1
     }
     
     // App brand color
@@ -192,8 +188,8 @@ final class ProfileViewController: UITableViewController {
         switch sectionType {
         case .account:
             if isLoggedIn {
-                // header + optional verify phone + borrowing setup + optional KYC row
-                var count = 2
+                // header + optional verify phone + optional KYC row
+                var count = 1
                 if showsAddPhoneRow { count += 1 }
                 if showsKYCVerificationRow { count += 1 }
                 return count
@@ -272,8 +268,6 @@ final class ProfileViewController: UITableViewController {
                     cell.accessoryType = .disclosureIndicator
                     cell.imageView?.image = UIImage(systemName: "phone.badge.plus")
                     cell.imageView?.tintColor = brandTeal
-                } else if indexPath.row == borrowingSetupRowIndex {
-                    configureBorrowingSetupCell(cell)
                 } else if let kycRowIndex, indexPath.row == kycRowIndex {
                     // KYC / Identity Verification row
                     cell.accessoryType = .disclosureIndicator
@@ -367,8 +361,6 @@ final class ProfileViewController: UITableViewController {
             } else if isLoggedIn {
                 if showsAddPhoneRow && indexPath.row == 1 {
                     presentAddPhoneNumber()
-                } else if indexPath.row == borrowingSetupRowIndex {
-                    editProfileTapped()
                 } else if let kycRowIndex, indexPath.row == kycRowIndex {
                     // KYC row
                     presentKYCVerification()
@@ -562,53 +554,8 @@ final class ProfileViewController: UITableViewController {
         isLenderPro = profile.isLenderPro
     }
 
-    private func configureBorrowingSetupCell(_ cell: UITableViewCell) {
-        cell.accessoryType = .disclosureIndicator
-        cell.textLabel?.numberOfLines = 2
 
-        guard let profile = currentProfile else {
-            cell.textLabel?.text = "Complete your profile details"
-            cell.textLabel?.textColor = brandTeal
-            cell.imageView?.image = UIImage(systemName: "person.text.rectangle")
-            cell.imageView?.tintColor = brandTeal
-            return
-        }
 
-        if let freezeUntil = profile.borrowFreezeUntil, freezeUntil > Date() {
-            let formatter = DateFormatter()
-            formatter.dateStyle = .medium
-            formatter.timeStyle = .none
-            cell.textLabel?.text = "Borrowing paused until \(formatter.string(from: freezeUntil))"
-            cell.textLabel?.textColor = .systemRed
-            cell.imageView?.image = UIImage(systemName: "exclamationmark.shield")
-            cell.imageView?.tintColor = .systemRed
-            return
-        }
-
-        if profile.upiId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            cell.textLabel?.text = "Add your UPI ID so borrowers can pay you directly"
-            cell.textLabel?.textColor = brandTeal
-            cell.imageView?.image = UIImage(systemName: "indianrupeesign.circle")
-            cell.imageView?.tintColor = brandTeal
-            return
-        }
-
-        if !profile.isCollegeVerified {
-            cell.textLabel?.text = profile.collegeEmail.isEmpty
-                ? "Add a college email for extra trust points (optional)"
-                : "College email saved. Use a supported educational domain to earn extra trust points"
-            cell.textLabel?.textColor = brandTeal
-            cell.imageView?.image = UIImage(systemName: "graduationcap.circle")
-            cell.imageView?.tintColor = brandTeal
-            return
-        }
-
-        cell.textLabel?.text = "Borrowing and lending profile ready"
-        cell.textLabel?.textColor = .systemGreen
-        cell.imageView?.image = UIImage(systemName: "checkmark.seal.fill")
-        cell.imageView?.tintColor = .systemGreen
-    }
-    
     private func computeProfileTabIndex() -> Int? {
         if let tab = self.tabBarController ?? findTabBarControllerFromWindow() {
             guard let vcs = tab.viewControllers, !vcs.isEmpty else { return nil }
@@ -655,6 +602,7 @@ private class AccountHeaderCell: UITableViewCell {
     
     // App brand color
     private let brandTeal = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0)
+    private let proGold = UIColor(red: 0.85, green: 0.65, blue: 0.13, alpha: 1.0)
     
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
@@ -735,6 +683,20 @@ private class AccountHeaderCell: UITableViewCell {
         nameLabel.text = displayName.isEmpty ? "Guest User" : displayName
         proBadgeView.isHidden = !isLenderPro
         proBadgeView.accessibilityLabel = isLenderPro ? "Lender Pro active" : nil
+        
+        // Golden profile icon for Pro users
+        if isLenderPro {
+            iconView.tintColor = proGold
+            iconView.layer.shadowColor = proGold.cgColor
+            iconView.layer.shadowRadius = 6
+            iconView.layer.shadowOpacity = 0.5
+            iconView.layer.shadowOffset = .zero
+        } else {
+            iconView.tintColor = brandTeal
+            iconView.layer.shadowColor = nil
+            iconView.layer.shadowRadius = 0
+            iconView.layer.shadowOpacity = 0
+        }
         
         if isLoggedIn {
             emailLabel.text = email.isEmpty ? nil : email

@@ -99,6 +99,7 @@ final class LocationSelectorViewController: UIViewController {
                     let name = try await AppLocationManager.shared.placename(for: loc)
                     // Keep Home button title in sync via local store
                     SavedAddressesStore.shared.setDefaultSelectedAddress(name)
+                    DistanceService.shared.clearViewerAddressCache()
                     await MainActor.run {
                         self.onSelectedAddress?(name)
                     }
@@ -126,6 +127,7 @@ final class LocationSelectorViewController: UIViewController {
                 guard !trimmed.isEmpty else { return }
                 // Keep Home button title in sync locally
                 SavedAddressesStore.shared.setDefaultSelectedAddress(trimmed)
+                DistanceService.shared.clearViewerAddressCache()
                 self.onSelectedAddress?(trimmed)
             }
         }
@@ -299,6 +301,7 @@ extension LocationSelectorViewController: UITableViewDelegate {
                 // Optionally mark it default in backend via ManageAddresses screen; here we just reflect locally for Home button
                 let display = self.displayString(for: address)
                 SavedAddressesStore.shared.setDefaultSelectedAddress(display)
+                DistanceService.shared.clearViewerAddressCache()
                 self.onSelectedAddress?(display)
             }
         }

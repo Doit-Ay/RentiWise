@@ -42,22 +42,15 @@ final class VerificationBadgeStripView: UIView {
     /// Configure with verification status.
     /// - Parameters:
     ///   - isPhoneVerified: whether user's phone is verified
-    ///   - isCollegeVerified: whether user's college email is verified
-    func configure(isPhoneVerified: Bool, isCollegeVerified: Bool) {
+    func configure(isPhoneVerified: Bool, isCollegeVerified: Bool = false) {
         stackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
 
-        if !isPhoneVerified && !isCollegeVerified {
+        if !isPhoneVerified {
             stackView.addArrangedSubview(makePill(text: "Unverified", teal: false))
             return
         }
 
-        if isPhoneVerified {
-            stackView.addArrangedSubview(makePill(text: "📱 Phone Verified", teal: true))
-        }
-
-        if isCollegeVerified {
-            stackView.addArrangedSubview(makePill(text: "🎓 College Verified", teal: true))
-        }
+        stackView.addArrangedSubview(makePill(text: "📱 Phone Verified", teal: true))
     }
 
     private func makePill(text: String, teal: Bool) -> UIView {

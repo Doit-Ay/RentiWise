@@ -1,5 +1,20 @@
+# macOS
+.DS_Store
+*.DS_Store
+
+# Supabase local (keep functions and migrations)
 supabase/*
 !supabase/functions/
 !supabase/functions/**
 !supabase/migrations/
 !supabase/migrations/**
+
+# Supabase CLI binary
+supabase_cli
+
+# Python analysis scripts
+*.py
+codebase_review_results.md
+
+# Xcode user state
+*.xcuserstate

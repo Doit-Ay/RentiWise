@@ -22,8 +22,6 @@ class ProfileInformationViewController: UITableViewController {
             ("Email", profile.email.isEmpty ? "Not set" : profile.email),
             ("Phone", profile.phone.isEmpty ? "Not set" : profile.phone),
             ("UPI ID", profile.upiId.isEmpty ? "Not set" : profile.upiId),
-            ("College Email", profile.collegeEmail.isEmpty ? "Not set" : profile.collegeEmail),
-            ("College Verified", profile.isCollegeVerified ? "Yes" : "No")
         ]
 
         if profile.averageRating > 0 {

@@ -71,7 +71,7 @@ final class CardView: UIView {
     }()
 
     private let distanceIcon: UIImageView = {
-        let img = UIImageView(image: UIImage(systemName: "location.fill"))
+        let img = UIImageView(image: UIImage(systemName: "mappin.and.ellipse"))
         img.tintColor = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0)
         img.contentMode = .scaleAspectFit
         img.translatesAutoresizingMaskIntoConstraints = false

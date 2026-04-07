@@ -24,7 +24,7 @@ final class TrustScoreBreakdownViewController: UIViewController {
     private var trustScore: Int = 0
     private var badgeTier: String = "newcomer"
     private var hasPhone: Bool = false
-    private var isCollegeVerified: Bool = false
+
     private var hasProfilePhoto: Bool = false
     private var avgRating: Double = 0
     private var completedRentals: Int = 0
@@ -86,13 +86,12 @@ final class TrustScoreBreakdownViewController: UIViewController {
                 let trust_score: Int?
                 let badge_tier: String?
                 let phone: String?
-                let is_college_verified: Bool?
                 let profile_image_url: String?
             }
 
             let resp = try await SupabaseManager.shared.client
                 .from("users")
-                .select("trust_score, badge_tier, phone, is_college_verified, profile_image_url")
+                .select("trust_score, badge_tier, phone, profile_image_url")
                 .eq("id", value: userId)
                 .single()
                 .execute()
@@ -101,7 +100,7 @@ final class TrustScoreBreakdownViewController: UIViewController {
             trustScore = row.trust_score ?? 0
             badgeTier = row.badge_tier ?? "newcomer"
             hasPhone = !(row.phone ?? "").isEmpty
-            isCollegeVerified = row.is_college_verified ?? false
+
             hasProfilePhoto = !(row.profile_image_url ?? "").isEmpty
 
             // Fetch avg rating
@@ -225,11 +224,7 @@ final class TrustScoreBreakdownViewController: UIViewController {
             earned: phonePoints, total: 30, isComplete: hasPhone
         ))
 
-        let collegePoints = isCollegeVerified ? 25 : 0
-        componentsStack.addArrangedSubview(makeScoreRow(
-            icon: "🎓", title: "College Email",
-            earned: collegePoints, total: 25, isComplete: isCollegeVerified
-        ))
+
 
         let photoPoints = hasProfilePhoto ? 10 : 0
         componentsStack.addArrangedSubview(makeScoreRow(
