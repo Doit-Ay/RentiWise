@@ -78,7 +78,7 @@ class BorrowerTableViewCell: UITableViewCell {
         cardBackground.layer.shadowOffset = CGSize(width: 0, height: 6)
 
         cardBackground.layer.shouldRasterize = true
-        cardBackground.layer.rasterizationScale = UIScreen.main.scale
+        cardBackground.layer.rasterizationScale = traitCollection.displayScale > 0 ? traitCollection.displayScale : 2.0
     }
 
     override func layoutSubviews() {

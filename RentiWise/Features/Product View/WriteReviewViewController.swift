@@ -92,32 +92,23 @@ class WriteReviewViewController: UIViewController {
             let empty = UIImage(systemName: "star", withConfiguration: config)
             let filled = UIImage(systemName: "star.fill", withConfiguration: config)
 
-            if #available(iOS 15.0, *) {
-                var buttonConfig = UIButton.Configuration.plain()
-                buttonConfig.baseForegroundColor = .systemYellow
-                buttonConfig.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0)
-                button.configuration = buttonConfig
-                button.setImage(empty, for: .normal)
-                button.setImage(filled, for: .selected)
-                
-                button.configuration?.background.backgroundColor = .clear
-                button.configuration?.background.strokeColor = .clear
-                button.configurationUpdateHandler = { btn in
-                    var config = btn.configuration
-                    config?.background.backgroundColor = .clear
-                    config?.background.strokeColor = .clear
-                    btn.configuration = config
-                }
-                button.showsMenuAsPrimaryAction = false
-                button.changesSelectionAsPrimaryAction = false
-            } else {
-                button.setImage(empty, for: .normal)
-                button.setImage(filled, for: .selected)
-                button.tintColor = UIColor.systemYellow
-                button.contentEdgeInsets = .zero
-                button.adjustsImageWhenHighlighted = false
-                button.setBackgroundImage(UIImage(), for: .highlighted)
+            var buttonConfig = UIButton.Configuration.plain()
+            buttonConfig.baseForegroundColor = .systemYellow
+            buttonConfig.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0)
+            button.configuration = buttonConfig
+            button.setImage(empty, for: .normal)
+            button.setImage(filled, for: .selected)
+            
+            button.configuration?.background.backgroundColor = .clear
+            button.configuration?.background.strokeColor = .clear
+            button.configurationUpdateHandler = { btn in
+                var config = btn.configuration
+                config?.background.backgroundColor = .clear
+                config?.background.strokeColor = .clear
+                btn.configuration = config
             }
+            button.showsMenuAsPrimaryAction = false
+            button.changesSelectionAsPrimaryAction = false
 
             button.addTarget(self, action: #selector(didTapStar(_:)), for: .touchUpInside)
             starButtons.append(button)

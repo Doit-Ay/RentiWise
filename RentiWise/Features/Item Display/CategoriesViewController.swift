@@ -104,8 +104,18 @@ final class CategoriesViewController: UIViewController {
 
         // Fetch items for the selected category
         Task { await loadItems() }
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleItemsShouldRefresh),
+            name: Notification.Name("itemsShouldRefresh"),
+            object: nil
+        )
     }
 
+    @objc private func handleItemsShouldRefresh() {
+        Task { await loadItems() }
+    }
     private func formattedPricePerDay(_ value: Double) -> String {
         let amount = NSNumber(value: value)
         let currency = currencyFormatter.string(from: amount) ?? "\(value)"

@@ -343,6 +343,7 @@
 				INFOPLIST_KEY_NSCameraUsageDescription = "Rentiwise uses the camera so you can photograph items you’re listing and record return or damage evidence.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Rentiwise uses your location while the app is open to show nearby rentals and pickup-relevant results.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Rentiwise uses the microphone when you record a verification video during KYC checks.";
+				INFOPLIST_KEY_NFCReaderUsageDescription = "Rentiwise uses NFC to read your government ID during identity verification.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Rentiwise uses your photo library so you can attach listing photos and return or damage evidence.";
 				INFOPLIST_KEY_NSUserNotificationsUsageDescription = "Rentiwise uses notifications for borrow requests, approvals, return reminders, and important support or safety updates.";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -391,6 +392,7 @@
 				INFOPLIST_KEY_NSCameraUsageDescription = "Rentiwise uses the camera so you can photograph items you’re listing and record return or damage evidence.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Rentiwise uses your location while the app is open to show nearby rentals and pickup-relevant results.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Rentiwise uses the microphone when you record a verification video during KYC checks.";
+				INFOPLIST_KEY_NFCReaderUsageDescription = "Rentiwise uses NFC to read your government ID during identity verification.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Rentiwise uses your photo library so you can attach listing photos and return or damage evidence.";
 				INFOPLIST_KEY_NSUserNotificationsUsageDescription = "Rentiwise uses notifications for borrow requests, approvals, return reminders, and important support or safety updates.";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;

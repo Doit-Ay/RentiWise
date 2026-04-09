@@ -35,7 +35,8 @@ extension UIView {
         layer.shadowOffset = offset
         layer.masksToBounds = false
         layer.shouldRasterize = shouldRasterize
-        layer.rasterizationScale = UIScreen.main.scale
+        let scale = traitCollection.displayScale > 0 ? traitCollection.displayScale : 2.0
+        layer.rasterizationScale = scale
     }
 
     @discardableResult
@@ -131,7 +132,8 @@ extension UIView {
 
         // Border
         if borderAlpha > 0 {
-            layer.borderWidth = 1.0 / UIScreen.main.scale
+            let pixelScale = traitCollection.displayScale > 0 ? traitCollection.displayScale : 2.0
+            layer.borderWidth = 1.0 / pixelScale
             layer.borderColor = UIColor.white.withAlphaComponent(borderAlpha).cgColor
         } else {
             layer.borderWidth = 0

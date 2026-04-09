@@ -287,6 +287,19 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
             name: .notificationsDidUpdate,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleItemsShouldRefresh),
+            name: Notification.Name("itemsShouldRefresh"),
+            object: nil
+        )
+    }
+
+    @objc private func handleItemsShouldRefresh() {
+        Task {
+            await checkAndUpdateListingSection(forceRefresh: true)
+            await loadFeaturedItems(forceRefresh: true)
+        }
     }
 
     @objc private func dismissKeyboardTap() {
@@ -344,8 +357,8 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
         refreshLocationButtonTitle()
         // Update notification badge
         Task { await updateNotificationBadge() }
-        // Refresh featured items & new arrivals so newly added items appear
-        Task { await loadFeaturedItems() }
+        // Refresh featured items & new arrivals so newly added items appear // Pass forceRefresh: needsRefresh so it updates properly on tab switches if not isFirstLoad
+        Task { await loadFeaturedItems(forceRefresh: needsRefresh) }
     }
 
 
@@ -385,13 +398,16 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
         // Keep text left-aligned within its bounds
         btn.contentHorizontalAlignment = .leading
         // Optional: small horizontal padding
-        btn.contentEdgeInsets = UIEdgeInsets(top: 0, left: 4, bottom: 0, right: 4)
+        var locBtnConfig = UIButton.Configuration.plain()
+        locBtnConfig.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 4, bottom: 0, trailing: 4)
+        btn.configuration = locBtnConfig
         // Prefer truncation over expanding horizontally
         btn.setContentCompressionResistancePriority(.required, for: .horizontal)
         // If the button has an image, ensure room between image and text
         if btn.image(for: .normal) != nil {
             btn.semanticContentAttribute = .forceLeftToRight
-            btn.imageEdgeInsets = UIEdgeInsets(top: 0, left: 0, bottom: 0, right: 6)
+            locBtnConfig.imagePadding = 6
+            btn.configuration = locBtnConfig
         }
     }
 

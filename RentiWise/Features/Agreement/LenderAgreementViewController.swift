@@ -363,7 +363,8 @@ final class LenderAgreementViewController: UIViewController {
         let sep = UIView()
         sep.backgroundColor = .separator
         sep.translatesAutoresizingMaskIntoConstraints = false
-        sep.heightAnchor.constraint(equalToConstant: 1.0 / UIScreen.main.scale).isActive = true
+        let pixelScale = traitCollection.displayScale > 0 ? traitCollection.displayScale : 2.0
+        sep.heightAnchor.constraint(equalToConstant: 1.0 / pixelScale).isActive = true
         return sep
     }
 }

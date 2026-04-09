@@ -3,57 +3,28 @@ import XCTest
 
 final class DashboardViewControllerTests: XCTestCase {
 
-    // MARK: - History Filter Logic (replicated from DashboardViewController)
-
-    // The dashboard uses status strings to filter requests
-    private let allStatuses = ["pending", "accepted", "completed", "cancelled", "rejected", "in_progress"]
-
-    private func filteredStatuses(for filter: String) -> [String] {
-        switch filter {
-        case "in_progress":
-            return allStatuses.filter { ["pending", "accepted", "in_progress"].contains($0) }
-        case "completed":
-            return allStatuses.filter { $0 == "completed" }
-        case "cancelled":
-            return allStatuses.filter { ["cancelled", "rejected"].contains($0) }
-        case "all":
-            return allStatuses
-        default:
-            return allStatuses
-        }
-    }
+    // MARK: - History Filter Logic
 
     func testFilterInProgress() {
-        let result = filteredStatuses(for: "in_progress")
-        XCTAssertTrue(result.contains("pending"))
-        XCTAssertTrue(result.contains("accepted"))
-        XCTAssertTrue(result.contains("in_progress"))
-        XCTAssertFalse(result.contains("completed"))
-        XCTAssertFalse(result.contains("cancelled"))
+        XCTAssertEqual(DashboardHistoryStatus.classification(for: "pending"), .inProgress)
+        XCTAssertEqual(DashboardHistoryStatus.classification(for: "accepted"), .inProgress)
+        XCTAssertEqual(DashboardHistoryStatus.classification(for: "approved"), .inProgress)
+        XCTAssertEqual(DashboardHistoryStatus.classification(for: "returned"), .inProgress)
+        XCTAssertEqual(DashboardHistoryStatus.classification(for: "in_progress"), .inProgress)
     }
 
     func testFilterCompleted() {
-        let result = filteredStatuses(for: "completed")
-        XCTAssertTrue(result.contains("completed"))
-        XCTAssertFalse(result.contains("pending"))
-        XCTAssertEqual(result.count, 1)
+        XCTAssertEqual(DashboardHistoryStatus.classification(for: "completed"), .completed)
     }
 
     func testFilterCancelled() {
-        let result = filteredStatuses(for: "cancelled")
-        XCTAssertTrue(result.contains("cancelled"))
-        XCTAssertTrue(result.contains("rejected"))
-        XCTAssertEqual(result.count, 2)
+        XCTAssertEqual(DashboardHistoryStatus.classification(for: "cancelled"), .cancelled)
+        XCTAssertEqual(DashboardHistoryStatus.classification(for: "rejected"), .cancelled)
+        XCTAssertEqual(DashboardHistoryStatus.classification(for: "denied"), .cancelled)
     }
 
-    func testFilterAll() {
-        let result = filteredStatuses(for: "all")
-        XCTAssertEqual(result.count, allStatuses.count)
-    }
-
-    func testFilterUnknownDefaultsToAll() {
-        let result = filteredStatuses(for: "unknown_filter")
-        XCTAssertEqual(result.count, allStatuses.count)
+    func testFilterUnknownStatusRemainsUnknown() {
+        XCTAssertEqual(DashboardHistoryStatus.classification(for: "archived"), .unknown)
     }
 
     // MARK: - Segment (Listings vs History)
@@ -68,32 +39,32 @@ final class DashboardViewControllerTests: XCTestCase {
 
     // MARK: - Status Display Mapping
 
-    private func displayStatus(for rawStatus: String) -> String {
-        switch rawStatus {
-        case "pending": return "Pending"
-        case "accepted": return "Accepted"
-        case "rejected": return "Rejected"
-        case "completed": return "Completed"
-        case "cancelled": return "Cancelled"
-        case "in_progress": return "In Progress"
-        default: return rawStatus.capitalized
-        }
-    }
-
     func testStatusDisplayPending() {
-        XCTAssertEqual(displayStatus(for: "pending"), "Pending")
+        XCTAssertEqual(DashboardHistoryStatus.displayText(for: "pending"), "Pending")
     }
 
     func testStatusDisplayAccepted() {
-        XCTAssertEqual(displayStatus(for: "accepted"), "Accepted")
+        XCTAssertEqual(DashboardHistoryStatus.displayText(for: "accepted"), "Accepted")
+    }
+
+    func testStatusDisplayApprovedUsesActiveCopy() {
+        XCTAssertEqual(DashboardHistoryStatus.displayText(for: "approved"), "Active")
+    }
+
+    func testStatusDisplayReturnedUsesReturnPendingCopy() {
+        XCTAssertEqual(DashboardHistoryStatus.displayText(for: "returned"), "Return Pending")
+    }
+
+    func testStatusDisplayDenied() {
+        XCTAssertEqual(DashboardHistoryStatus.displayText(for: "denied"), "Denied")
     }
 
     func testStatusDisplayCompleted() {
-        XCTAssertEqual(displayStatus(for: "completed"), "Completed")
+        XCTAssertEqual(DashboardHistoryStatus.displayText(for: "completed"), "Completed")
     }
 
     func testStatusDisplayUnknown() {
-        XCTAssertEqual(displayStatus(for: "some_status"), "Some_Status")
+        XCTAssertEqual(DashboardHistoryStatus.displayText(for: "some_status"), "Some Status")
     }
 
     // MARK: - Date Formatting for Display

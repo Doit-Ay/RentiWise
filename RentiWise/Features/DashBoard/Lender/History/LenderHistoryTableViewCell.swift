@@ -17,6 +17,8 @@ class LenderHistoryTableViewCell: UITableViewCell {
     // Card background (glass) container
     private let cardBackground = UIView()
     private var didInstallCardConstraints = false
+    private var imageLoadTask: URLSessionDataTask?
+    private var representedImageURL: URL?
 
     override func awakeFromNib() {
         super.awakeFromNib()
@@ -84,6 +86,9 @@ class LenderHistoryTableViewCell: UITableViewCell {
 
     override func prepareForReuse() {
         super.prepareForReuse()
+        imageLoadTask?.cancel()
+        imageLoadTask = nil
+        representedImageURL = nil
         itemImageHistory?.image = nil
         itemNameHistory?.text = nil
         itemRateHistory?.text = nil
@@ -93,5 +98,59 @@ class LenderHistoryTableViewCell: UITableViewCell {
         backgroundColor = .clear
         contentView.backgroundColor = .clear
         cardBackground.backgroundColor = .clear
+    }
+
+    func setPlaceholderImage() {
+        imageLoadTask?.cancel()
+        imageLoadTask = nil
+        representedImageURL = nil
+        itemImageHistory?.image = UIImage(systemName: "photo")
+        itemImageHistory?.tintColor = .secondaryLabel
+        itemImageHistory?.contentMode = .scaleAspectFit
+    }
+
+    func setImage(from url: URL) {
+        imageLoadTask?.cancel()
+        representedImageURL = url
+
+        if let cached = HistoryImageCache.shared.image(forKey: url.absoluteString) {
+            itemImageHistory?.image = cached
+            itemImageHistory?.contentMode = .scaleAspectFill
+            itemImageHistory?.clipsToBounds = true
+            return
+        }
+
+        let request = URLRequest(url: url, cachePolicy: .returnCacheDataElseLoad, timeoutInterval: 20)
+        imageLoadTask = URLSession.shared.dataTask(with: request) { [weak self] data, _, _ in
+            guard let self,
+                  let data = data,
+                  let image = UIImage(data: data) else {
+                return
+            }
+
+            HistoryImageCache.shared.setImage(image, forKey: url.absoluteString)
+
+            DispatchQueue.main.async {
+                guard self.representedImageURL == url else { return }
+                self.itemImageHistory?.image = image
+                self.itemImageHistory?.contentMode = .scaleAspectFill
+                self.itemImageHistory?.clipsToBounds = true
+            }
+        }
+        imageLoadTask?.resume()
+    }
+}
+
+private final class HistoryImageCache {
+    static let shared = HistoryImageCache()
+
+    private let cache = NSCache<NSString, UIImage>()
+
+    func image(forKey key: String) -> UIImage? {
+        cache.object(forKey: key as NSString)
+    }
+
+    func setImage(_ image: UIImage, forKey key: String) {
+        cache.setObject(image, forKey: key as NSString)
     }
 }

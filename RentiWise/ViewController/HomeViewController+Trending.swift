@@ -268,7 +268,9 @@ final class TrendingItemCell: UICollectionViewCell {
         rentButton.setTitle("Rent", for: .normal)
         rentButton.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
         rentButton.setTitleColor(brandTeal, for: .normal)
-        rentButton.contentEdgeInsets = UIEdgeInsets(top: 8, left: 16, bottom: 8, right: 16)
+        var rentBtnConfig = UIButton.Configuration.plain()
+        rentBtnConfig.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16)
+        rentButton.configuration = rentBtnConfig
         rentButton.backgroundColor = .white
         rentButton.layer.cornerRadius = 16
         rentButton.layer.masksToBounds = false

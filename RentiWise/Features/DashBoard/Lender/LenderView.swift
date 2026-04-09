@@ -698,17 +698,9 @@ extension LenderView: UITableViewDataSource {
 
             // Image: if you later set imagePath with a public storage path, load it; else show placeholder
             if let path = row.imagePath, let url = StorageURLBuilder.publicFileURL(for: path) {
-                UIImageView.rw_loadImage(from: url) { [weak cell] image in
-                    DispatchQueue.main.async {
-                        cell?.itemImageHistory?.image = image
-                        cell?.itemImageHistory?.contentMode = .scaleAspectFill
-                        cell?.itemImageHistory?.clipsToBounds = true
-                    }
-                }
+                cell.setImage(from: url)
             } else {
-                cell.itemImageHistory?.image = UIImage(systemName: "photo")
-                cell.itemImageHistory?.tintColor = .secondaryLabel
-                cell.itemImageHistory?.contentMode = .scaleAspectFit
+                cell.setPlaceholderImage()
             }
 
             cell.backgroundColor = .secondarySystemBackground

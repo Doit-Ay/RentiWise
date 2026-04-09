@@ -40,4 +40,16 @@ final class StorageURLBuilderTests: XCTestCase {
         let urlString = url!.absoluteString
         XCTAssertTrue(urlString.contains("owner/folder/image_01.jpg"))
     }
+
+    func testPublicFileURLEncodesReservedCharactersPerPathSegment() {
+        let url = StorageURLBuilder.publicFileURL(for: "owner name/folder #1/image 01%.jpg")
+        XCTAssertNotNil(url)
+
+        let urlString = url!.absoluteString
+        XCTAssertTrue(urlString.contains("owner%20name"))
+        XCTAssertTrue(urlString.contains("folder%20%231"))
+        XCTAssertTrue(urlString.contains("image%2001%25.jpg"))
+        XCTAssertFalse(urlString.contains("owner name"))
+        XCTAssertFalse(urlString.contains("folder #1"))
+    }
 }

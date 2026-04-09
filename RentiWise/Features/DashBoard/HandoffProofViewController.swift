@@ -297,7 +297,8 @@ final class HandoffProofViewController: UIViewController {
         let d = UIView()
         d.backgroundColor = .separator
         d.translatesAutoresizingMaskIntoConstraints = false
-        d.heightAnchor.constraint(equalToConstant: 1.0 / UIScreen.main.scale).isActive = true
+        let pixelScale = traitCollection.displayScale > 0 ? traitCollection.displayScale : 2.0
+        d.heightAnchor.constraint(equalToConstant: 1.0 / pixelScale).isActive = true
         return d
     }
 

@@ -255,7 +255,9 @@ final class SupportChatViewController: UIViewController {
             button.layer.shadowOpacity = 0.05
             button.layer.shadowRadius = 2
             button.layer.shadowOffset = CGSize(width: 0, height: 1)
-            button.contentEdgeInsets = UIEdgeInsets(top: 8, left: 16, bottom: 8, right: 16)
+            var quickBtnConfig = UIButton.Configuration.plain()
+            quickBtnConfig.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16)
+            button.configuration = quickBtnConfig
             button.addTarget(self, action: #selector(quickActionTapped(_:)), for: .touchUpInside)
             quickActionsStack.addArrangedSubview(button)
         }

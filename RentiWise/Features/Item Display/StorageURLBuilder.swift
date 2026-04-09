@@ -10,8 +10,23 @@ enum StorageURLBuilder {
     }
 
     static func publicFileURL(for path: String) -> URL? {
-    
-        let urlString = "\(baseURLString)/storage/v1/object/public/\(bucket)/\(path)"
-        return URL(string: urlString)
+        guard var url = URL(string: "\(baseURLString)/storage/v1/object/public/\(bucket)") else {
+            return nil
+        }
+
+        let sanitizedPath = path
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+
+        guard !sanitizedPath.isEmpty else {
+            return URL(string: url.absoluteString + "/")
+        }
+
+        for segment in sanitizedPath.split(separator: "/", omittingEmptySubsequences: true) {
+            let decodedSegment = String(segment).removingPercentEncoding ?? String(segment)
+            url.appendPathComponent(decodedSegment, isDirectory: false)
+        }
+
+        return url
     }
 }

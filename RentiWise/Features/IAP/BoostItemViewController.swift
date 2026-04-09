@@ -154,6 +154,47 @@ final class BoostItemViewController: UIViewController {
         infoLabel.textColor = .tertiaryLabel
         infoLabel.textAlignment = .center
         stack.addArrangedSubview(infoLabel)
+
+        // Legal links (required by Guideline 3.1.2)
+        let legalStack = UIStackView()
+        legalStack.axis = .horizontal
+        legalStack.spacing = 16
+        legalStack.alignment = .center
+        legalStack.distribution = .equalCentering
+
+        let tosButton = UIButton(type: .system)
+        tosButton.setTitle("Terms of Service", for: .normal)
+        tosButton.titleLabel?.font = .systemFont(ofSize: 12)
+        tosButton.setTitleColor(.secondaryLabel, for: .normal)
+        tosButton.addTarget(self, action: #selector(showTerms), for: .touchUpInside)
+
+        let separator = UILabel()
+        separator.text = "•"
+        separator.font = .systemFont(ofSize: 12)
+        separator.textColor = .tertiaryLabel
+
+        let ppButton = UIButton(type: .system)
+        ppButton.setTitle("Privacy Policy", for: .normal)
+        ppButton.titleLabel?.font = .systemFont(ofSize: 12)
+        ppButton.setTitleColor(.secondaryLabel, for: .normal)
+        ppButton.addTarget(self, action: #selector(showPrivacy), for: .touchUpInside)
+
+        legalStack.addArrangedSubview(tosButton)
+        legalStack.addArrangedSubview(separator)
+        legalStack.addArrangedSubview(ppButton)
+        stack.addArrangedSubview(legalStack)
+    }
+
+    @objc private func showTerms() {
+        let vc = LegalDocumentViewController(document: .termsOfService)
+        vc.hidesBottomBarWhenPushed = true
+        navigationController?.pushViewController(vc, animated: true)
+    }
+
+    @objc private func showPrivacy() {
+        let vc = LegalDocumentViewController(document: .privacyPolicy)
+        vc.hidesBottomBarWhenPushed = true
+        navigationController?.pushViewController(vc, animated: true)
     }
 
     private func registerPaymentLifecycleObservers() {

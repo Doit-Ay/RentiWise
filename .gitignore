@@ -18,3 +18,4 @@ codebase_review_results.md
 
 # Xcode user state
 *.xcuserstate
+.agents/

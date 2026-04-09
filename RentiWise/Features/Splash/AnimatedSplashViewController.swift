@@ -37,7 +37,7 @@ final class AnimatedSplashViewController: UIViewController {
     }
 
     private func buildUI() {
-        let screenW = UIScreen.main.bounds.width
+        let screenW = view.bounds.width
         
         // Height is back to normal!
         let rectHeight = screenW * 0.85
@@ -88,7 +88,7 @@ final class AnimatedSplashViewController: UIViewController {
     }
 
     private func hideBeforeAnimation() {
-        let screenW = UIScreen.main.bounds.width
+        let screenW = view.bounds.width
         
         // Push rects fully off screen
         rectLeft.transform  = CGAffineTransform(translationX: -screenW, y: 0)

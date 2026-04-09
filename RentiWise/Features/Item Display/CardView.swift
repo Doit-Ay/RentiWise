@@ -130,14 +130,15 @@ final class CardView: UIView {
         outerBorderLayer.strokeColor = teal.cgColor
         outerBorderLayer.lineWidth = outerBorderWidthOtherSides
         outerBorderLayer.lineJoin = .round
-        outerBorderLayer.contentsScale = UIScreen.main.scale
+        let pixelScale = traitCollection.displayScale > 0 ? traitCollection.displayScale : 2.0
+        outerBorderLayer.contentsScale = pixelScale
         layer.addSublayer(outerBorderLayer)
 
         outerLeftEdgeLayer.fillColor = UIColor.clear.cgColor
         outerLeftEdgeLayer.strokeColor = teal.cgColor
         outerLeftEdgeLayer.lineWidth = outerBorderWidthLeft
         outerLeftEdgeLayer.lineJoin = .round
-        outerLeftEdgeLayer.contentsScale = UIScreen.main.scale
+        outerLeftEdgeLayer.contentsScale = pixelScale
         layer.addSublayer(outerLeftEdgeLayer)
     }
 

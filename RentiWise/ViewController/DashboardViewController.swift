@@ -38,12 +38,14 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
 
     // MARK: - Private UI
     private let tableView = UITableView(frame: .zero, style: .plain)
+    private var reloadTask: Task<Void, Never>?
+    private var loadGeneration = 0
 
     private enum Segment: Int { case listing = 0, history = 1 }
     var initialSegment: Int?
 
     private var items: [Item] = []
-    private struct HistoryRow { let title: String; let ratePerDay: Double; let borrowerName: String; let imagePath: String? }
+    private struct HistoryRow { let title: String; let ratePerDay: Double; let detailText: String; let imagePath: String? }
     private var historyRows: [HistoryRow] = []
 
     // New: keep the full requests we fetched for history so we can open details
@@ -94,6 +96,7 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
     }
 
     deinit {
+        reloadTask?.cancel()
         NotificationCenter.default.removeObserver(self)
     }
 
@@ -108,9 +111,11 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
                 nav.popToViewController(homeVC, animated: true)
                 return
             }
-            // 2. Pop to root (root is usually HomeViewController)
-            nav.popToRootViewController(animated: true)
-            return
+            // 2. If Dashboard is not the root controller, fall back to the root of the stack.
+            if let root = nav.viewControllers.first, root !== self {
+                nav.popToRootViewController(animated: true)
+                return
+            }
         }
         // 3. Switch to the Home tab if inside a tab bar
         if let tab = tabBarController {
@@ -136,7 +141,17 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
     }
 
     @objc private func backTapped() {
-        navigationController?.popViewController(animated: true)
+        if let nav = navigationController, nav.viewControllers.count > 1 {
+            nav.popViewController(animated: true)
+            return
+        }
+
+        if presentingViewController != nil || navigationController?.presentingViewController != nil {
+            dismiss(animated: true)
+            return
+        }
+
+        routeToHome()
     }
 
     override func viewDidLayoutSubviews() {
@@ -145,7 +160,7 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
 
     @objc private func handleItemsShouldRefresh() {
         guard Segment(rawValue: roleSegmented.selectedSegmentIndex) == .listing else { return }
-        Task { await loadMyItems() }
+        reloadForSelectedSegment()
     }
 
     // MARK: - Navigation bar button (Filter on right)
@@ -223,40 +238,26 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
     }
     private var activeHistoryFilter: HistoryFilter = .all
 
+    @MainActor
     private func applyHistoryFilter() {
-        // We will re-run the mapping from ownerHistoryRequests to historyRows using the active filter.
-        let filteredRequests: [RequestWithItem]
-        
-        switch activeHistoryFilter {
-        case .inProgress:
-            let inProgressStatuses: Set<String> = ["pending", "accepted", "approved", "active", "in_progress"]
-            filteredRequests = ownerHistoryRequests.filter { inProgressStatuses.contains($0.status.lowercased()) }
-        case .completed:
-            let completedStatuses: Set<String> = ["completed", "returned"]
-            filteredRequests = ownerHistoryRequests.filter { completedStatuses.contains($0.status.lowercased()) }
-        case .cancelled:
-            let cancelledStatuses: Set<String> = ["cancelled", "rejected", "denied"]
-            filteredRequests = ownerHistoryRequests.filter { cancelledStatuses.contains($0.status.lowercased()) }
-        case .all:
-            filteredRequests = ownerHistoryRequests
+        let filteredRequests = ownerHistoryRequests.filter {
+            DashboardHistoryStatus.matches($0.status, filter: activeHistoryFilter)
         }
 
         displayedHistoryRequests = filteredRequests
-        self.historyRows = filteredRequests.map { req in
+        historyRows = filteredRequests.map { req in
             let title = req.items?.title ?? req.item_id
             let rate = req.items?.price_per_day ?? 0
-            let borrowerOrStatus = req.status.capitalized
+            let detailText = DashboardHistoryStatus.displayText(for: req.status)
             let imagePath = req.items?.images.first
-            return HistoryRow(title: title, ratePerDay: rate, borrowerName: borrowerOrStatus, imagePath: imagePath)
+            return HistoryRow(title: title, ratePerDay: rate, detailText: detailText, imagePath: imagePath)
         }
-        
-        DispatchQueue.main.async {
-            self.tableView.reloadData()
-            if self.historyRows.isEmpty {
-                self.loadEmptyStateIfNeeded()
-            } else {
-                self.tableView.backgroundView = nil
-            }
+
+        tableView.reloadData()
+        if historyRows.isEmpty {
+            loadEmptyStateIfNeeded()
+        } else {
+            tableView.backgroundView = nil
         }
     }
 
@@ -304,18 +305,39 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
 
     // MARK: - Segment handling
     @objc func roleChanged(_ sender: UISegmentedControl) { segmentedChanged(sender) }
-    @objc private func segmentedChanged(_ sender: UISegmentedControl) { 
-        updateFilterButtonVisibility()
-        reloadForSelectedSegment() 
+    @objc private func segmentedChanged(_ sender: UISegmentedControl) {
+        reloadForSelectedSegment()
     }
 
     private func reloadForSelectedSegment() {
         updateFilterButtonVisibility()
         guard let segment = Segment(rawValue: roleSegmented.selectedSegmentIndex) else { return }
-        switch segment {
-        case .listing: Task { await loadMyItems() }
-        case .history: Task { await loadOwnerHistoryFromDB() }
+
+        reloadTask?.cancel()
+        loadGeneration += 1
+        let generation = loadGeneration
+
+        isLoading = true
+        tableView.backgroundView = nil
+
+        reloadTask = Task { [weak self] in
+            guard let self else { return }
+            switch segment {
+            case .listing:
+                await self.loadMyItems(loadGeneration: generation)
+            case .history:
+                await self.loadOwnerHistoryFromDB(loadGeneration: generation)
+            }
         }
+    }
+
+    @MainActor
+    private func applyLoadResultIfCurrent(segment: Segment, generation: Int, update: () -> Void) {
+        guard loadGeneration == generation,
+              Segment(rawValue: roleSegmented.selectedSegmentIndex) == segment else {
+            return
+        }
+        update()
     }
 
     // MARK: - Data loading
@@ -335,14 +357,15 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
         }
     }
 
-    private func loadMyItems() async {
-        await MainActor.run { self.isLoading = true }
-
+    private func loadMyItems(loadGeneration generation: Int) async {
         guard let userId = await SupabaseManager.shared.currentUserId() else {
             await MainActor.run {
-                self.isLoading = false
-                self.items = []
-                self.loadEmptyStateIfNeeded()
+                self.applyLoadResultIfCurrent(segment: .listing, generation: generation) {
+                    self.isLoading = false
+                    self.items = []
+                    self.tableView.reloadData()
+                    self.loadEmptyStateIfNeeded()
+                }
             }
             return
         }
@@ -350,23 +373,29 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
         do {
             let service = ItemsService()
             let allItems = try await service.fetchItems(category: "")
+            guard !Task.isCancelled else { return }
+
             let ownerItems = allItems
                 .filter { $0.owner_id.lowercased() == userId.lowercased() }
                 .sorted { ($0.created_at ?? Date.distantPast) > ($1.created_at ?? Date.distantPast) }
             let visibleItems = collapseAccidentalDuplicateListings(ownerItems)
 
             await MainActor.run {
-                self.isLoading = false
-                self.items = visibleItems
-                self.tableView.reloadData()
-                self.loadEmptyStateIfNeeded()
+                self.applyLoadResultIfCurrent(segment: .listing, generation: generation) {
+                    self.isLoading = false
+                    self.items = visibleItems
+                    self.tableView.reloadData()
+                    self.loadEmptyStateIfNeeded()
+                }
             }
         } catch {
             await MainActor.run {
-                self.isLoading = false
-                self.items = []
-                self.tableView.reloadData()
-                self.loadEmptyStateIfNeeded()
+                self.applyLoadResultIfCurrent(segment: .listing, generation: generation) {
+                    self.isLoading = false
+                    self.items = []
+                    self.tableView.reloadData()
+                    self.loadEmptyStateIfNeeded()
+                }
             }
         }
     }
@@ -395,22 +424,25 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
         return deduped
     }
 
-    private func loadOwnerHistoryFromDB() async {
+    private func loadOwnerHistoryFromDB(loadGeneration generation: Int) async {
         await MainActor.run {
-            self.isLoading = true
-            self.historyRows = []
-            self.ownerHistoryRequests = []
-            self.displayedHistoryRequests = []
+            self.applyLoadResultIfCurrent(segment: .history, generation: generation) {
+                self.historyRows = []
+                self.ownerHistoryRequests = []
+                self.displayedHistoryRequests = []
+            }
         }
 
         guard let userId = await SupabaseManager.shared.currentUserId() else {
             await MainActor.run {
-                self.isLoading = false
-                self.historyRows = []
-                self.ownerHistoryRequests = []
-                self.displayedHistoryRequests = []
-                self.tableView.reloadData()
-                self.loadEmptyStateIfNeeded()
+                self.applyLoadResultIfCurrent(segment: .history, generation: generation) {
+                    self.isLoading = false
+                    self.historyRows = []
+                    self.ownerHistoryRequests = []
+                    self.displayedHistoryRequests = []
+                    self.tableView.reloadData()
+                    self.loadEmptyStateIfNeeded()
+                }
             }
             return
         }
@@ -431,21 +463,89 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
                 .execute()
 
             let requests = try JSONDecoder().decode([RequestWithItem].self, from: response.data)
+            guard !Task.isCancelled else { return }
 
             await MainActor.run {
-                self.isLoading = false
-                self.ownerHistoryRequests = requests
-                self.applyHistoryFilter() // Replaces manual `mapped` logic and respects active filter
+                self.applyLoadResultIfCurrent(segment: .history, generation: generation) {
+                    self.isLoading = false
+                    self.ownerHistoryRequests = requests
+                    self.applyHistoryFilter()
+                }
             }
         } catch {
             await MainActor.run {
-                self.isLoading = false
-                self.historyRows = []
-                self.ownerHistoryRequests = []
-                self.displayedHistoryRequests = []
-                self.tableView.reloadData()
-                self.loadEmptyStateIfNeeded()
+                self.applyLoadResultIfCurrent(segment: .history, generation: generation) {
+                    self.isLoading = false
+                    self.historyRows = []
+                    self.ownerHistoryRequests = []
+                    self.displayedHistoryRequests = []
+                    self.tableView.reloadData()
+                    self.loadEmptyStateIfNeeded()
+                }
             }
+        }
+    }
+}
+
+enum DashboardHistoryStatus {
+    case inProgress
+    case completed
+    case cancelled
+    case unknown
+
+    static func normalized(_ rawStatus: String) -> String {
+        rawStatus.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    static func classification(for rawStatus: String) -> Self {
+        switch normalized(rawStatus) {
+        case "pending", "accepted", "approved", "active", "in_progress", "returned":
+            return .inProgress
+        case "completed":
+            return .completed
+        case "cancelled", "rejected", "denied":
+            return .cancelled
+        default:
+            return .unknown
+        }
+    }
+
+    static func displayText(for rawStatus: String) -> String {
+        switch normalized(rawStatus) {
+        case "pending":
+            return "Pending"
+        case "accepted":
+            return "Accepted"
+        case "approved", "active", "in_progress":
+            return "Active"
+        case "returned":
+            return "Return Pending"
+        case "completed":
+            return "Completed"
+        case "cancelled":
+            return "Cancelled"
+        case "rejected":
+            return "Rejected"
+        case "denied":
+            return "Denied"
+        default:
+            return rawStatus
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .replacingOccurrences(of: "_", with: " ")
+                .capitalized
+        }
+    }
+
+    static func matches(_ rawStatus: String, filter: DashboardViewController.HistoryFilter) -> Bool {
+        switch filter {
+        case .all:
+            return true
+        case .inProgress:
+            return classification(for: rawStatus) == .inProgress
+        case .completed:
+            return classification(for: rawStatus) == .completed
+        case .cancelled:
+            return classification(for: rawStatus) == .cancelled
         }
     }
 }
@@ -517,20 +617,12 @@ extension DashboardViewController: UITableViewDataSource {
             let amount = NSNumber(value: row.ratePerDay)
             let rateText = (currencyFormatter.string(from: amount) ?? "\(row.ratePerDay)") + " / day"
             cell.itemRateHistory?.text = rateText
-            cell.itemBorrowerName?.text = row.borrowerName
+            cell.itemBorrowerName?.text = row.detailText
 
             if let path = row.imagePath, let url = StorageURLBuilder.publicFileURL(for: path) {
-                UIImageView.rw_loadImage(from: url) { [weak cell] image in
-                    DispatchQueue.main.async {
-                        cell?.itemImageHistory?.image = image
-                        cell?.itemImageHistory?.contentMode = .scaleAspectFill
-                        cell?.itemImageHistory?.clipsToBounds = true
-                    }
-                }
+                cell.setImage(from: url)
             } else {
-                cell.itemImageHistory?.image = UIImage(systemName: "photo")
-                cell.itemImageHistory?.tintColor = .secondaryLabel
-                cell.itemImageHistory?.contentMode = .scaleAspectFit
+                cell.setPlaceholderImage()
             }
             cell.backgroundColor = .clear
             cell.contentView.backgroundColor = .clear

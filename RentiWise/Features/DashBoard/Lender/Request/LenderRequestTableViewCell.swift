@@ -60,7 +60,7 @@ final class LenderRequestTableViewCell: UITableViewCell {
 
         // Optional: rasterize for scrolling performance (be mindful with dynamic resizing)
         card.layer.shouldRasterize = true
-        card.layer.rasterizationScale = UIScreen.main.scale
+        card.layer.rasterizationScale = traitCollection.displayScale > 0 ? traitCollection.displayScale : 2.0
     }
 
     override func prepareForReuse() {
