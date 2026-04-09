@@ -1715,6 +1715,8 @@ class BookingApprovalViewController: UIViewController {
 
     private func fetchAndDisplayAddress(for userId: String) async {
         await MainActor.run { self.addressLabel?.text = nil }
+
+        // 1) Try addresses table — default address
         do {
             let client = SupabaseManager.shared.client
 
@@ -1732,6 +1734,7 @@ class BookingApprovalViewController: UIViewController {
                 return
             }
 
+            // 2) Try addresses table — any address (is_default might be false)
             if let data = try? await client
                 .from("addresses")
                 .select("address_line1,address_line2,city,state,postal_code,country,is_default,created_at")
@@ -1750,6 +1753,7 @@ class BookingApprovalViewController: UIViewController {
             // continue to fallback
         }
 
+        // 3) Try user_default_address view — city/state/country or reverse geocode from coordinates
         do {
             let client = SupabaseManager.shared.client
             let rows: [OwnerDefaultAddressRow] = try await client
@@ -1784,11 +1788,45 @@ class BookingApprovalViewController: UIViewController {
                 await MainActor.run { self.addressLabel?.text = display }
                 return
             }
-
-            await MainActor.run { self.addressLabel?.text = "Address unavailable" }
         } catch {
-            await MainActor.run { self.addressLabel?.text = "Address unavailable" }
+            // continue to RPC fallback
         }
+
+        // 4) Try RPC get_owner_coordinates — fallback for users whose address rows aren't visible
+        do {
+            struct RPCRow: Decodable {
+                let latitude: Double?
+                let longitude: Double?
+                let city: String?
+                let state: String?
+                let country: String?
+            }
+            let rpcRows: [RPCRow] = try await SupabaseManager.shared.client
+                .rpc("get_owner_coordinates", params: ["owner_user_id": userId])
+                .execute()
+                .value
+
+            if let row = rpcRows.first {
+                // If city/state available, use them
+                let textParts = [row.city, row.state, row.country]
+                    .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+                if !textParts.isEmpty {
+                    await MainActor.run { self.addressLabel?.text = textParts.joined(separator: ", ") }
+                    return
+                }
+                // Otherwise reverse geocode from coordinates
+                if let lat = row.latitude, let lon = row.longitude, lat != 0, lon != 0 {
+                    let display = await reverseGeocodeIfNeeded(lat: lat, lon: lon, fallbackText: "Address unavailable")
+                    await MainActor.run { self.addressLabel?.text = display }
+                    return
+                }
+            }
+        } catch {
+            // final fallback
+        }
+
+        await MainActor.run { self.addressLabel?.text = "Address unavailable" }
     }
 
     private func reverseGeocodeIfNeeded(lat: Double, lon: Double, fallbackText: String) async -> String {

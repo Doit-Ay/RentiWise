@@ -80,11 +80,17 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     /// Inserts a default address row with GPS coordinates if the user has no address yet.
+    /// Reverse geocodes first to populate required NOT NULL columns (address_line1, city, state, postal_code).
     private func autoSaveAddressIfNeeded(userId: String, lat: Double, lon: Double) async {
         struct AddressCheck: Decodable { let id: String }
         struct AddressInsert: Encodable {
             let user_id: String
             let label: String
+            let address_line1: String
+            let city: String
+            let state: String
+            let postal_code: String
+            let country: String
             let latitude: Double
             let longitude: Double
             let is_default: Bool
@@ -99,9 +105,42 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
                 .value
             guard existing.isEmpty else { return }
 
-            let payload = AddressInsert(user_id: userId, label: "Home", latitude: lat, longitude: lon, is_default: true)
+            // Reverse geocode to fill required columns
+            var city = "Chennai"
+            var state = "Tamil Nadu"
+            var country = "India"
+            var postalCode = "600001"
+            var addressLine1 = "Auto-detected location"
+
+            let location = CLLocation(latitude: lat, longitude: lon)
+            if let placemarks = try? await CLGeocoder().reverseGeocodeLocation(location),
+               let p = placemarks.first {
+                city = p.locality ?? p.subLocality ?? city
+                state = p.administrativeArea ?? state
+                country = p.country ?? country
+                postalCode = p.postalCode ?? postalCode
+                let parts = [p.subThoroughfare, p.thoroughfare, p.subLocality].compactMap { $0 }.joined(separator: " ")
+                if !parts.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    addressLine1 = parts
+                } else {
+                    addressLine1 = "\(city) area"
+                }
+            }
+
+            let payload = AddressInsert(
+                user_id: userId,
+                label: "Home",
+                address_line1: addressLine1,
+                city: city,
+                state: state,
+                postal_code: postalCode,
+                country: country,
+                latitude: lat,
+                longitude: lon,
+                is_default: true
+            )
             _ = try await SupabaseManager.shared.client.from("addresses").insert(payload).execute()
-            debugLog("[SceneDelegate] Auto-saved GPS address for user \(userId)")
+            debugLog("[SceneDelegate] Auto-saved GPS address for user \(userId): \(city), \(state)")
         } catch {
             debugLog("[SceneDelegate] autoSaveAddressIfNeeded error: \(error.localizedDescription)")
         }

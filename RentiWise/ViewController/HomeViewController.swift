@@ -874,7 +874,7 @@ extension HomeViewController {
             let nonIndiaKeywords = ["san francisco", "california", "united states", "new york", "los angeles", "cupertino"]
             if nonIndiaKeywords.contains(where: { lower.contains($0) }) {
                 SavedAddressesStore.shared.clearSelectedAddress()
-                DistanceService.shared.clearViewerAddressCache()
+                DistanceService.shared.clearAllDistanceCaches()
             }
         }
 
@@ -929,7 +929,8 @@ extension HomeViewController {
         }
 
         vc.onSelectedAddress = { [weak self] _ in
-            DistanceService.shared.clearViewerAddressCache()
+            DistanceService.shared.clearAllDistanceCaches()
+            CategoryItemCell.clearDistanceCache()
             self?.refreshLocationButtonTitle()
             Task { await self?.loadFeaturedItems(forceRefresh: true) }
         }
@@ -941,7 +942,8 @@ extension HomeViewController {
                 let display = [saved.label, saved.city, saved.state].compactMap { $0 }.first ?? saved.city
                 let fullString = self.makeFullAddressString(from: saved)
                 SavedAddressesStore.shared.setDefaultSelectedAddress(fullString)
-                DistanceService.shared.clearViewerAddressCache()
+                DistanceService.shared.clearAllDistanceCaches()
+                CategoryItemCell.clearDistanceCache()
                 self.refreshLocationButtonTitle()
                 Task { await self.loadFeaturedItems(forceRefresh: true) }
                 completion(display)
@@ -964,7 +966,8 @@ extension HomeViewController {
                 let display = [addr.label, addr.city, addr.state].compactMap { $0 }.first ?? addr.city
                 let fullString = self.makeFullAddressString(from: addr)
                 SavedAddressesStore.shared.setDefaultSelectedAddress(fullString)
-                DistanceService.shared.clearViewerAddressCache()
+                DistanceService.shared.clearAllDistanceCaches()
+                CategoryItemCell.clearDistanceCache()
                 self.refreshLocationButtonTitle()
                 Task { await self.loadFeaturedItems(forceRefresh: true) }
             }

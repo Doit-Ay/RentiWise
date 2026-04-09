@@ -47,6 +47,12 @@ final class CategoryItemCell: UITableViewCell {
     // otherwise fall back to owner-level distance.
     private static let distanceCache = NSCache<NSString, NSString>()
 
+    /// Clears the UI-level distance string cache. Call when the viewer's location changes
+    /// so that cells re-fetch fresh distances instead of showing stale values.
+    static func clearDistanceCache() {
+        distanceCache.removeAllObjects()
+    }
+
     override func awakeFromNib() {
         super.awakeFromNib()
         backgroundColor = .clear

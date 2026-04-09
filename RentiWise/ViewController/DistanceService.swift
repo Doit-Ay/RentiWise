@@ -22,6 +22,7 @@ final class DistanceService {
     // MARK: - In-memory caches
     private var geocodeCache = NSCache<NSString, CLLocation>()
     private var directionsCache = NSCache<NSString, NSNumber>() // meters
+    private var ownerCoordCache = NSCache<NSString, CLLocation>() // owner_id → CLLocation
 
     private let client: SupabaseClient
     private let geocoder = CLGeocoder()
@@ -32,6 +33,9 @@ final class DistanceService {
     private let viewerAddressLonKey = "RW_ViewerAddressLongitude"
     private let viewerAddressHashKey = "RW_ViewerAddressHash"
     private let viewerAddressFetchedAtKey = "RW_ViewerAddressFetchedAt"
+    /// When true, the viewer coordinate was explicitly set by the user (e.g. picking a saved address).
+    /// In this case, resolveViewerAddress() should NOT overwrite it with the DB default.
+    private let viewerAddressExplicitKey = "RW_ViewerAddressExplicit"
 
     private init(client: SupabaseClient = SupabaseManager.shared.client) {
         self.client = client
@@ -39,6 +43,7 @@ final class DistanceService {
         geocodeCache.totalCostLimit = 4 * 1024 * 1024
         directionsCache.countLimit = 512
         directionsCache.totalCostLimit = 2 * 1024 * 1024
+        ownerCoordCache.countLimit = 128
     }
 
     // MARK: - Public API
@@ -56,6 +61,36 @@ final class DistanceService {
         defaults.removeObject(forKey: viewerAddressLonKey)
         defaults.removeObject(forKey: viewerAddressHashKey)
         defaults.removeObject(forKey: viewerAddressFetchedAtKey)
+        defaults.removeObject(forKey: viewerAddressExplicitKey)
+    }
+
+    /// Clears ALL distance caches — viewer address, in-memory directions/geocode, and owner cache.
+    /// Call this whenever the user's location changes so every distance is recomputed.
+    func clearAllDistanceCaches() {
+        clearViewerAddressCache()
+        directionsCache.removeAllObjects()
+        geocodeCache.removeAllObjects()
+        ownerCoordCache.removeAllObjects()
+        print("[DistanceService] All caches cleared")
+    }
+
+    /// Directly set the viewer's coordinate, bypassing DB/GPS lookups.
+    /// Used when the user picks a saved address with known lat/lon from the location picker.
+    func setViewerCoordinate(latitude: Double, longitude: Double) {
+        let userId = SupabaseManager.shared.currentUserIdSync() ?? "anonymous"
+        let location = CLLocation(latitude: latitude, longitude: longitude)
+        let resolved = ResolvedAddressCoordinate(
+            userId: userId,
+            location: location,
+            hash: viewerAddressHash(for: location)
+        )
+        // Clear stale distances before setting new location
+        directionsCache.removeAllObjects()
+        ownerCoordCache.removeAllObjects()
+        saveViewerAddress(resolved)
+        // Mark as explicitly set so resolveViewerAddress doesn't overwrite with DB default
+        UserDefaults.standard.set(true, forKey: viewerAddressExplicitKey)
+        print("[DistanceService] Viewer coordinate explicitly set: \(latitude), \(longitude)")
     }
 
     /// Returns a stable numeric distance for ranking lists.
@@ -232,26 +267,44 @@ final class DistanceService {
             return cached
         }
 
-        // 1) Try DB addresses table first (user's saved address — most reliable)
-        if userId != "anonymous", let resolved = await fetchViewerAddressCoordinate(userId: userId) {
-            saveViewerAddress(resolved)
-            return resolved
+        // Check if user explicitly set coordinates via location picker.
+        // If so, honour the explicit selection and DON'T overwrite with the DB default.
+        let isExplicit = UserDefaults.standard.bool(forKey: viewerAddressExplicitKey)
+
+        if !isExplicit {
+            // 1) Try DB addresses table first (user's saved default address — most reliable)
+            if userId != "anonymous", let resolved = await fetchViewerAddressCoordinate(userId: userId) {
+                print("[DistanceService] Viewer resolved from DB: \(resolved.location.coordinate.latitude), \(resolved.location.coordinate.longitude)")
+                saveViewerAddress(resolved)
+                return resolved
+            }
         }
 
         // 2) Try SavedAddressesStore (local UserDefaults — user's explicit selection)
         let savedAddress = SavedAddressesStore.shared.getDefaultSelectedAddress()?.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let savedAddress, !savedAddress.isEmpty,
-           let location = await geocodeAddressString(savedAddress) {
-            let resolved = ResolvedAddressCoordinate(
-                userId: userId,
-                location: location,
-                hash: normalizeAddressKey(savedAddress)
-            )
+        if let savedAddress, !savedAddress.isEmpty {
+            // Check if it looks like coordinates were encoded (from setViewerCoordinate)
+            // Otherwise geocode the text
+            if let location = await geocodeAddressString(savedAddress) {
+                let resolved = ResolvedAddressCoordinate(
+                    userId: userId,
+                    location: location,
+                    hash: normalizeAddressKey(savedAddress)
+                )
+                print("[DistanceService] Viewer resolved from SavedAddressesStore geocode('\(savedAddress)'): \(location.coordinate.latitude), \(location.coordinate.longitude)")
+                saveViewerAddress(resolved)
+                return resolved
+            }
+        }
+
+        // 3) If explicit was set but the cache expired, fall back to DB now
+        if isExplicit, userId != "anonymous", let resolved = await fetchViewerAddressCoordinate(userId: userId) {
+            print("[DistanceService] Viewer resolved from DB (explicit cache expired): \(resolved.location.coordinate.latitude), \(resolved.location.coordinate.longitude)")
             saveViewerAddress(resolved)
             return resolved
         }
 
-        // 3) Try device GPS (only if no saved address exists)
+        // 4) Try device GPS (only if no saved address exists)
         if let coordinates = await AppLocationManager.shared.currentCoordinates() {
             let location = CLLocation(latitude: coordinates.latitude, longitude: coordinates.longitude)
             let resolved = ResolvedAddressCoordinate(
@@ -259,6 +312,7 @@ final class DistanceService {
                 location: location,
                 hash: viewerAddressHash(for: location)
             )
+            print("[DistanceService] Viewer resolved from GPS: \(coordinates.latitude), \(coordinates.longitude)")
             saveViewerAddress(resolved)
             if userId != "anonymous" {
                 await autoSaveAddressIfNeeded(userId: userId, location: location)
@@ -266,7 +320,8 @@ final class DistanceService {
             return resolved
         }
 
-        // 4) Ultimate fallback: hardcoded Chennai coordinate
+        // 5) Ultimate fallback: hardcoded Chennai coordinate
+        print("[DistanceService] Viewer: ALL lookups failed, using Chennai fallback")
         let resolved = ResolvedAddressCoordinate(
             userId: userId,
             location: fallbackCoordinate,
@@ -316,6 +371,12 @@ final class DistanceService {
     }
 
     private func fetchOwnerCoordinate(ownerId: String) async -> CLLocation {
+        // Check in-memory cache first
+        let cacheKey = ownerId.lowercased() as NSString
+        if let cached = ownerCoordCache.object(forKey: cacheKey) {
+            return cached
+        }
+
         // 1) Try RPC function (SECURITY DEFINER — bypasses RLS for cross-user lookups)
         do {
             let rows: [PublicDefaultAddressRow] = try await client
@@ -326,15 +387,20 @@ final class DistanceService {
             if let row = rows.first {
                 print("[DistanceService] Owner \(ownerId) from RPC: lat=\(row.latitude ?? -999), lon=\(row.longitude ?? -999), city=\(row.city ?? "nil")")
                 if let location = validatedLocation(latitude: row.latitude, longitude: row.longitude) {
+                    ownerCoordCache.setObject(location, forKey: cacheKey)
                     return location
                 }
 
+                // Lat/lon are NULL but city is available — geocode and backfill
                 let parts = [row.city, row.state, row.country]
                     .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
                     .filter { !$0.isEmpty }
                     .joined(separator: ", ")
                 if !parts.isEmpty, let geocoded = await geocodeAddressString(parts) {
                     print("[DistanceService] Owner \(ownerId) geocoded '\(parts)' -> \(geocoded.coordinate.latitude), \(geocoded.coordinate.longitude)")
+                    ownerCoordCache.setObject(geocoded, forKey: cacheKey)
+                    // Backfill the coordinates into the DB so future lookups are instant
+                    await backfillOwnerCoordinates(ownerId: ownerId, location: geocoded)
                     return geocoded
                 }
             } else {
@@ -357,6 +423,7 @@ final class DistanceService {
             if let row = rows.first {
                 print("[DistanceService] Owner \(ownerId) from view: lat=\(row.latitude ?? -999), lon=\(row.longitude ?? -999), city=\(row.city ?? "nil")")
                 if let location = validatedLocation(latitude: row.latitude, longitude: row.longitude) {
+                    ownerCoordCache.setObject(location, forKey: cacheKey)
                     return location
                 }
 
@@ -365,6 +432,8 @@ final class DistanceService {
                     .filter { !$0.isEmpty }
                     .joined(separator: ", ")
                 if !parts.isEmpty, let geocoded = await geocodeAddressString(parts) {
+                    ownerCoordCache.setObject(geocoded, forKey: cacheKey)
+                    await backfillOwnerCoordinates(ownerId: ownerId, location: geocoded)
                     return geocoded
                 }
             }
@@ -375,12 +444,38 @@ final class DistanceService {
         // 3) Try addresses table directly (works with new RLS policy)
         if let ownAddress = await fetchViewerAddressCoordinate(userId: ownerId) {
             print("[DistanceService] Owner \(ownerId) from addresses table: \(ownAddress.location.coordinate.latitude), \(ownAddress.location.coordinate.longitude)")
+            ownerCoordCache.setObject(ownAddress.location, forKey: cacheKey)
             return ownAddress.location
         }
 
         // 4) Ultimate fallback: Chennai coordinate
-        print("[DistanceService] Owner \(ownerId): ALL lookups failed, using Chennai fallback")
+        print("[DistanceService] ⚠️ Owner \(ownerId): ALL lookups failed, using Chennai fallback")
         return fallbackCoordinate
+    }
+
+    /// Writes resolved lat/lon back to the addresses table for an owner whose row had NULL coordinates.
+    /// This is a one-time backfill so future lookups are instant.
+    private func backfillOwnerCoordinates(ownerId: String, location: CLLocation) async {
+        struct CoordPatch: Encodable {
+            let latitude: Double
+            let longitude: Double
+        }
+        do {
+            try await client
+                .from("addresses")
+                .update(CoordPatch(
+                    latitude: location.coordinate.latitude,
+                    longitude: location.coordinate.longitude
+                ))
+                .eq("user_id", value: ownerId)
+                .is("latitude", value: nil)
+                .execute()
+            print("[DistanceService] Backfilled coordinates for owner \(ownerId)")
+        } catch {
+            // Non-critical — the update may fail if RLS blocks it, but the SECURITY DEFINER
+            // RPC already has the coords cached for this session.
+            print("[DistanceService] backfillOwnerCoordinates error (non-critical): \(error)")
+        }
     }
 
     private func validatedLocation(latitude: Double?, longitude: Double?) -> CLLocation? {

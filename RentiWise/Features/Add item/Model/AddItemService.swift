@@ -528,10 +528,16 @@ final class AddItemService: AddItemServicing {
     }
 
     /// Saves the device GPS as the user's default address if they don't have one yet.
+    /// Reverse geocodes to fill required NOT NULL columns (address_line1, city, state, postal_code).
     private func autoSaveAddressFromGPS(userId: String, latitude: Double, longitude: Double) async {
         struct AddressInsert: Encodable {
             let user_id: String
             let label: String
+            let address_line1: String
+            let city: String
+            let state: String
+            let postal_code: String
+            let country: String
             let latitude: Double
             let longitude: Double
             let is_default: Bool
@@ -547,14 +553,42 @@ final class AddItemService: AddItemServicing {
                 .value
             guard existing.isEmpty else { return }
 
+            // Reverse geocode to fill required columns
+            var city = "Chennai"
+            var state = "Tamil Nadu"
+            var country = "India"
+            var postalCode = "600001"
+            var addressLine1 = "Auto-detected location"
+
+            let location = CLLocation(latitude: latitude, longitude: longitude)
+            if let placemarks = try? await CLGeocoder().reverseGeocodeLocation(location),
+               let p = placemarks.first {
+                city = p.locality ?? p.subLocality ?? city
+                state = p.administrativeArea ?? state
+                country = p.country ?? country
+                postalCode = p.postalCode ?? postalCode
+                let parts = [p.subThoroughfare, p.thoroughfare, p.subLocality].compactMap { $0 }.joined(separator: " ")
+                if !parts.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    addressLine1 = parts
+                } else {
+                    addressLine1 = "\(city) area"
+                }
+            }
+
             let payload = AddressInsert(
                 user_id: userId,
                 label: "Home",
+                address_line1: addressLine1,
+                city: city,
+                state: state,
+                postal_code: postalCode,
+                country: country,
                 latitude: latitude,
                 longitude: longitude,
                 is_default: true
             )
             _ = try await client.from("addresses").insert(payload).execute()
+            debugLog("[AddItem] Auto-saved GPS address: \(city), \(state)")
         } catch {
             debugLog("[AddItem] autoSaveAddressFromGPS failed: \(error.localizedDescription)")
         }

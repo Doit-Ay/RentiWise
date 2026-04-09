@@ -97,9 +97,13 @@ final class LocationSelectorViewController: UIViewController {
                 do {
                     let loc = try await AppLocationManager.shared.currentLocation()
                     let name = try await AppLocationManager.shared.placename(for: loc)
+                    // Set the coordinate directly for accurate distance calculations
+                    DistanceService.shared.setViewerCoordinate(
+                        latitude: loc.coordinate.latitude,
+                        longitude: loc.coordinate.longitude
+                    )
                     // Keep Home button title in sync via local store
                     SavedAddressesStore.shared.setDefaultSelectedAddress(name)
-                    DistanceService.shared.clearViewerAddressCache()
                     await MainActor.run {
                         self.onSelectedAddress?(name)
                     }
@@ -127,7 +131,7 @@ final class LocationSelectorViewController: UIViewController {
                 guard !trimmed.isEmpty else { return }
                 // Keep Home button title in sync locally
                 SavedAddressesStore.shared.setDefaultSelectedAddress(trimmed)
-                DistanceService.shared.clearViewerAddressCache()
+                DistanceService.shared.clearAllDistanceCaches()
                 self.onSelectedAddress?(trimmed)
             }
         }
@@ -298,10 +302,23 @@ extension LocationSelectorViewController: UITableViewDelegate {
             let address = saved[indexPath.row]
             dismissThen { [weak self] in
                 guard let self = self else { return }
-                // Optionally mark it default in backend via ManageAddresses screen; here we just reflect locally for Home button
                 let display = self.displayString(for: address)
-                SavedAddressesStore.shared.setDefaultSelectedAddress(display)
-                DistanceService.shared.clearViewerAddressCache()
+
+                // Set coordinates directly if available (avoids geocoding "Home"/"Office")
+                if let lat = address.latitude, let lon = address.longitude, lat != 0, lon != 0 {
+                    DistanceService.shared.setViewerCoordinate(latitude: lat, longitude: lon)
+                } else {
+                    // Fall back to clearing caches — resolveViewerAddress will re-resolve
+                    DistanceService.shared.clearAllDistanceCaches()
+                }
+
+                // Build a geocodable string for SavedAddressesStore (city, state, country)
+                let geocodableString = [address.city, address.state, address.country]
+                    .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+                    .joined(separator: ", ")
+                SavedAddressesStore.shared.setDefaultSelectedAddress(
+                    geocodableString.isEmpty ? display : geocodableString
+                )
                 self.onSelectedAddress?(display)
             }
         }
