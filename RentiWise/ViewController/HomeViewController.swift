@@ -398,16 +398,13 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
         // Keep text left-aligned within its bounds
         btn.contentHorizontalAlignment = .leading
         // Optional: small horizontal padding
-        var locBtnConfig = UIButton.Configuration.plain()
-        locBtnConfig.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 4, bottom: 0, trailing: 4)
-        btn.configuration = locBtnConfig
+        btn.contentEdgeInsets = UIEdgeInsets(top: 0, left: 4, bottom: 0, right: 4)
         // Prefer truncation over expanding horizontally
         btn.setContentCompressionResistancePriority(.required, for: .horizontal)
         // If the button has an image, ensure room between image and text
         if btn.image(for: .normal) != nil {
             btn.semanticContentAttribute = .forceLeftToRight
-            locBtnConfig.imagePadding = 6
-            btn.configuration = locBtnConfig
+            btn.imageEdgeInsets = UIEdgeInsets(top: 0, left: 0, bottom: 0, right: 6)
         }
     }
 

@@ -117,9 +117,7 @@ extension HomeViewController {
 
             v.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
             v.setTitleColor(titleColor, for: .normal)
-            var btnConfig = UIButton.Configuration.plain()
-            btnConfig.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 14, bottom: 8, trailing: 14)
-            v.configuration = btnConfig
+            v.contentEdgeInsets = UIEdgeInsets(top: 8, left: 14, bottom: 8, right: 14)
 
             v.applyGlassEffect(
                 cornerRadius: 16,
@@ -185,9 +183,7 @@ extension HomeViewController {
             ])
 
             button.backgroundColor = .clear
-            var btnConfig = UIButton.Configuration.plain()
-            btnConfig.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0)
-            button.configuration = btnConfig
+            button.contentEdgeInsets = .zero
 
             existing = wrapper
         }

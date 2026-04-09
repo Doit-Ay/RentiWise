@@ -92,9 +92,7 @@ final class CategoryItemCell: UITableViewCell {
             
             b.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
             b.setTitleColor(UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0), for: .normal) // Teal text
-            var rentBtnConfig = UIButton.Configuration.plain()
-            rentBtnConfig.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 14, bottom: 8, trailing: 14)
-            b.configuration = rentBtnConfig
+            b.contentEdgeInsets = UIEdgeInsets(top: 8, left: 14, bottom: 8, right: 14)
             
             // Soft off-white background (less bright than pure white)
             b.backgroundColor = UIColor(white: 0.96, alpha: 1.0)

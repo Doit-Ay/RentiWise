@@ -179,9 +179,7 @@ class DashboardLenderRequestViewController: UIViewController {
         change.layer.cornerRadius = 12
         change.layer.borderWidth = 1.5
         change.layer.borderColor = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1.0).cgColor
-        var changeBtnConfig = UIButton.Configuration.plain()
-        changeBtnConfig.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 14, bottom: 6, trailing: 14)
-        change.configuration = changeBtnConfig
+        change.contentEdgeInsets = UIEdgeInsets(top: 6, left: 14, bottom: 6, right: 14)
         change.setContentHuggingPriority(.required, for: .horizontal)
 
         // Horizontal row: [ status label ] [ spacer ] [ change button ]
@@ -1455,9 +1453,7 @@ class DashboardLenderRequestViewController: UIViewController {
             reviewButton.backgroundColor = tealColor
             reviewButton.layer.cornerRadius = 8
             reviewButton.layer.masksToBounds = true
-            var reviewBtnConfig = UIButton.Configuration.plain()
-            reviewBtnConfig.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 14, bottom: 6, trailing: 14)
-            reviewButton.configuration = reviewBtnConfig
+            reviewButton.contentEdgeInsets = UIEdgeInsets(top: 6, left: 14, bottom: 6, right: 14)
             reviewButton.translatesAutoresizingMaskIntoConstraints = false
             // Tag encodes the request type and ID for the action handler
             reviewButton.accessibilityIdentifier = "\(pending.type)|\(pending.id)|\(pending.status)"

@@ -250,10 +250,9 @@ extension HomeViewController {
         buyProBtn.layer.cornerRadius = 16
         
         // Proper spacing horizontally
-        var proBtnConfig = UIButton.Configuration.plain()
-        proBtnConfig.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 14, bottom: 0, trailing: 14)
-        proBtnConfig.imagePadding = 6
-        buyProBtn.configuration = proBtnConfig
+        buyProBtn.contentEdgeInsets = UIEdgeInsets(top: 0, left: 14, bottom: 0, right: 14)
+        buyProBtn.titleEdgeInsets = UIEdgeInsets(top: 0, left: 6, bottom: 0, right: -6)
+        buyProBtn.imageEdgeInsets = UIEdgeInsets(top: 0, left: -2, bottom: 0, right: 2)
         
         buyProBtn.translatesAutoresizingMaskIntoConstraints = false
         // Ensure button does NOT get compressed vertically or horizontally
