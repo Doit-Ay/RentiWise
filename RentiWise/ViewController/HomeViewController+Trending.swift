@@ -49,15 +49,27 @@ extension HomeViewController {
         let requestGeneration = UUID()
         trendingSortGeneration = requestGeneration
 
-        let fallbackSorted = items.sorted(by: isPreferredTrendingItem(_:over:))
-        trendingItems = Array(fallbackSorted.prefix(6))
-        trendingCollectionView?.reloadData()
-
         Task { [weak self] in
             guard let self else { return }
+            let me = await SupabaseManager.shared.currentUserId()
+            
+            // Filter out items owned by the current user so they don't dominate their own trending list
+            let filteredItems = items.filter { item in
+                guard let me = me else { return true }
+                return item.owner_id.lowercased() != me.lowercased()
+            }
+
+            let fallbackSorted = filteredItems.sorted(by: self.isPreferredTrendingItem(_:over:))
+            let initialTrending = Array(fallbackSorted.prefix(6))
+            
+            await MainActor.run {
+                guard self.trendingSortGeneration == requestGeneration else { return }
+                self.trendingItems = initialTrending
+                self.trendingCollectionView?.reloadData()
+            }
 
             let rankedItems = await withTaskGroup(of: (Item, Double).self, returning: [(Item, Double)].self) { group in
-                for item in items {
+                for item in filteredItems {
                     group.addTask {
                         let distance = await DistanceService.shared.rankingDistanceMeters(for: item)
                         return (item, distance)
@@ -122,7 +134,8 @@ extension HomeViewController {
             return lhs.hasActiveBoost && !rhs.hasActiveBoost
         }
 
-        return (lhs.created_at ?? .distantPast) > (rhs.created_at ?? .distantPast)
+        // Reversing sort to oldest first so newest items stay specifically in New Arrivals
+        return (lhs.created_at ?? .distantPast) < (rhs.created_at ?? .distantPast)
     }
 }
 

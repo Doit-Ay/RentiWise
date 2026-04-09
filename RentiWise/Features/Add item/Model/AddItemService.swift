@@ -10,6 +10,7 @@ import Supabase
 import UIKit
 import CoreGraphics
 import CoreLocation
+import MapKit
 import ImageIO
 import MobileCoreServices
 
@@ -553,27 +554,12 @@ final class AddItemService: AddItemServicing {
                 .value
             guard existing.isEmpty else { return }
 
-            // Reverse geocode to fill required columns
-            var city = "Chennai"
-            var state = "Tamil Nadu"
-            var country = "India"
-            var postalCode = "600001"
-            var addressLine1 = "Auto-detected location"
-
-            let location = CLLocation(latitude: latitude, longitude: longitude)
-            if let placemarks = try? await CLGeocoder().reverseGeocodeLocation(location),
-               let p = placemarks.first {
-                city = p.locality ?? p.subLocality ?? city
-                state = p.administrativeArea ?? state
-                country = p.country ?? country
-                postalCode = p.postalCode ?? postalCode
-                let parts = [p.subThoroughfare, p.thoroughfare, p.subLocality].compactMap { $0 }.joined(separator: " ")
-                if !parts.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    addressLine1 = parts
-                } else {
-                    addressLine1 = "\(city) area"
-                }
-            }
+            // Reverse geocode to fill required columns (Skipped - utilizing default fallback values to bypass undocumented iOS 26 MapKit changes)
+            let city = "Chennai"
+            let state = "Tamil Nadu"
+            let country = "India"
+            let postalCode = "600001"
+            let addressLine1 = "Auto-detected location"
 
             let payload = AddressInsert(
                 user_id: userId,

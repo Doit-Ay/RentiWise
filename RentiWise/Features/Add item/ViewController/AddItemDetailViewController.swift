@@ -13,6 +13,9 @@ class AddItemDetailViewController: UIViewController {
 
     // MARK: - Outlets / Actions from IB
 
+    @IBOutlet weak var titleTextField: UITextField!
+    @IBOutlet weak var descriptionHeadingLabel: UILabel!
+
     @IBAction func itemTitleTextField(_ sender: UITextField) {
         // Keep draft.title in sync if you wire this action from the title text field
         draft.title = sender.text ?? ""
@@ -35,9 +38,14 @@ class AddItemDetailViewController: UIViewController {
     // Continue button → push AddItemPricingViewController from its XIB
     @IBAction func ContinueTapped(_ sender: UIButton) {
         // Update draft with chosen values from UI controls
+        if let titleText = titleTextField?.text {
+            draft.title = titleText
+        }
         draft.category = (selectACategory.text == "Select a category") ? "" : (selectACategory.text ?? "")
         draft.condition = (selectCondition.text == "Select condition") ? "" : (selectCondition.text ?? "")
-        draft.description = descriptionTextView.text ?? ""
+        
+        let descText = descriptionTextView.text ?? ""
+        draft.description = (descText == descriptionPlaceholder) ? "" : descText
 
         // Validate required fields before proceeding
         if let errorMessage = validateDraft() {
@@ -89,9 +97,16 @@ class AddItemDetailViewController: UIViewController {
         if trimmedDescription.isEmpty {
             return "Please add a short description."
         }
+        
+        if trimmedDescription.count > 180 {
+            return "Description must be 180 characters or less."
+        }
 
         return nil
     }
+
+    // MARK: - Description Placeholder
+    let descriptionPlaceholder = "e.g., A small, portable air conditioner..."
 
     // MARK: - Lifecycle
 
@@ -109,7 +124,14 @@ class AddItemDetailViewController: UIViewController {
             navBar.scrollEdgeAppearance = appearance
         }
 
+        // Initialize the dynamic character count for the header label
+        updateCharacterCount(for: draft.description)
+
         // Prefill from draft if editing
+        if !draft.title.isEmpty {
+            titleTextField?.text = draft.title
+        }
+
         if !draft.category.isEmpty {
             selectACategory.text = draft.category
             selectACategory.textColor = .label
@@ -124,8 +146,13 @@ class AddItemDetailViewController: UIViewController {
             selectCondition.text = "Select condition"
         }
 
+        descriptionTextView.delegate = self
         if !draft.description.isEmpty {
             descriptionTextView.text = draft.description
+            descriptionTextView.textColor = .label
+        } else {
+            descriptionTextView.text = descriptionPlaceholder
+            descriptionTextView.textColor = .placeholderText
         }
 
         // Setup iOS native UIMenu for dropdowns
@@ -217,6 +244,27 @@ class AddItemDetailViewController: UIViewController {
         ])
     }
 
+    // MARK: - Handlers
+    
+    func updateCharacterCount(for text: String) {
+        let actualText = (text == descriptionPlaceholder) ? "" : text
+        let count = actualText.count
+        
+        let attributedString = NSMutableAttributedString(string: "Description ", attributes: [
+            .font: UIFont.systemFont(ofSize: 17, weight: .medium),
+            .foregroundColor: UIColor.label
+        ])
+        
+        // Use red text color if the user has exceeded the 180 character limit
+        let countColor: UIColor = count > 180 ? .systemRed : .secondaryLabel
+        let subtitleString = NSAttributedString(string: "(\(count)/180 chars)", attributes: [
+            .font: UIFont.systemFont(ofSize: 14, weight: .regular),
+            .foregroundColor: countColor
+        ])
+        attributedString.append(subtitleString)
+        descriptionHeadingLabel?.attributedText = attributedString
+    }
+
     // Dismiss keyboard utility
     @objc private func dismissKeyboard() {
         view.endEditing(true)
@@ -231,4 +279,27 @@ class AddItemDetailViewController: UIViewController {
     }
 }
 
+extension AddItemDetailViewController: UITextViewDelegate {
+    func textViewDidBeginEditing(_ textView: UITextView) {
+        if textView.text == descriptionPlaceholder {
+            textView.text = ""
+            textView.textColor = .label
+        }
+    }
+
+    func textViewDidEndEditing(_ textView: UITextView) {
+        if textView.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            textView.text = descriptionPlaceholder
+            textView.textColor = .placeholderText
+        }
+    }
+    func textViewDidChange(_ textView: UITextView) {
+        updateCharacterCount(for: textView.text)
+    }
+    
+    func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
+        // Allow typing past 300 characters, we handle validation sequentially on continue
+        return true
+    }
+}
 

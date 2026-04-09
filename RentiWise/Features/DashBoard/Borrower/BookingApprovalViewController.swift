@@ -1123,9 +1123,9 @@ class BookingApprovalViewController: UIViewController {
                     .eq("id", value: reqId)
                     .execute()
 
-                if (previousStatus == "accepted" || previousStatus == "approved"), let itemId {
-                    try? await self.setItemAvailability(itemId: itemId, isActive: true)
-                }
+                // if (previousStatus == "accepted" || previousStatus == "approved"), let itemId {
+                //     try? await self.setItemAvailability(itemId: itemId, isActive: true)
+                // }
 
                 await MainActor.run {
                     // Update local request status
@@ -1235,17 +1235,58 @@ class BookingApprovalViewController: UIViewController {
         
         if dbStatus.borrowerCanCancelBeforePickup {
             // Borrower can cancel while the request is pending or accepted, until pickup is verified.
-            returnButton?.setAttributedTitle(NSAttributedString(string: "Cancel Request", attributes: attrs), for: .normal)
-            returnButton?.backgroundColor = .systemRed
+            let cancelAttrs: [NSAttributedString.Key: Any] = [
+                .font: UIFont.systemFont(ofSize: 18, weight: .semibold),
+                .foregroundColor: UIColor.systemRed
+            ]
+            returnButton?.setAttributedTitle(NSAttributedString(string: "Cancel Request", attributes: cancelAttrs), for: .normal)
+            returnButton?.backgroundColor = .white
+            
+            // New design specifications
+            returnButton?.layer.borderWidth = 1
+            returnButton?.layer.borderColor = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1).cgColor
+            returnButton?.layer.cornerRadius = 24
+            returnButton?.layer.masksToBounds = true
+            returnButton?.setTitleColor(.systemRed, for: .normal)
+            
+            // Ensure width / height
+            returnButton?.translatesAutoresizingMaskIntoConstraints = false
+            returnButton?.constraints.forEach { c in
+                if c.firstAttribute == .height || c.firstAttribute == .width {
+                    returnButton?.removeConstraint(c)
+                }
+            }
+            returnButton?.heightAnchor.constraint(equalToConstant: 44).isActive = true
+            returnButton?.widthAnchor.constraint(equalToConstant: 361).isActive = true
+            
             returnButton?.isHidden = false
             extendButton?.isHidden = true
             extendReturnButtonsStack?.isHidden = false
         } else if dbStatus.borrowerShowsExtendAndReturnActions {
             // Active rental — borrower can extend or return
-            returnButton?.setAttributedTitle(NSAttributedString(string: "Return Item", attributes: attrs), for: .normal)
+            let returnAttrs: [NSAttributedString.Key: Any] = [
+                .font: UIFont.systemFont(ofSize: 18, weight: .semibold),
+                .foregroundColor: UIColor.white
+            ]
+            returnButton?.setAttributedTitle(NSAttributedString(string: "Return Item", attributes: returnAttrs), for: .normal)
             returnButton?.backgroundColor = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1)
+            
+            // Revert border styling from Cancel state
+            returnButton?.layer.borderWidth = 0
+            returnButton?.layer.cornerRadius = 24
+            
+            // Setup dimensions
+            returnButton?.translatesAutoresizingMaskIntoConstraints = false
+            returnButton?.constraints.forEach { c in
+                if c.firstAttribute == .height || c.firstAttribute == .width {
+                    returnButton?.removeConstraint(c)
+                }
+            }
+            returnButton?.heightAnchor.constraint(equalToConstant: 44).isActive = true
+            // If both extend and return are showing side-by-side, we shouldn't force 361 fixed width, but if they are stacked vertically, we can.
+            // Leaving width dynamic or forcing 361 depending on StackView setup. Let's force it for consistency if vertically stacked.
+            
             returnButton?.isHidden = false
-            extendButton?.setAttributedTitle(NSAttributedString(string: "Extend Rental", attributes: attrs), for: .normal)
             extendButton?.isHidden = false
             extendReturnButtonsStack?.isHidden = false
         } else {

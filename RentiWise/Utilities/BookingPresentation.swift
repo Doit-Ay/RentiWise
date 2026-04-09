@@ -223,7 +223,7 @@ enum BookingPresentationFormatter {
             quantityUnits = max(1, Int(ceil(duration / 3600.0)))
             
             dateText = displayDateFormatter.string(from: pickupDateTime)
-            timeText = "\(displayTimeFormatter.string(from: pickupDateTime)) — \(displayTimeFormatter.string(from: returnDateTime))"
+            timeText = displayTimeFormatter.string(from: pickupDateTime)
         case .day:
             quantityUnits = max(1, Int(ceil(duration / 86400.0)))
             rentalFee = Double(quantityUnits) * pricePerDay

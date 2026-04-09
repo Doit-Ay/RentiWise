@@ -22,9 +22,11 @@ final class AddressService: AddressServicing {
     }
 
     func list() async throws -> [Address] {
+        let userId = try await currentUserId()
         let resp = try await client
             .from("addresses")
             .select()
+            .eq("user_id", value: userId)
             .order("is_default", ascending: false)
             .order("created_at", ascending: false)
             .execute()

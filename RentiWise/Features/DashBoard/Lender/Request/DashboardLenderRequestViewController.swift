@@ -394,10 +394,10 @@ class DashboardLenderRequestViewController: UIViewController {
         // Build the list of right bar button items
         var items: [UIBarButtonItem] = []
 
-        // 1) Chat button — visible only when payment is done by borrower
-        if rentalPaymentState.borrowerMarkedPaid {
+        // 1) Chat button — visible when the lender accepts the rent request
+        if ["accepted", "approved", "completed"].contains(current) {
             let chatItem = UIBarButtonItem(
-                image: UIImage(systemName: "bubble.left.and.bubble.right"),
+                image: UIImage(systemName: "ellipsis.message"),
                 style: .plain,
                 target: self,
                 action: #selector(chatWithBorrowerTapped)
@@ -1004,11 +1004,11 @@ class DashboardLenderRequestViewController: UIViewController {
 
             let persistedPickupCode = try await persistRequest(status: newStatus, pickupCode: requestedPickupCode)
 
-            if newStatus == "accepted" {
-                try await syncItemAvailabilityIfPossible(itemId: current.item_id, ownerId: current.owner_id, isActive: false)
-            } else if newStatus == "denied", previousStatus == "accepted" || previousStatus == "approved" {
-                try await syncItemAvailabilityIfPossible(itemId: current.item_id, ownerId: current.owner_id, isActive: true)
-            }
+            // if newStatus == "accepted" {
+            //     try await syncItemAvailabilityIfPossible(itemId: current.item_id, ownerId: current.owner_id, isActive: false)
+            // } else if newStatus == "denied", previousStatus == "accepted" || previousStatus == "approved" {
+            //     try await syncItemAvailabilityIfPossible(itemId: current.item_id, ownerId: current.owner_id, isActive: true)
+            // }
 
             // Update local model and UI
             current.status = newStatus

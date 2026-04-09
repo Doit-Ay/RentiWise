@@ -12,6 +12,8 @@ import Supabase
 extension HomeViewController {
 
     func loadFeaturedItems(forceRefresh: Bool = false) async {
+        let me = await SupabaseManager.shared.currentUserId()
+        
         // On cold start, use PreloadManager's cached data to avoid duplicate API call.
         if !forceRefresh, PreloadManager.shared.isComplete, !PreloadManager.shared.allFetchedItems.isEmpty {
             let allItems = PreloadManager.shared.allFetchedItems
@@ -31,7 +33,7 @@ extension HomeViewController {
             }
 
             await MainActor.run {
-                self.applyFeatured(items: items)
+                self.applyFeatured(items: items, currentUserId: me)
                 self.updateTrendingItems(from: allItems)
             }
             return
@@ -55,17 +57,17 @@ extension HomeViewController {
             }
 
             await MainActor.run {
-                self.applyFeatured(items: items)
+                self.applyFeatured(items: items, currentUserId: me)
                 self.updateTrendingItems(from: allItems)
             }
         } catch {
             await MainActor.run {
-                self.applyFeatured(items: [])
+                self.applyFeatured(items: [], currentUserId: me)
             }
         }
     }
 
-    func applyFeatured(items: [Item]) {
+    func applyFeatured(items: [Item], currentUserId: String?) {
         let slots: [(UIImageView?, UILabel?, UILabel?, UILabel?, UILabel?, UILabel?, UIView?, UIButton?)] = [
             (item1Image, item1Name, item1Rate, item1Rating, item1Distance, item1owner, item1CardView, rentButton1),
             (item2Image, item2Name, item2Rate, item2Rating, item2Distance, item2owner, item2CardView, rentButton2),
@@ -75,7 +77,7 @@ extension HomeViewController {
 
         for (i, slot) in slots.enumerated() {
             if i < items.count {
-                configureFeaturedSlot(slot, with: items[i])
+                configureFeaturedSlot(slot, with: items[i], currentUserId: currentUserId)
                 // Resolve and set owner name for this slot
                 resolveOwnerName(for: items[i].owner_id, slotIndex: i)
 
@@ -102,11 +104,15 @@ extension HomeViewController {
         self.featuredItems = items
     }
 
-    func configureFeaturedSlot(_ slot: (UIImageView?, UILabel?, UILabel?, UILabel?, UILabel?, UILabel?, UIView?, UIButton?), with item: Item) {
+    func configureFeaturedSlot(_ slot: (UIImageView?, UILabel?, UILabel?, UILabel?, UILabel?, UILabel?, UIView?, UIButton?), with item: Item, currentUserId: String?) {
         let (imageView, nameLabel, rateLabel, ratingLabel, distanceLabel, ownerLabel, cardView, rentButton) = slot
 
         cardView?.isHidden = false
-        rentButton?.isEnabled = true
+        
+        let isOwn = (currentUserId?.lowercased() == item.owner_id.lowercased())
+        rentButton?.isEnabled = !isOwn
+        rentButton?.alpha = isOwn ? 0.4 : 1.0
+        
         ownerLabel?.text = nil
 
         nameLabel?.text = item.title

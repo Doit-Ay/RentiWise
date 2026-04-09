@@ -13,9 +13,11 @@
             <connections>
                 <outlet property="categorySelection" destination="zkc-PB-AxX" id="g4S-d6-63c"/>
                 <outlet property="conditionSelection" destination="oy8-q0-BaQ" id="Nd2-qD-uds"/>
+                <outlet property="descriptionHeadingLabel" destination="ESA-32-8p7" id="DESC-HED-1XZ"/>
                 <outlet property="descriptionTextView" destination="W7F-ih-H8b" id="oxT-0K-Onw"/>
                 <outlet property="selectACategory" destination="MQP-pZ-ws8" id="MgF-0D-bZD"/>
                 <outlet property="selectCondition" destination="2cE-Po-6nr" id="lbM-mY-zL9"/>
+                <outlet property="titleTextField" destination="gsQ-H6-DYo" id="TIT-LE-001"/>
                 <outlet property="view" destination="i5M-Pr-FkT" id="sfx-zR-JGt"/>
             </connections>
         </placeholder>

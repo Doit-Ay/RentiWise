@@ -146,6 +146,7 @@ class RequestViewController: UIViewController {
         }
         
         applyGlassToCards()
+        dateLabel.minimumDate = Date()
         dateLabel.datePickerMode = .date
         pickuptimeLabel.datePickerMode = .time
         returntimeLabel.datePickerMode = .time
@@ -446,6 +447,7 @@ class RequestViewController: UIViewController {
             dateLabel.accessibilityLabel = "Pickup Date"
             returntimeLabel.accessibilityLabel = "Return Date"
             let startOfPickup = Calendar.current.startOfDay(for: dateLabel.date)
+            returntimeLabel.minimumDate = startOfPickup
             if returntimeLabel.date < startOfPickup {
                 returntimeLabel.date = startOfPickup
             }
@@ -495,15 +497,55 @@ class RequestViewController: UIViewController {
     }
     
     @objc private func datePickerChanged(_ sender: UIDatePicker) {
-        if sender === dateLabel { hasSelectedDate = true }
+        if sender === dateLabel {
+            hasSelectedDate = true
+            // If rental unit is day, make sure return date can't be before pickup date
+            if rentalUnit == .day {
+                let startOfPickup = Calendar.current.startOfDay(for: dateLabel.date)
+                returntimeLabel.minimumDate = startOfPickup
+                if returntimeLabel.date < startOfPickup {
+                    returntimeLabel.date = startOfPickup
+                }
+            }
+        }
         if sender === pickuptimeLabel { hasSelectedPickupTime = true }
         if sender === returntimeLabel { hasSelectedReturnTime = true }
+        
+        let now = Date()
+        let calendar = Calendar.current
+        
+        // Enforce time restrictions dynamically
+        if calendar.isDate(dateLabel.date, inSameDayAs: now) {
+            pickuptimeLabel.minimumDate = now
+            if pickuptimeLabel.date < now {
+                pickuptimeLabel.date = now
+            }
+        } else {
+            pickuptimeLabel.minimumDate = nil
+        }
+        
+        if rentalUnit == .hour {
+            returntimeLabel.minimumDate = pickuptimeLabel.date
+            if returntimeLabel.date < pickuptimeLabel.date {
+                returntimeLabel.date = pickuptimeLabel.date
+            }
+        }
+        
         updatePickerTextColors()
         recalculatePricing()
         if rentalUnit != .none {
             boookingcontainer?.isHidden = false
         }
         applyItemToUI()
+        
+        // Auto-close compact date picker popover after selection only for Dates (Calendars)
+        // We do not close on Times because the user needs to scroll the time wheel continuously
+        if sender.datePickerMode == .date {
+            if let presented = self.presentedViewController, !presented.isBeingDismissed {
+                presented.dismiss(animated: true, completion: nil)
+            }
+            sender.resignFirstResponder()
+        }
     }
     
     // MARK: - Pricing Logic

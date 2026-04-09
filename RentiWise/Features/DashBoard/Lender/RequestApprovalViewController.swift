@@ -70,21 +70,26 @@ class RequestApprovalViewController: UIViewController {
         let tealColor = UIColor(red: 93/255.0, green: 169/255.0, blue: 182/255.0, alpha: 1.0)
         
         // Style buttons
-        acceptButton.layer.cornerRadius = 14
+        acceptButton.layer.cornerRadius = 24
         acceptButton.layer.masksToBounds = true
         acceptButton.backgroundColor = tealColor
         acceptButton.setTitleColor(.white, for: .normal)
-        acceptButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
+        acceptButton.titleLabel?.font = .systemFont(ofSize: 18, weight: .semibold)
         
-        rejectButton.layer.cornerRadius = 14
+        rejectButton.layer.cornerRadius = 24
         rejectButton.layer.masksToBounds = true
         rejectButton.backgroundColor = tealColor
         rejectButton.setTitleColor(.white, for: .normal)
-        rejectButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
+        rejectButton.titleLabel?.font = .systemFont(ofSize: 18, weight: .semibold)
         
-        // Ensure height is 44 if not already set in XIB (handled in XIB or constraints, but we can set constraints here if needed, or rely on intrinsic/XIB)
+        acceptButton.translatesAutoresizingMaskIntoConstraints = false
+        rejectButton.translatesAutoresizingMaskIntoConstraints = false
+        
         acceptButton.heightAnchor.constraint(equalToConstant: 44).isActive = true
+        acceptButton.widthAnchor.constraint(equalToConstant: 361).isActive = true
+        
         rejectButton.heightAnchor.constraint(equalToConstant: 44).isActive = true
+        rejectButton.widthAnchor.constraint(equalToConstant: 361).isActive = true
     }
     
     // MARK: - Configuration

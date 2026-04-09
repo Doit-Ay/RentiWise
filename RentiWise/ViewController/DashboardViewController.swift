@@ -92,6 +92,21 @@ class DashboardViewController: UIViewController, UITabBarDelegate {
 
         NotificationCenter.default.addObserver(self, selector: #selector(handleItemsShouldRefresh), name: Notification.Name("itemsShouldRefresh"), object: nil)
 
+        // Ensure previously hidden items are restored for the user
+        Task {
+            if let me = await SupabaseManager.shared.currentUserId() {
+                _ = try? await SupabaseManager.shared.client
+                    .from("items")
+                    .update(["is_active": true])
+                    .eq("owner_id", value: me)
+                    .eq("is_active", value: false)
+                    .execute()
+                await MainActor.run {
+                    NotificationCenter.default.post(name: Notification.Name("itemsShouldRefresh"), object: nil)
+                }
+            }
+        }
+
         reloadForSelectedSegment()
     }
 

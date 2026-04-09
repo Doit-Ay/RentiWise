@@ -246,16 +246,22 @@ final class SupportChatViewController: UIViewController {
     private func setupQuickActions() {
         for topic in quickActionTopics {
             let button = UIButton(type: .system)
-            button.setTitle(topic, for: .normal)
-            button.titleLabel?.font = .systemFont(ofSize: 14, weight: .medium)
-            button.setTitleColor(UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0), for: .normal)
-            button.backgroundColor = .white
-            button.layer.cornerRadius = 18
+            var config = UIButton.Configuration.filled()
+            config.baseBackgroundColor = .white
+            config.baseForegroundColor = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0)
+            config.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16)
+            config.background.cornerRadius = 18
+            
+            var attributedTitle = AttributedString(topic)
+            attributedTitle.font = .systemFont(ofSize: 14, weight: .medium)
+            config.attributedTitle = attributedTitle
+            
+            button.configuration = config
+            
             button.layer.shadowColor = UIColor.black.cgColor
             button.layer.shadowOpacity = 0.05
             button.layer.shadowRadius = 2
             button.layer.shadowOffset = CGSize(width: 0, height: 1)
-            button.contentEdgeInsets = UIEdgeInsets(top: 8, left: 16, bottom: 8, right: 16)
             button.addTarget(self, action: #selector(quickActionTapped(_:)), for: .touchUpInside)
             quickActionsStack.addArrangedSubview(button)
         }

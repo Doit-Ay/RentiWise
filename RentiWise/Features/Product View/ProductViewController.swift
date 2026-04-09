@@ -365,18 +365,19 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
                 await MainActor.run {
                     self.displayMode = .ownItem
                     self.setupNavBarForDisplayMode()
+                    self.applyDisplayMode()
                 }
             } else {
                 await MainActor.run {
                     self.displayMode = .normal
                     self.setupNavBarForDisplayMode()
+                    self.applyDisplayMode()
                 }
                 // Check if borrower already has an active request for this item
                 await self.checkExistingRequestForItem(itemId: item.id, borrowerId: me)
             }
         }
 
-        applyDisplayMode()
         // Ensure Share button exists when appropriate (normal mode only)
         setupShareButtonIfNeeded()
 
@@ -458,9 +459,6 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
     private func applyDisplayMode() {
         let isOwn = (displayMode == .ownItem)
 
-        // Hide views
-        ownerCard?.isHidden = isOwn
-
         // Make owner card tappable to view the owner's profile (with report/block)
         if !isOwn, let card = ownerCard {
             card.isUserInteractionEnabled = true
@@ -469,46 +467,54 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
                 card.addGestureRecognizer(tap)
             }
         }
-        depositCard?.isHidden = isOwn
+        
         writeAReview?.isHidden = isOwn
-        rentNowoutlet?.isHidden = isOwn
-        actionButtonsContainer?.isHidden = isOwn || ((writeAReview == nil || writeAReview?.isHidden == true) && (rentNowoutlet == nil || rentNowoutlet?.isHidden == true))
+        // Always show the Rent Now button container, but change its state
+        rentNowoutlet?.isHidden = false
+        actionButtonsContainer?.isHidden = (writeAReview == nil || writeAReview?.isHidden == true) && (rentNowoutlet == nil || rentNowoutlet?.isHidden == true)
         
         // Show/hide bottom button bar
-        bottomButtonBar?.isHidden = isOwn
-
-        // Extra safeguard: explicitly hide owner subviews in own-item mode
-        ownerNameLabel?.isHidden = isOwn
-        ownerAvatarImageView?.isHidden = isOwn
-        distanceRightLabel?.isHidden = isOwn
-        ownerRating?.isHidden = isOwn
-
-        // Ensure runtime constraint exists (safe even if already created)
-        if ownModeDescriptionToReviewsConstraint == nil,
-           let desc = descriptionCard,
-           let reviewsTitle = reviewsTitleLabel {
-            let c = reviewsTitle.topAnchor.constraint(equalTo: desc.bottomAnchor, constant: 12)
-            c.priority = .required
-            ownModeDescriptionToReviewsConstraint = c
+        bottomButtonBar?.isHidden = false
+        
+        if isOwn {
+            rentNowoutlet?.setTitle("Your listing", for: .normal)
+            rentNowoutlet?.isEnabled = false
+            rentNowoutlet?.backgroundColor = .systemGray4
+            rentNowoutlet?.setTitleColor(.secondaryLabel, for: .normal)
+            
+            bottomRentButton?.setTitle("Your listing", for: .normal)
+            bottomRentButton?.isEnabled = false
+            bottomRentButton?.backgroundColor = .systemGray4
+            bottomRentButton?.setTitleColor(.secondaryLabel, for: .normal)
+        } else {
+            rentNowoutlet?.setTitle("Rent Now", for: .normal)
+            rentNowoutlet?.isEnabled = true
+            rentNowoutlet?.backgroundColor = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0)
+            rentNowoutlet?.setTitleColor(.white, for: .normal)
+            
+            bottomRentButton?.setTitle("Rent Now", for: .normal)
+            bottomRentButton?.isEnabled = true
+            bottomRentButton?.backgroundColor = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0)
+            bottomRentButton?.setTitleColor(.white, for: .normal)
         }
 
-        // Collapse heights if not using a UIStackView
-        if isOwn {
-            ownerCardHeight?.constant = 0
-            depositCardHeight?.constant = 0
-            actionButtonsContainerHeight?.constant = 0
+        // Keep standard spacing visible for owner as well
+        ownerCard?.isHidden = false
+        depositCard?.isHidden = false
+        ownerNameLabel?.isHidden = false
+        ownerAvatarImageView?.isHidden = false
+        distanceRightLabel?.isHidden = false
+        ownerRating?.isHidden = false
 
-            // Deactivate storyboard spacing and force Reviews under Description
-            descriptionAndReview?.isActive = false
-            ownModeDescriptionToReviewsConstraint?.isActive = true
+        // Deprecate collapsing constraints
+        ownerCardHeight?.constant = ownerCard?.intrinsicContentSize.height ?? 80
+        depositCardHeight?.constant = depositCard?.intrinsicContentSize.height ?? 100
+        actionButtonsContainerHeight?.constant = actionButtonsContainer?.intrinsicContentSize.height ?? 50
 
-        } else {
-            // Restore the normal spacing value between Description and Reviews
-            ownModeDescriptionToReviewsConstraint?.isActive = false
-            if let spacer = descriptionAndReview {
-                spacer.constant = 248
-                spacer.isActive = true
-            }
+        ownModeDescriptionToReviewsConstraint?.isActive = false
+        if let spacer = descriptionAndReview {
+            spacer.constant = 248
+            spacer.isActive = true
         }
 
         UIView.animate(withDuration: 0.2) {
@@ -1296,7 +1302,9 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         subtitle.numberOfLines = 0
 
         v.addArrangedSubview(title)
-        v.addArrangedSubview(subtitle)
+        if displayMode != .ownItem {
+            v.addArrangedSubview(subtitle)
+        }
         // Removed the extra "Write a Review" button to avoid duplication
 
         return container

@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<document type="com.apple.InterfaceBuilder3.CocoaTouch.XIB" version="3.0" toolsVersion="24128" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES">
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.XIB" version="3.0" toolsVersion="24506" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES">
     <device id="retina6_12" orientation="portrait" appearance="light"/>
     <dependencies>
-        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="24063"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="24504"/>
         <capability name="Safe area layout guides" minToolsVersion="9.0"/>
         <capability name="System colors in document resources" minToolsVersion="11.0"/>
         <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
@@ -35,51 +35,46 @@
             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
             <subviews>
                 <scrollView clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="Scroll-View">
-                    <rect key="frame" x="0.0" y="0.0" width="393" height="752"/>
+                    <rect key="frame" x="0.0" y="0.0" width="393" height="724"/>
                     <subviews>
                         <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="Content-View">
                             <rect key="frame" x="0.0" y="0.0" width="393" height="700"/>
                             <subviews>
-                                <!-- Header -->
                                 <label opaque="NO" userInteractionEnabled="NO" contentMode="left" text="Review Request" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="Header-Lbl">
-                                    <rect key="frame" x="24" y="32" width="345" height="34"/>
+                                    <rect key="frame" x="24" y="31.999999999999996" width="345" height="33.666666666666657"/>
                                     <fontDescription key="fontDescription" type="system" weight="semibold" pointSize="28"/>
                                     <nil key="textColor"/>
                                     <nil key="highlightedColor"/>
                                 </label>
-                                
-                                <!-- Type Badge -->
                                 <label opaque="NO" userInteractionEnabled="NO" contentMode="left" text="RETURN REQUEST" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="Type-Lbl">
-                                    <rect key="frame" x="24" y="82" width="345" height="20"/>
-                                    <fontDescription key="fontDescription" type="system" weight="bold" pointSize="12"/>
+                                    <rect key="frame" x="24" y="81.666666666666671" width="345" height="14.333333333333329"/>
+                                    <fontDescription key="fontDescription" type="boldSystem" pointSize="12"/>
                                     <color key="textColor" red="0.36470588240000001" green="0.66274509800000003" blue="0.71372549019999998" alpha="1" colorSpace="calibratedRGB"/>
                                     <nil key="highlightedColor"/>
                                 </label>
-                                
-                                <!-- Booking Info Card -->
                                 <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="Booking-Card">
-                                    <rect key="frame" x="24" y="118" width="345" height="100"/>
+                                    <rect key="frame" x="24" y="112" width="345" height="100"/>
                                     <subviews>
                                         <label opaque="NO" userInteractionEnabled="NO" contentMode="left" text="BOOKING DETAILS" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="Booking-Title">
-                                            <rect key="frame" x="20" y="16" width="305" height="14"/>
+                                            <rect key="frame" x="20" y="16" width="305" height="13.333333333333336"/>
                                             <fontDescription key="fontDescription" type="system" weight="medium" pointSize="11"/>
                                             <color key="textColor" systemColor="secondaryLabelColor"/>
                                             <nil key="highlightedColor"/>
                                         </label>
                                         <label opaque="NO" userInteractionEnabled="NO" contentMode="left" text="Item Name" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="Item-Name-Lbl">
-                                            <rect key="frame" x="20" y="36" width="305" height="20"/>
+                                            <rect key="frame" x="20" y="35.333333333333343" width="305" height="19.333333333333329"/>
                                             <fontDescription key="fontDescription" type="system" weight="semibold" pointSize="16"/>
                                             <nil key="textColor"/>
                                             <nil key="highlightedColor"/>
                                         </label>
                                         <label opaque="NO" userInteractionEnabled="NO" contentMode="left" text="Borrower Name" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="Borrower-Lbl">
-                                            <rect key="frame" x="20" y="60" width="305" height="16"/>
+                                            <rect key="frame" x="20" y="58.666666666666657" width="305" height="17"/>
                                             <fontDescription key="fontDescription" type="system" pointSize="14"/>
                                             <color key="textColor" systemColor="secondaryLabelColor"/>
                                             <nil key="highlightedColor"/>
                                         </label>
                                         <label opaque="NO" userInteractionEnabled="NO" contentMode="left" text="Rental Period" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="Period-Lbl">
-                                            <rect key="frame" x="20" y="80" width="305" height="16"/>
+                                            <rect key="frame" x="20" y="79.666666666666657" width="305" height="17"/>
                                             <fontDescription key="fontDescription" type="system" pointSize="14"/>
                                             <color key="textColor" systemColor="secondaryLabelColor"/>
                                             <nil key="highlightedColor"/>
@@ -87,26 +82,26 @@
                                     </subviews>
                                     <color key="backgroundColor" systemColor="secondarySystemGroupedBackgroundColor"/>
                                     <constraints>
-                                        <constraint firstItem="Booking-Title" firstAttribute="top" secondItem="Booking-Card" secondAttribute="top" constant="16" id="BookingTitle-Top"/>
-                                        <constraint firstItem="Booking-Title" firstAttribute="leading" secondItem="Booking-Card" secondAttribute="leading" constant="20" id="BookingTitle-Lead"/>
-                                        <constraint firstAttribute="trailing" secondItem="Booking-Title" secondAttribute="trailing" constant="20" id="BookingTitle-Trail"/>
-                                        <constraint firstItem="Item-Name-Lbl" firstAttribute="top" secondItem="Booking-Title" secondAttribute="bottom" constant="6" id="ItemName-Top"/>
-                                        <constraint firstItem="Item-Name-Lbl" firstAttribute="leading" secondItem="Booking-Card" secondAttribute="leading" constant="20" id="ItemName-Lead"/>
-                                        <constraint firstAttribute="trailing" secondItem="Item-Name-Lbl" secondAttribute="trailing" constant="20" id="ItemName-Trail"/>
-                                        <constraint firstItem="Borrower-Lbl" firstAttribute="top" secondItem="Item-Name-Lbl" secondAttribute="bottom" constant="4" id="Borrower-Top"/>
-                                        <constraint firstItem="Borrower-Lbl" firstAttribute="leading" secondItem="Booking-Card" secondAttribute="leading" constant="20" id="Borrower-Lead"/>
-                                        <constraint firstAttribute="trailing" secondItem="Borrower-Lbl" secondAttribute="trailing" constant="20" id="Borrower-Trail"/>
-                                        <constraint firstItem="Period-Lbl" firstAttribute="top" secondItem="Borrower-Lbl" secondAttribute="bottom" constant="4" id="Period-Top"/>
-                                        <constraint firstItem="Period-Lbl" firstAttribute="leading" secondItem="Booking-Card" secondAttribute="leading" constant="20" id="Period-Lead"/>
-                                        <constraint firstAttribute="trailing" secondItem="Period-Lbl" secondAttribute="trailing" constant="20" id="Period-Trail"/>
                                         <constraint firstAttribute="height" constant="100" id="BookingCard-Height"/>
+                                        <constraint firstItem="Booking-Title" firstAttribute="leading" secondItem="Booking-Card" secondAttribute="leading" constant="20" id="BookingTitle-Lead"/>
+                                        <constraint firstItem="Booking-Title" firstAttribute="top" secondItem="Booking-Card" secondAttribute="top" constant="16" id="BookingTitle-Top"/>
+                                        <constraint firstAttribute="trailing" secondItem="Booking-Title" secondAttribute="trailing" constant="20" id="BookingTitle-Trail"/>
+                                        <constraint firstItem="Borrower-Lbl" firstAttribute="leading" secondItem="Booking-Card" secondAttribute="leading" constant="20" id="Borrower-Lead"/>
+                                        <constraint firstItem="Borrower-Lbl" firstAttribute="top" secondItem="Item-Name-Lbl" secondAttribute="bottom" constant="4" id="Borrower-Top"/>
+                                        <constraint firstAttribute="trailing" secondItem="Borrower-Lbl" secondAttribute="trailing" constant="20" id="Borrower-Trail"/>
+                                        <constraint firstItem="Item-Name-Lbl" firstAttribute="leading" secondItem="Booking-Card" secondAttribute="leading" constant="20" id="ItemName-Lead"/>
+                                        <constraint firstItem="Item-Name-Lbl" firstAttribute="top" secondItem="Booking-Title" secondAttribute="bottom" constant="6" id="ItemName-Top"/>
+                                        <constraint firstAttribute="trailing" secondItem="Item-Name-Lbl" secondAttribute="trailing" constant="20" id="ItemName-Trail"/>
+                                        <constraint firstItem="Period-Lbl" firstAttribute="leading" secondItem="Booking-Card" secondAttribute="leading" constant="20" id="Period-Lead"/>
+                                        <constraint firstItem="Period-Lbl" firstAttribute="top" secondItem="Borrower-Lbl" secondAttribute="bottom" constant="4" id="Period-Top"/>
+                                        <constraint firstAttribute="trailing" secondItem="Period-Lbl" secondAttribute="trailing" constant="20" id="Period-Trail"/>
                                     </constraints>
                                     <userDefinedRuntimeAttributes>
                                         <userDefinedRuntimeAttribute type="number" keyPath="layer.cornerRadius">
                                             <real key="value" value="16"/>
                                         </userDefinedRuntimeAttribute>
                                         <userDefinedRuntimeAttribute type="number" keyPath="layer.shadowOpacity">
-                                            <real key="value" value="0.04"/>
+                                            <real key="value" value="0.040000000000000001"/>
                                         </userDefinedRuntimeAttribute>
                                         <userDefinedRuntimeAttribute type="size" keyPath="layer.shadowOffset">
                                             <size key="value" width="0.0" height="1"/>
@@ -116,23 +111,20 @@
                                         </userDefinedRuntimeAttribute>
                                     </userDefinedRuntimeAttributes>
                                 </view>
-                                
-                                <!-- Request Details Stack -->
                                 <stackView opaque="NO" contentMode="scaleToFill" axis="vertical" spacing="16" translatesAutoresizingMaskIntoConstraints="NO" id="Details-Stack">
-                                    <rect key="frame" x="24" y="234" width="345" height="200"/>
+                                    <rect key="frame" x="24" y="228" width="345" height="100"/>
                                     <subviews>
-                                        <!-- Return Details View -->
-                                        <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="Ret-Details-View" hidden="YES">
+                                        <view hidden="YES" contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="Ret-Details-View">
                                             <rect key="frame" x="0.0" y="0.0" width="345" height="100"/>
                                             <subviews>
                                                 <label opaque="NO" userInteractionEnabled="NO" contentMode="left" text="RETURN DETAILS" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="Ret-Title">
-                                                    <rect key="frame" x="20" y="16" width="305" height="14"/>
+                                                    <rect key="frame" x="20" y="16" width="305" height="13.333333333333336"/>
                                                     <fontDescription key="fontDescription" type="system" weight="medium" pointSize="11"/>
                                                     <color key="textColor" systemColor="secondaryLabelColor"/>
                                                     <nil key="highlightedColor"/>
                                                 </label>
-                                                <label opaque="NO" userInteractionEnabled="NO" contentMode="left" numberOfLines="0" text="Notes will appear here" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="Notes-Lbl">
-                                                    <rect key="frame" x="20" y="36" width="305" height="50"/>
+                                                <label opaque="NO" userInteractionEnabled="NO" contentMode="left" text="Notes will appear here" textAlignment="natural" lineBreakMode="tailTruncation" numberOfLines="0" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="Notes-Lbl">
+                                                    <rect key="frame" x="20" y="35.333333333333314" width="305" height="18"/>
                                                     <fontDescription key="fontDescription" type="system" pointSize="15"/>
                                                     <nil key="textColor"/>
                                                     <nil key="highlightedColor"/>
@@ -140,13 +132,13 @@
                                             </subviews>
                                             <color key="backgroundColor" systemColor="secondarySystemGroupedBackgroundColor"/>
                                             <constraints>
-                                                <constraint firstItem="Ret-Title" firstAttribute="top" secondItem="Ret-Details-View" secondAttribute="top" constant="16" id="RetTitle-Top"/>
-                                                <constraint firstItem="Ret-Title" firstAttribute="leading" secondItem="Ret-Details-View" secondAttribute="leading" constant="20" id="RetTitle-Lead"/>
-                                                <constraint firstAttribute="trailing" secondItem="Ret-Title" secondAttribute="trailing" constant="20" id="RetTitle-Trail"/>
-                                                <constraint firstItem="Notes-Lbl" firstAttribute="top" secondItem="Ret-Title" secondAttribute="bottom" constant="6" id="Notes-Top"/>
                                                 <constraint firstItem="Notes-Lbl" firstAttribute="leading" secondItem="Ret-Details-View" secondAttribute="leading" constant="20" id="Notes-Lead"/>
+                                                <constraint firstItem="Notes-Lbl" firstAttribute="top" secondItem="Ret-Title" secondAttribute="bottom" constant="6" id="Notes-Top"/>
                                                 <constraint firstAttribute="trailing" secondItem="Notes-Lbl" secondAttribute="trailing" constant="20" id="Notes-Trail"/>
                                                 <constraint firstAttribute="height" constant="100" id="RetDetails-Height"/>
+                                                <constraint firstItem="Ret-Title" firstAttribute="leading" secondItem="Ret-Details-View" secondAttribute="leading" constant="20" id="RetTitle-Lead"/>
+                                                <constraint firstItem="Ret-Title" firstAttribute="top" secondItem="Ret-Details-View" secondAttribute="top" constant="16" id="RetTitle-Top"/>
+                                                <constraint firstAttribute="trailing" secondItem="Ret-Title" secondAttribute="trailing" constant="20" id="RetTitle-Trail"/>
                                             </constraints>
                                             <userDefinedRuntimeAttributes>
                                                 <userDefinedRuntimeAttribute type="number" keyPath="layer.cornerRadius">
@@ -154,37 +146,35 @@
                                                 </userDefinedRuntimeAttribute>
                                             </userDefinedRuntimeAttributes>
                                         </view>
-                                        
-                                        <!-- Extension Details View -->
                                         <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="Ext-Details-View">
                                             <rect key="frame" x="0.0" y="0.0" width="345" height="100"/>
                                             <subviews>
                                                 <label opaque="NO" userInteractionEnabled="NO" contentMode="left" text="EXTENSION DETAILS" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="Ext-Title">
-                                                    <rect key="frame" x="20" y="16" width="305" height="14"/>
+                                                    <rect key="frame" x="20" y="16" width="305" height="13.333333333333336"/>
                                                     <fontDescription key="fontDescription" type="system" weight="medium" pointSize="11"/>
                                                     <color key="textColor" systemColor="secondaryLabelColor"/>
                                                     <nil key="highlightedColor"/>
                                                 </label>
                                                 <label opaque="NO" userInteractionEnabled="NO" contentMode="left" text="Original End: Jan 15, 2026" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="Orig-End-Lbl">
-                                                    <rect key="frame" x="20" y="36" width="305" height="18"/>
+                                                    <rect key="frame" x="20" y="35.333333333333314" width="305" height="18"/>
                                                     <fontDescription key="fontDescription" type="system" pointSize="15"/>
                                                     <nil key="textColor"/>
                                                     <nil key="highlightedColor"/>
                                                 </label>
                                                 <label opaque="NO" userInteractionEnabled="NO" contentMode="left" text="New End: Jan 20, 2026" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="New-End-Lbl">
-                                                    <rect key="frame" x="20" y="58" width="305" height="18"/>
+                                                    <rect key="frame" x="20" y="57.333333333333314" width="305" height="18"/>
                                                     <fontDescription key="fontDescription" type="system" weight="medium" pointSize="15"/>
                                                     <color key="textColor" red="0.36470588240000001" green="0.66274509800000003" blue="0.71372549019999998" alpha="1" colorSpace="calibratedRGB"/>
                                                     <nil key="highlightedColor"/>
                                                 </label>
                                                 <label opaque="NO" userInteractionEnabled="NO" contentMode="left" text="5 additional days - ₹500" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="Add-Days-Lbl">
-                                                    <rect key="frame" x="20" y="80" width="200" height="18"/>
+                                                    <rect key="frame" x="20" y="79.333333333333314" width="158" height="17"/>
                                                     <fontDescription key="fontDescription" type="system" pointSize="14"/>
                                                     <color key="textColor" systemColor="secondaryLabelColor"/>
                                                     <nil key="highlightedColor"/>
                                                 </label>
-                                                <label opaque="NO" userInteractionEnabled="NO" contentMode="left" text="₹500" textAlignment="right" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="Add-Cost-Lbl" hidden="YES">
-                                                    <rect key="frame" x="225" y="80" width="100" height="18"/>
+                                                <label hidden="YES" opaque="NO" userInteractionEnabled="NO" contentMode="left" text="₹500" textAlignment="right" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="Add-Cost-Lbl">
+                                                    <rect key="frame" x="225" y="79.333333333333314" width="100" height="17"/>
                                                     <constraints>
                                                         <constraint firstAttribute="width" constant="100" id="AddCost-Width"/>
                                                     </constraints>
@@ -195,20 +185,20 @@
                                             </subviews>
                                             <color key="backgroundColor" systemColor="secondarySystemGroupedBackgroundColor"/>
                                             <constraints>
-                                                <constraint firstItem="Ext-Title" firstAttribute="top" secondItem="Ext-Details-View" secondAttribute="top" constant="16" id="ExtTitle-Top"/>
-                                                <constraint firstItem="Ext-Title" firstAttribute="leading" secondItem="Ext-Details-View" secondAttribute="leading" constant="20" id="ExtTitle-Lead"/>
-                                                <constraint firstAttribute="trailing" secondItem="Ext-Title" secondAttribute="trailing" constant="20" id="ExtTitle-Trail"/>
-                                                <constraint firstItem="Orig-End-Lbl" firstAttribute="top" secondItem="Ext-Title" secondAttribute="bottom" constant="6" id="OrigEnd-Top"/>
-                                                <constraint firstItem="Orig-End-Lbl" firstAttribute="leading" secondItem="Ext-Details-View" secondAttribute="leading" constant="20" id="OrigEnd-Lead"/>
-                                                <constraint firstAttribute="trailing" secondItem="Orig-End-Lbl" secondAttribute="trailing" constant="20" id="OrigEnd-Trail"/>
-                                                <constraint firstItem="New-End-Lbl" firstAttribute="top" secondItem="Orig-End-Lbl" secondAttribute="bottom" constant="4" id="NewEnd-Top"/>
-                                                <constraint firstItem="New-End-Lbl" firstAttribute="leading" secondItem="Ext-Details-View" secondAttribute="leading" constant="20" id="NewEnd-Lead"/>
-                                                <constraint firstAttribute="trailing" secondItem="New-End-Lbl" secondAttribute="trailing" constant="20" id="NewEnd-Trail"/>
-                                                <constraint firstItem="Add-Days-Lbl" firstAttribute="top" secondItem="New-End-Lbl" secondAttribute="bottom" constant="4" id="AddDays-Top"/>
-                                                <constraint firstItem="Add-Days-Lbl" firstAttribute="leading" secondItem="Ext-Details-View" secondAttribute="leading" constant="20" id="AddDays-Lead"/>
                                                 <constraint firstItem="Add-Cost-Lbl" firstAttribute="centerY" secondItem="Add-Days-Lbl" secondAttribute="centerY" id="AddCost-CenterY"/>
                                                 <constraint firstAttribute="trailing" secondItem="Add-Cost-Lbl" secondAttribute="trailing" constant="20" id="AddCost-Trail"/>
+                                                <constraint firstItem="Add-Days-Lbl" firstAttribute="leading" secondItem="Ext-Details-View" secondAttribute="leading" constant="20" id="AddDays-Lead"/>
+                                                <constraint firstItem="Add-Days-Lbl" firstAttribute="top" secondItem="New-End-Lbl" secondAttribute="bottom" constant="4" id="AddDays-Top"/>
                                                 <constraint firstAttribute="height" constant="100" id="ExtDetails-Height"/>
+                                                <constraint firstItem="Ext-Title" firstAttribute="leading" secondItem="Ext-Details-View" secondAttribute="leading" constant="20" id="ExtTitle-Lead"/>
+                                                <constraint firstItem="Ext-Title" firstAttribute="top" secondItem="Ext-Details-View" secondAttribute="top" constant="16" id="ExtTitle-Top"/>
+                                                <constraint firstAttribute="trailing" secondItem="Ext-Title" secondAttribute="trailing" constant="20" id="ExtTitle-Trail"/>
+                                                <constraint firstItem="New-End-Lbl" firstAttribute="leading" secondItem="Ext-Details-View" secondAttribute="leading" constant="20" id="NewEnd-Lead"/>
+                                                <constraint firstItem="New-End-Lbl" firstAttribute="top" secondItem="Orig-End-Lbl" secondAttribute="bottom" constant="4" id="NewEnd-Top"/>
+                                                <constraint firstAttribute="trailing" secondItem="New-End-Lbl" secondAttribute="trailing" constant="20" id="NewEnd-Trail"/>
+                                                <constraint firstItem="Orig-End-Lbl" firstAttribute="leading" secondItem="Ext-Details-View" secondAttribute="leading" constant="20" id="OrigEnd-Lead"/>
+                                                <constraint firstItem="Orig-End-Lbl" firstAttribute="top" secondItem="Ext-Title" secondAttribute="bottom" constant="6" id="OrigEnd-Top"/>
+                                                <constraint firstAttribute="trailing" secondItem="Orig-End-Lbl" secondAttribute="trailing" constant="20" id="OrigEnd-Trail"/>
                                             </constraints>
                                             <userDefinedRuntimeAttributes>
                                                 <userDefinedRuntimeAttribute type="number" keyPath="layer.cornerRadius">
@@ -221,48 +211,49 @@
                             </subviews>
                             <color key="backgroundColor" systemColor="systemGroupedBackgroundColor"/>
                             <constraints>
-                                <constraint firstItem="Header-Lbl" firstAttribute="top" secondItem="Content-View" secondAttribute="top" constant="32" id="Header-Top"/>
-                                <constraint firstItem="Header-Lbl" firstAttribute="leading" secondItem="Content-View" secondAttribute="leading" constant="24" id="Header-Lead"/>
-                                <constraint firstAttribute="trailing" secondItem="Header-Lbl" secondAttribute="trailing" constant="24" id="Header-Trail"/>
-                                <constraint firstItem="Type-Lbl" firstAttribute="top" secondItem="Header-Lbl" secondAttribute="bottom" constant="16" id="Type-Top"/>
-                                <constraint firstItem="Type-Lbl" firstAttribute="leading" secondItem="Content-View" secondAttribute="leading" constant="24" id="Type-Lead"/>
-                                <constraint firstAttribute="trailing" secondItem="Type-Lbl" secondAttribute="trailing" constant="24" id="Type-Trail"/>
-                                <constraint firstItem="Booking-Card" firstAttribute="top" secondItem="Type-Lbl" secondAttribute="bottom" constant="16" id="BookingCard-Top"/>
                                 <constraint firstItem="Booking-Card" firstAttribute="leading" secondItem="Content-View" secondAttribute="leading" constant="24" id="BookingCard-Lead"/>
+                                <constraint firstItem="Booking-Card" firstAttribute="top" secondItem="Type-Lbl" secondAttribute="bottom" constant="16" id="BookingCard-Top"/>
                                 <constraint firstAttribute="trailing" secondItem="Booking-Card" secondAttribute="trailing" constant="24" id="BookingCard-Trail"/>
-                                <constraint firstItem="Details-Stack" firstAttribute="top" secondItem="Booking-Card" secondAttribute="bottom" constant="16" id="DetailsStack-Top"/>
-                                <constraint firstItem="Details-Stack" firstAttribute="leading" secondItem="Content-View" secondAttribute="leading" constant="24" id="DetailsStack-Lead"/>
-                                <constraint firstAttribute="trailing" secondItem="Details-Stack" secondAttribute="trailing" constant="24" id="DetailsStack-Trail"/>
                                 <constraint firstAttribute="height" constant="700" id="Content-Height"/>
+                                <constraint firstItem="Details-Stack" firstAttribute="leading" secondItem="Content-View" secondAttribute="leading" constant="24" id="DetailsStack-Lead"/>
+                                <constraint firstItem="Details-Stack" firstAttribute="top" secondItem="Booking-Card" secondAttribute="bottom" constant="16" id="DetailsStack-Top"/>
+                                <constraint firstAttribute="trailing" secondItem="Details-Stack" secondAttribute="trailing" constant="24" id="DetailsStack-Trail"/>
+                                <constraint firstItem="Header-Lbl" firstAttribute="leading" secondItem="Content-View" secondAttribute="leading" constant="24" id="Header-Lead"/>
+                                <constraint firstItem="Header-Lbl" firstAttribute="top" secondItem="Content-View" secondAttribute="top" constant="32" id="Header-Top"/>
+                                <constraint firstAttribute="trailing" secondItem="Header-Lbl" secondAttribute="trailing" constant="24" id="Header-Trail"/>
+                                <constraint firstItem="Type-Lbl" firstAttribute="leading" secondItem="Content-View" secondAttribute="leading" constant="24" id="Type-Lead"/>
+                                <constraint firstItem="Type-Lbl" firstAttribute="top" secondItem="Header-Lbl" secondAttribute="bottom" constant="16" id="Type-Top"/>
+                                <constraint firstAttribute="trailing" secondItem="Type-Lbl" secondAttribute="trailing" constant="24" id="Type-Trail"/>
                             </constraints>
                         </view>
                     </subviews>
                     <constraints>
-                        <constraint firstItem="Content-View" firstAttribute="width" secondItem="Scroll-View" secondAttribute="width" id="Content-Width"/>
                         <constraint firstAttribute="bottom" secondItem="Content-View" secondAttribute="bottom" id="Content-Bottom"/>
                         <constraint firstItem="Content-View" firstAttribute="leading" secondItem="Scroll-View" secondAttribute="leading" id="Content-Lead"/>
-                        <constraint firstAttribute="trailing" secondItem="Content-View" secondAttribute="trailing" id="Content-Trail"/>
                         <constraint firstItem="Content-View" firstAttribute="top" secondItem="Scroll-View" secondAttribute="top" id="Content-Top"/>
+                        <constraint firstAttribute="trailing" secondItem="Content-View" secondAttribute="trailing" id="Content-Trail"/>
+                        <constraint firstItem="Content-View" firstAttribute="width" secondItem="Scroll-View" secondAttribute="width" id="Content-Width"/>
                     </constraints>
                 </scrollView>
-                
-                <!-- Action Buttons -->
                 <stackView opaque="NO" contentMode="scaleToFill" distribution="fillEqually" spacing="16" translatesAutoresizingMaskIntoConstraints="NO" id="Button-Stack">
-                    <rect key="frame" x="24" y="762" width="345" height="50"/>
+                    <rect key="frame" x="24" y="734" width="345" height="44"/>
                     <subviews>
                         <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="Reject-Btn">
-                            <rect key="frame" x="0.0" y="0.0" width="164.5" height="44"/>
-                            <color key="backgroundColor" red="0.36470588240000001" green="0.66274509800000003" blue="0.71372549019999998" alpha="1" colorSpace="calibratedRGB"/>
+                            <rect key="frame" x="0.0" y="0.0" width="164.66666666666666" height="44"/>
+                            <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                             <constraints>
                                 <constraint firstAttribute="height" constant="44" id="Reject-Height"/>
                             </constraints>
-                            <fontDescription key="fontDescription" type="system" weight="medium" pointSize="16"/>
+                            <fontDescription key="fontDescription" type="system" weight="semibold" pointSize="18"/>
                             <state key="normal" title="Reject">
                                 <color key="titleColor" systemColor="systemRedColor"/>
                             </state>
                             <userDefinedRuntimeAttributes>
                                 <userDefinedRuntimeAttribute type="number" keyPath="ibCornerRadius">
-                                    <real key="value" value="14"/>
+                                    <real key="value" value="24"/>
+                                </userDefinedRuntimeAttribute>
+                                <userDefinedRuntimeAttribute type="color" keyPath="ibBorderColor">
+                                    <color key="value" red="0.36470588240000001" green="0.66274509800000003" blue="0.71372549019999998" alpha="1" colorSpace="calibratedRGB"/>
                                 </userDefinedRuntimeAttribute>
                             </userDefinedRuntimeAttributes>
                             <connections>
@@ -270,18 +261,18 @@
                             </connections>
                         </button>
                         <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="Accept-Btn">
-                            <rect key="frame" x="180.5" y="0.0" width="164.5" height="44"/>
+                            <rect key="frame" x="180.66666666666663" y="0.0" width="164.33333333333337" height="44"/>
                             <color key="backgroundColor" red="0.36470588240000001" green="0.66274509800000003" blue="0.71372549019999998" alpha="1" colorSpace="calibratedRGB"/>
                             <constraints>
                                 <constraint firstAttribute="height" constant="44" id="Accept-Height"/>
                             </constraints>
-                            <fontDescription key="fontDescription" type="system" weight="semibold" pointSize="16"/>
+                            <fontDescription key="fontDescription" type="system" weight="semibold" pointSize="18"/>
                             <state key="normal" title="Accept">
                                 <color key="titleColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                             </state>
                             <userDefinedRuntimeAttributes>
                                 <userDefinedRuntimeAttribute type="number" keyPath="ibCornerRadius">
-                                    <real key="value" value="14"/>
+                                    <real key="value" value="24"/>
                                 </userDefinedRuntimeAttribute>
                             </userDefinedRuntimeAttributes>
                             <connections>
@@ -297,32 +288,29 @@
             <viewLayoutGuide key="safeArea" id="fnl-2z-Ty3"/>
             <color key="backgroundColor" systemColor="systemGroupedBackgroundColor"/>
             <constraints>
-                <constraint firstItem="Scroll-View" firstAttribute="top" secondItem="i5M-Pr-FkT" secondAttribute="top" id="Scroll-Top"/>
-                <constraint firstItem="Scroll-View" firstAttribute="leading" secondItem="fnl-2z-Ty3" secondAttribute="leading" id="Scroll-Lead"/>
-                <constraint firstItem="fnl-2z-Ty3" firstAttribute="trailing" secondItem="Scroll-View" secondAttribute="trailing" id="Scroll-Trail"/>
-                <constraint firstItem="Button-Stack" firstAttribute="top" secondItem="Scroll-View" secondAttribute="bottom" constant="10" id="BtnStack-Top"/>
-                <constraint firstItem="Button-Stack" firstAttribute="leading" secondItem="fnl-2z-Ty3" secondAttribute="leading" constant="24" id="BtnStack-Lead"/>
-                <constraint firstItem="fnl-2z-Ty3" firstAttribute="trailing" secondItem="Button-Stack" secondAttribute="trailing" constant="24" id="BtnStack-Trail"/>
                 <constraint firstItem="fnl-2z-Ty3" firstAttribute="bottom" secondItem="Button-Stack" secondAttribute="bottom" constant="6" id="BtnStack-Bottom"/>
+                <constraint firstItem="Button-Stack" firstAttribute="leading" secondItem="fnl-2z-Ty3" secondAttribute="leading" constant="24" id="BtnStack-Lead"/>
+                <constraint firstItem="Button-Stack" firstAttribute="top" secondItem="Scroll-View" secondAttribute="bottom" constant="10" id="BtnStack-Top"/>
+                <constraint firstItem="fnl-2z-Ty3" firstAttribute="trailing" secondItem="Button-Stack" secondAttribute="trailing" constant="24" id="BtnStack-Trail"/>
+                <constraint firstItem="Scroll-View" firstAttribute="leading" secondItem="fnl-2z-Ty3" secondAttribute="leading" id="Scroll-Lead"/>
+                <constraint firstItem="Scroll-View" firstAttribute="top" secondItem="i5M-Pr-FkT" secondAttribute="top" id="Scroll-Top"/>
+                <constraint firstItem="fnl-2z-Ty3" firstAttribute="trailing" secondItem="Scroll-View" secondAttribute="trailing" id="Scroll-Trail"/>
             </constraints>
             <point key="canvasLocation" x="140" y="20"/>
         </view>
     </objects>
     <resources>
         <systemColor name="secondaryLabelColor">
-            <color red="0.23529411764705882" green="0.23529411764705882" blue="0.2627450980392157" alpha="0.59999999999999998" colorSpace="custom" customColorSpace="sRGB"/>
+            <color red="0.23529411759999999" green="0.23529411759999999" blue="0.26274509800000001" alpha="0.59999999999999998" colorSpace="custom" customColorSpace="sRGB"/>
         </systemColor>
         <systemColor name="secondarySystemGroupedBackgroundColor">
             <color white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
         </systemColor>
         <systemColor name="systemGroupedBackgroundColor">
-            <color red="0.94901960784313721" green="0.94901960784313721" blue="0.96862745098039216" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+            <color red="0.94901960780000005" green="0.94901960780000005" blue="0.96862745100000003" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
         </systemColor>
         <systemColor name="systemRedColor">
-            <color red="1" green="0.23137254901960785" blue="0.18823529411764706" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
-        </systemColor>
-        <systemColor name="tertiarySystemGroupedBackgroundColor">
-            <color white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+            <color red="1" green="0.23137254900000001" blue="0.18823529410000001" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
         </systemColor>
     </resources>
 </document>

@@ -252,7 +252,7 @@ final class ChatServiceV2 {
       
        // Update conversation summary for ordering in list
        let now = iso8601WithFS.string(from: Date())
-       try? await client
+       _ = try? await client
            .from("chat_conversations")
            .update(ConversationUpdatePayload(last_message: trimmedText, last_message_at: now))
            .eq("id", value: conversationId)

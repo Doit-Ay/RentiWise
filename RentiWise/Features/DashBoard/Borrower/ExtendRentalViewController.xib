@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<document type="com.apple.InterfaceBuilder3.CocoaTouch.XIB" version="3.0" toolsVersion="24128" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES">
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.XIB" version="3.0" toolsVersion="24506" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES">
     <device id="retina6_12" orientation="portrait" appearance="light"/>
     <dependencies>
-        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="24063"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="24504"/>
         <capability name="Safe area layout guides" minToolsVersion="9.0"/>
         <capability name="System colors in document resources" minToolsVersion="11.0"/>
         <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
@@ -11,16 +11,16 @@
         <placeholder placeholderIdentifier="IBFilesOwner" id="-1" userLabel="File's Owner" customClass="ExtendRentalViewController" customModule="RentiWise" customModuleProvider="target">
             <connections>
                 <outlet property="additionalDaysLabel" destination="Add-Days-Lbl" id="OutAddDays"/>
+                <outlet property="additionalDaysTitleLabel" destination="Add-Days-Title" id="OutAddDaysTitle"/>
                 <outlet property="additionalFeeLabel" destination="Add-Fee-Lbl" id="OutAddFee"/>
+                <outlet property="curEndTitleLabel" destination="Cur-End-Title" id="OutCurEndTitle"/>
                 <outlet property="currentEndDateLabel" destination="Cur-End-Lbl" id="OutCurEnd"/>
                 <outlet property="itemNameLabel" destination="Item-Name-Lbl" id="OutItemName"/>
+                <outlet property="newDateTitleLabel" destination="New-Date-Title" id="OutNewDateTitle"/>
                 <outlet property="newEndDatePicker" destination="Date-Picker" id="OutDatePick"/>
                 <outlet property="pricePerDayLabel" destination="Price-Day-Lbl" id="OutPriceDay"/>
                 <outlet property="sendRequestButton" destination="Send-Req-Btn" id="OutSendBtn"/>
                 <outlet property="totalExtensionLabel" destination="Tot-Ext-Lbl" id="OutTotExt"/>
-                <outlet property="additionalDaysTitleLabel" destination="Add-Days-Title" id="OutAddDaysTitle"/>
-                <outlet property="curEndTitleLabel" destination="Cur-End-Title" id="OutCurEndTitle"/>
-                <outlet property="newDateTitleLabel" destination="New-Date-Title" id="OutNewDateTitle"/>
                 <outlet property="view" destination="i5M-Pr-FkT" id="sfx-zR-JGt"/>
             </connections>
         </placeholder>
@@ -30,7 +30,7 @@
             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
             <subviews>
                 <scrollView clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="Scroll-View">
-                    <rect key="frame" x="0.0" y="0.0" width="393" height="728"/>
+                    <rect key="frame" x="0.0" y="0.0" width="393" height="734"/>
                     <subviews>
                         <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="Content-View">
                             <rect key="frame" x="0.0" y="0.0" width="393" height="760"/>
@@ -270,21 +270,24 @@
                     <viewLayoutGuide key="frameLayoutGuide" id="Frame-Guide"/>
                 </scrollView>
                 <stackView opaque="NO" contentMode="scaleToFill" distribution="fillEqually" spacing="16" translatesAutoresizingMaskIntoConstraints="NO" id="Button-Stack">
-                    <rect key="frame" x="24" y="728" width="345" height="50"/>
+                    <rect key="frame" x="24" y="734" width="345" height="44"/>
                     <subviews>
                         <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="Cancel-Btn">
-                            <rect key="frame" x="0.0" y="0.0" width="164.66666666666666" height="50"/>
+                            <rect key="frame" x="0.0" y="0.0" width="164.66666666666666" height="44"/>
                             <color key="backgroundColor" systemColor="tertiarySystemGroupedBackgroundColor"/>
                             <constraints>
-                                <constraint firstAttribute="height" constant="50" id="Cancel-Height"/>
+                                <constraint firstAttribute="height" constant="44" id="Cancel-Height"/>
                             </constraints>
-                            <fontDescription key="fontDescription" type="system" weight="medium" pointSize="16"/>
+                            <fontDescription key="fontDescription" type="system" weight="semibold" pointSize="18"/>
                             <state key="normal" title="Cancel">
-                                <color key="titleColor" systemColor="labelColor"/>
+                                <color key="titleColor" systemColor="systemRedColor"/>
                             </state>
                             <userDefinedRuntimeAttributes>
                                 <userDefinedRuntimeAttribute type="number" keyPath="ibCornerRadius">
-                                    <real key="value" value="14"/>
+                                    <real key="value" value="24"/>
+                                </userDefinedRuntimeAttribute>
+                                <userDefinedRuntimeAttribute type="color" keyPath="ibBorderColor">
+                                    <color key="value" red="0.36470588240000001" green="0.66274509800000003" blue="0.71372549019999998" alpha="1" colorSpace="calibratedRGB"/>
                                 </userDefinedRuntimeAttribute>
                             </userDefinedRuntimeAttributes>
                             <connections>
@@ -292,18 +295,18 @@
                             </connections>
                         </button>
                         <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="Send-Req-Btn">
-                            <rect key="frame" x="180.66666666666663" y="0.0" width="164.33333333333337" height="50"/>
+                            <rect key="frame" x="180.66666666666663" y="0.0" width="164.33333333333337" height="44"/>
                             <color key="backgroundColor" red="0.36470588240000001" green="0.66274509800000003" blue="0.71372549019999998" alpha="1" colorSpace="calibratedRGB"/>
                             <constraints>
-                                <constraint firstAttribute="height" constant="50" id="Send-Height"/>
+                                <constraint firstAttribute="height" constant="44" id="Send-Height"/>
                             </constraints>
-                            <fontDescription key="fontDescription" type="system" weight="semibold" pointSize="16"/>
+                            <fontDescription key="fontDescription" type="system" weight="semibold" pointSize="18"/>
                             <state key="normal" title="Send Request">
                                 <color key="titleColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                             </state>
                             <userDefinedRuntimeAttributes>
                                 <userDefinedRuntimeAttribute type="number" keyPath="ibCornerRadius">
-                                    <real key="value" value="14"/>
+                                    <real key="value" value="24"/>
                                 </userDefinedRuntimeAttribute>
                             </userDefinedRuntimeAttributes>
                             <connections>
@@ -311,9 +314,6 @@
                             </connections>
                         </button>
                     </subviews>
-                    <constraints>
-                        <constraint firstAttribute="height" constant="50" id="BtnStack-Height"/>
-                    </constraints>
                 </stackView>
             </subviews>
             <viewLayoutGuide key="safeArea" id="fnl-2z-Ty3"/>
@@ -331,9 +331,6 @@
         </view>
     </objects>
     <resources>
-        <systemColor name="labelColor">
-            <color white="0.0" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
-        </systemColor>
         <systemColor name="secondaryLabelColor">
             <color red="0.23529411759999999" green="0.23529411759999999" blue="0.26274509800000001" alpha="0.59999999999999998" colorSpace="custom" customColorSpace="sRGB"/>
         </systemColor>
@@ -345,6 +342,9 @@
         </systemColor>
         <systemColor name="systemGroupedBackgroundColor">
             <color red="0.94901960780000005" green="0.94901960780000005" blue="0.96862745100000003" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+        </systemColor>
+        <systemColor name="systemRedColor">
+            <color red="1" green="0.23137254900000001" blue="0.18823529410000001" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
         </systemColor>
         <systemColor name="tertiarySystemGroupedBackgroundColor">
             <color red="0.94901960780000005" green="0.94901960780000005" blue="0.96862745100000003" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>

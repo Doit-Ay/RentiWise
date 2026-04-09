@@ -7,6 +7,7 @@
 
 import UIKit
 import CoreLocation
+import Supabase
 
 /// Bottom sheet to select location:
 /// - Use current location (GPS + reverse geocode)
@@ -28,8 +29,9 @@ final class LocationSelectorViewController: UIViewController {
     // MARK: - Private UI
     private let tableView = UITableView(frame: .zero, style: .insetGrouped)
 
-    // Data (backend addresses)
+    // Data (backend addresses — only populated when user is signed in)
     private var saved: [Address] = []
+    private var isSignedIn: Bool = false
     private let service: AddressServicing = AddressService()
     
     // App brand color used across the app (matches Home/others)
@@ -41,7 +43,7 @@ final class LocationSelectorViewController: UIViewController {
         view.backgroundColor = .systemBackground
 
         setupTable()
-        Task { await reloadSaved() }
+        Task { await reloadSaved() }  // checks auth internally
 
         // Configure as a bottom sheet if available
         if let sheet = presentationController as? UISheetPresentationController {
@@ -68,17 +70,27 @@ final class LocationSelectorViewController: UIViewController {
     }
 
     @MainActor
-    private func applySaved(_ list: [Address]) {
+    private func applySaved(_ list: [Address], signedIn: Bool) {
+        isSignedIn = signedIn
         saved = list
         tableView.reloadData()
     }
 
     private func reloadSaved() async {
+        // First check if the user is authenticated at all
         do {
-            let list = try await service.list()
-            await MainActor.run { self.applySaved(list) }
+            _ = try await SupabaseManager.shared.client.auth.session
+            // Signed in — fetch only this user's addresses
+            do {
+                let list = try await service.list()
+                await MainActor.run { self.applySaved(list, signedIn: true) }
+            } catch {
+                // Fetch failed — still signed in but show no saved addresses
+                await MainActor.run { self.applySaved([], signedIn: true) }
+            }
         } catch {
-            await MainActor.run { self.applySaved([]) }
+            // Not authenticated — guest mode: only 2 options, no DB fetch
+            await MainActor.run { self.applySaved([], signedIn: false) }
         }
     }
 
@@ -175,34 +187,25 @@ final class LocationSelectorViewController: UIViewController {
 // MARK: - UITableViewDataSource
 extension LocationSelectorViewController: UITableViewDataSource {
     func numberOfSections(in tableView: UITableView) -> Int {
-        // Section 0: Actions
-        // Section 1: Saved addresses (if any)
-        return saved.isEmpty ? 1 : 2
+        // Section 0: Actions (2 rows for guest/no addresses, 3 rows when user has saved addresses)
+        // Section 1: Saved addresses (only when signed in AND has ≥1 address)
+        return (isSignedIn && !saved.isEmpty) ? 2 : 1
     }
 
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        if saved.isEmpty {
-            // Only actions
-            switch section {
-            case 0: return 2 // Use GPS, Enter manually (no Manage when none saved)
-            default: return 0
-            }
+        if section == 0 {
+            // If signed in AND has saved addresses: show 3 actions (includes Manage)
+            // Otherwise: show only 2 options (Use GPS + Enter manually)
+            return (isSignedIn && !saved.isEmpty) ? 3 : 2
         } else {
-            if section == 0 {
-                return 3 // Use GPS, Enter manually, Manage saved
-            } else {
-                return saved.count
-            }
+            // Section 1 only exists when isSignedIn && !saved.isEmpty
+            return saved.count
         }
     }
 
     func tableView(_ tableView: UITableView,
                    titleForHeaderInSection section: Int) -> String? {
-        if saved.isEmpty {
-            return section == 0 ? nil : nil
-        } else {
-            return section == 1 ? "Saved addresses" : nil
-        }
+        return section == 1 ? "Saved Addresses" : nil
     }
 
     func tableView(_ tableView: UITableView,
@@ -210,50 +213,39 @@ extension LocationSelectorViewController: UITableViewDataSource {
         let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
         var config = cell.defaultContentConfiguration()
 
-        if saved.isEmpty {
-            // Actions only
-            if indexPath.section == 0 {
-                if indexPath.row == 0 {
-                    config.text = "Use current location"
-                    config.image = UIImage(systemName: "location.fill")
-                } else {
-                    config.text = "Enter address manually"
-                    config.image = UIImage(systemName: "square.and.pencil")
-                }
+        if indexPath.section == 0 {
+            // Action rows
+            switch indexPath.row {
+            case 0:
+                config.text = "Use current location"
+                config.image = UIImage(systemName: "location.fill")
+            case 1:
+                config.text = "Enter address manually"
+                config.image = UIImage(systemName: "square.and.pencil")
+            case 2:
+                // Only rendered when isSignedIn && !saved.isEmpty
+                config.text = "Manage saved addresses"
+                config.image = UIImage(systemName: "bookmark.circle")
+            default:
+                break
             }
         } else {
-            if indexPath.section == 0 {
-                switch indexPath.row {
-                case 0:
-                    config.text = "Use current location"
-                    config.image = UIImage(systemName: "location.fill")
-                case 1:
-                    config.text = "Enter address manually"
-                    config.image = UIImage(systemName: "square.and.pencil")
-                case 2:
-                    config.text = "Manage saved addresses"
-                    config.image = UIImage(systemName: "bookmark.circle")
-                default:
-                    break
-                }
-            } else {
-                // Saved addresses section (backend)
-                guard indexPath.row < saved.count else {
-                    cell.contentConfiguration = config
-                    return cell
-                }
-                let address = saved[indexPath.row]
-                let title: String
-                if let label = address.label, !label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    title = "\(label) — \(address.address_line1)"
-                } else {
-                    title = address.address_line1
-                }
-                let secondary = "\(address.city), \(address.state) \(address.postal_code)"
-                config.text = title
-                config.secondaryText = secondary
-                config.image = UIImage(systemName: address.is_default ? "bookmark.fill" : "bookmark")
+            // Saved addresses section — only reached when signed in
+            guard indexPath.row < saved.count else {
+                cell.contentConfiguration = config
+                return cell
             }
+            let address = saved[indexPath.row]
+            let title: String
+            if let label = address.label, !label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                title = "\(label) — \(address.address_line1)"
+            } else {
+                title = address.address_line1
+            }
+            let secondary = "\(address.city), \(address.state) \(address.postal_code)"
+            config.text = title
+            config.secondaryText = secondary
+            config.image = UIImage(systemName: address.is_default ? "bookmark.fill" : "bookmark")
         }
 
         // Apply app brand tint to all row icons
@@ -261,7 +253,6 @@ extension LocationSelectorViewController: UITableViewDataSource {
 
         cell.contentConfiguration = config
         cell.accessoryType = .disclosureIndicator
-        // Also set cell tint in case any accessory/image uses it
         cell.tintColor = brandTeal
         return cell
     }
@@ -273,31 +264,21 @@ extension LocationSelectorViewController: UITableViewDelegate {
                    didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
 
-        if saved.isEmpty {
-            // Actions only
-            if indexPath.section == 0 {
-                if indexPath.row == 0 {
-                    useCurrentLocation()
-                } else {
-                    enterAddressManually()
-                }
-            }
-            return
-        }
-
         if indexPath.section == 0 {
+            // Action rows — same for guests and signed-in users
             switch indexPath.row {
             case 0:
                 useCurrentLocation()
             case 1:
                 enterAddressManually()
             case 2:
+                // Only reachable when isSignedIn && !saved.isEmpty
                 manageSavedAddresses()
             default:
                 break
             }
         } else {
-            // Pick a saved address from backend — dismiss first, then callback
+            // Section 1: saved addresses — only reachable when signed in
             guard indexPath.row < saved.count else { return }
             let address = saved[indexPath.row]
             dismissThen { [weak self] in
@@ -308,7 +289,6 @@ extension LocationSelectorViewController: UITableViewDelegate {
                 if let lat = address.latitude, let lon = address.longitude, lat != 0, lon != 0 {
                     DistanceService.shared.setViewerCoordinate(latitude: lat, longitude: lon)
                 } else {
-                    // Fall back to clearing caches — resolveViewerAddress will re-resolve
                     DistanceService.shared.clearAllDistanceCaches()
                 }
 
