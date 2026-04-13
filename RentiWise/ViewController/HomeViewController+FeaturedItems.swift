@@ -11,9 +11,6 @@ import Supabase
 // MARK: - Featured items loading
 extension HomeViewController {
 
-    /// Maximum radius (in meters) within which items are shown on the home screen.
-    private static let nearbyRadiusMeters: Double = 20_000 // 20 km
-
     func loadFeaturedItems(forceRefresh: Bool = false) async {
         let me = await SupabaseManager.shared.currentUserId()
 
@@ -44,8 +41,10 @@ extension HomeViewController {
             }
         }
 
-        // Filter items within 20km radius and sort by distance (nearest first)
-        let nearbyItems = await filterAndSortByDistance(allItems, radiusMeters: Self.nearbyRadiusMeters)
+        // Filter items within 30km radius and sort by distance (nearest first)
+        // Uses the centralized DistanceService filter which properly handles
+        // unresolved coordinates and own-item passthrough.
+        let nearbyItems = await DistanceService.shared.filterItemsWithinRadius(allItems)
 
         let featured = Array(nearbyItems.prefix(4))
 
@@ -60,30 +59,6 @@ extension HomeViewController {
                 self.showNoNearbyItemsBanner(false)
             }
         }
-    }
-
-    /// Filters items within the given radius and sorts by distance ascending.
-    private func filterAndSortByDistance(_ items: [Item], radiusMeters: Double) async -> [Item] {
-        // Compute distances concurrently
-        let itemsWithDistance: [(Item, Double)] = await withTaskGroup(of: (Item, Double).self) { group in
-            for item in items {
-                group.addTask {
-                    let meters = await DistanceService.shared.rankingDistanceMeters(for: item)
-                    return (item, meters)
-                }
-            }
-            var results: [(Item, Double)] = []
-            for await result in group {
-                results.append(result)
-            }
-            return results
-        }
-
-        // Filter within radius and sort by distance
-        return itemsWithDistance
-            .filter { $0.1 <= radiusMeters || $0.1 == 0 } // 0 means own item
-            .sorted { $0.1 < $1.1 }
-            .map { $0.0 }
     }
 
     /// Shows/hides a "Be the first to list" banner above the featured section.

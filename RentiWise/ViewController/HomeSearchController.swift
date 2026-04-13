@@ -166,8 +166,11 @@ final class HomeSearchController: NSObject {
                 let rows = try decoder.decode([Item].self, from: response.data)
                 let visibleRows = CommunitySafetyService.shared.visibleItems(from: rows)
 
+                // Apply 30km geofence — only show nearby search results
+                let nearbyRows = await DistanceService.shared.filterItemsWithinRadius(visibleRows)
+
                 await MainActor.run {
-                    self.results = visibleRows
+                    self.results = nearbyRows
                 }
             } catch {
                 await MainActor.run {

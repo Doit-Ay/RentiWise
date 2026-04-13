@@ -158,9 +158,9 @@ final class CategoriesViewController: UIViewController {
         }
 
         if let cat = category, !cat.isEmpty {
-            emptyStateLabel.text = "No items in \(cat)"
+            emptyStateLabel.text = "No items nearby in \(cat)"
         } else {
-            emptyStateLabel.text = "No items in this category"
+            emptyStateLabel.text = "No items nearby in this category"
         }
     }
 
@@ -177,7 +177,10 @@ final class CategoriesViewController: UIViewController {
         do {
             let cat = category ?? ""
             let fetched = try await service.fetchItems(category: cat)
-            self.items = fetched
+            // Apply 30km geofence — only show items within the user's nearby radius.
+            // This is the core peer-to-peer local rental premise.
+            let nearbyItems = await DistanceService.shared.filterItemsWithinRadius(fetched)
+            self.items = nearbyItems
             applyFilter(text: categorySearchBar?.text)
             await MainActor.run { self.reloadUI() }
         } catch {

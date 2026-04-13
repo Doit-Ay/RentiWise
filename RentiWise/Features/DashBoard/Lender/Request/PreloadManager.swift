@@ -107,7 +107,7 @@ final class PreloadManager {
                 .select()
                 .eq("is_active", value: true)
                 .order("created_at", ascending: false)
-                .limit(20)           // fetch enough for both featured (4) + trending (6)
+                .limit(50)           // fetch enough to survive 30km geofence for featured (4) + trending (6)
                 .execute()
             let decoder = JSONDecoder()
             decoder.dateDecodingStrategy = .iso8601

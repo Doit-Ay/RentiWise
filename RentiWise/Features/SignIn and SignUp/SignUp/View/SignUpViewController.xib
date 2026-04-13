@@ -18,7 +18,6 @@
                 <outlet property="signUpNumberText" destination="AOf-i2-4mp" id="Xdw-Jh-KDa"/>
                 <outlet property="signUpPasswordText" destination="qKB-B3-ukx" id="Oy7-FO-Tvy"/>
                 <outlet property="signUpConfirmPasswordText" destination="ConfPwd-txt" id="ConfPwd-cnct"/>
-                <outlet property="signUpConfirmPasswordText" destination="ConfPwd-txt" id="ConfPwd-cnct"/>
                 <outlet property="socialAuthStackView" destination="Uvs-cl-hpk" id="t0W-a4-dgV"/>
                 <outlet property="view" destination="iN0-l3-epB" id="gfO-Xc-zKI"/>
             </connections>
@@ -76,32 +75,6 @@
                             </constraints>
                             <fontDescription key="fontDescription" type="system" pointSize="14"/>
                             <textInputTraits key="textInputTraits" secureTextEntry="YES" textContentType="password"/>
-                            <userDefinedRuntimeAttributes>
-                                <userDefinedRuntimeAttribute type="boolean" keyPath="ibMasksToBounds" value="YES"/>
-                                <userDefinedRuntimeAttribute type="number" keyPath="ibCornerRadius">
-                                    <real key="value" value="12"/>
-                                </userDefinedRuntimeAttribute>
-                                <userDefinedRuntimeAttribute type="color" keyPath="ibBorderColor">
-                                    <color key="value" red="0.43921568630000002" green="0.65490196079999996" blue="0.70588235290000001" alpha="1" colorSpace="custom" customColorSpace="displayP3"/>
-                                </userDefinedRuntimeAttribute>
-                                <userDefinedRuntimeAttribute type="number" keyPath="ibBorderWidth">
-                                    <real key="value" value="1"/>
-                                </userDefinedRuntimeAttribute>
-                            </userDefinedRuntimeAttributes>
-                        </textField>
-                        <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Confirm Password" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="ConfPwd-lbl">
-                            <rect key="frame" x="0.0" y="0.0" width="353" height="20.333333333333329"/>
-                            <fontDescription key="fontDescription" type="system" weight="medium" pointSize="17"/>
-                            <nil key="textColor"/>
-                            <nil key="highlightedColor"/>
-                        </label>
-                        <textField opaque="NO" contentMode="scaleToFill" horizontalHuggingPriority="248" contentHorizontalAlignment="left" contentVerticalAlignment="center" borderStyle="roundedRect" textAlignment="natural" minimumFontSize="17" translatesAutoresizingMaskIntoConstraints="NO" id="ConfPwd-txt">
-                            <rect key="frame" x="0.0" y="0.0" width="353" height="50"/>
-                            <constraints>
-                                <constraint firstAttribute="height" constant="50" id="ConfPwd-h"/>
-                            </constraints>
-                            <fontDescription key="fontDescription" type="system" pointSize="14"/>
-                            <textInputTraits key="textInputTraits" secureTextEntry="YES" textContentType="newPassword"/>
                             <userDefinedRuntimeAttributes>
                                 <userDefinedRuntimeAttribute type="boolean" keyPath="ibMasksToBounds" value="YES"/>
                                 <userDefinedRuntimeAttribute type="number" keyPath="ibCornerRadius">

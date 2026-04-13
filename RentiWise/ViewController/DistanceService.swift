@@ -11,14 +11,24 @@ final class DistanceService {
     static let shared = DistanceService()
 
     // MARK: - Config
+
+    /// Maximum radius (in meters) within which items are visible to the user.
+    /// All views (Home, Categories, Search) must use this single source of truth.
+    static let nearbyRadiusMeters: Double = 30_000 // 30 km
+
     private let ttl: TimeInterval = 30 * 24 * 60 * 60
     private let transportType: MKDirectionsTransportType = .automobile
     private let viewerAddressCacheTTL: TimeInterval = 5 * 60
     private let defaultViewerAddress = "Current Location"
 
     // Fallback coordinate: used only when ALL lookups fail (no GPS, no DB, no saved address).
-    // This is a last-resort and should rarely be hit.
+    // Using (0, 0) — Null Island — so the computed distance to any real item will be
+    // enormous and correctly excluded by the nearby radius filter.
     private let fallbackCoordinate = CLLocation(latitude: 0.0, longitude: 0.0)
+
+    /// Sentinel value returned by `rankingDistanceMeters` when the owner's or viewer's
+    /// coordinates cannot be resolved. Guarantees exclusion from any radius filter.
+    private static let unresolvedDistance: Double = Double.greatestFiniteMagnitude
 
     // MARK: - In-memory caches
     private var geocodeCache = NSCache<NSString, CLLocation>()
@@ -109,11 +119,22 @@ final class DistanceService {
     }
 
     /// Returns a stable numeric distance for ranking lists.
+    /// Returns `0` for the user's own items.
+    /// Returns `Double.greatestFiniteMagnitude` when viewer or owner coordinates are unresolvable,
+    /// so the item is correctly excluded from radius-based filters.
     func rankingDistanceMeters(for item: Item) async -> Double {
         let viewerAddress = await resolveViewerAddress()
 
+        // Own item — always 0 so it passes any radius filter
         if viewerAddress.userId.caseInsensitiveCompare(item.owner_id) == .orderedSame {
             return 0
+        }
+
+        // If the viewer's location couldn't be resolved (fallback 0,0), we can't compute
+        // a meaningful distance. Return sentinel so item is excluded from radius filters
+        // but can still be shown with a "distance unavailable" label.
+        guard isValidCoordinate(viewerAddress.location) else {
+            return Self.unresolvedDistance
         }
 
         if let cached = await fetchCachedDistanceMeters(
@@ -129,7 +150,57 @@ final class DistanceService {
 
         let ownerCoord = await fetchOwnerCoordinate(ownerId: item.owner_id)
 
+        // If the owner's location couldn't be resolved, return sentinel
+        guard isValidCoordinate(ownerCoord) else {
+            return Self.unresolvedDistance
+        }
+
         return viewerAddress.location.distance(from: ownerCoord)
+    }
+
+    // MARK: - Radius filtering (used by Home, Categories, Search)
+
+    /// Filters items within the configured `nearbyRadiusMeters` and sorts by distance ascending.
+    /// Own items (distance == 0) always pass. Items with unresolvable coordinates are excluded.
+    func filterItemsWithinRadius(_ items: [Item]) async -> [Item] {
+        return await filterAndSortByDistance(items, radiusMeters: Self.nearbyRadiusMeters)
+    }
+
+    /// Filters items within the given radius and sorts by distance ascending.
+    /// Own items always pass. Items with unresolvable coordinates are excluded.
+    func filterAndSortByDistance(_ items: [Item], radiusMeters: Double) async -> [Item] {
+        let me = await SupabaseManager.shared.currentUserId()
+
+        let itemsWithDistance: [(Item, Double)] = await withTaskGroup(of: (Item, Double).self) { group in
+            for item in items {
+                group.addTask {
+                    let meters = await self.rankingDistanceMeters(for: item)
+                    return (item, meters)
+                }
+            }
+            var results: [(Item, Double)] = []
+            for await result in group {
+                results.append(result)
+            }
+            return results
+        }
+
+        return itemsWithDistance
+            .filter { pair in
+                let (item, distance) = pair
+                // Own items always pass
+                if let me, me.caseInsensitiveCompare(item.owner_id) == .orderedSame {
+                    return true
+                }
+                // Unresolved coordinates — exclude
+                if distance >= Self.unresolvedDistance {
+                    return false
+                }
+                // Within radius
+                return distance <= radiusMeters
+            }
+            .sorted { $0.1 < $1.1 }
+            .map { $0.0 }
     }
 
     /// Computes the viewer's distance to another user, typically used on lender/borrower cards.
@@ -518,6 +589,12 @@ final class DistanceService {
         }
 
         return CLLocation(latitude: latitude, longitude: longitude)
+    }
+
+    /// Returns true if the location has valid, non-zero coordinates (i.e. not the fallback).
+    private func isValidCoordinate(_ location: CLLocation) -> Bool {
+        let coord = location.coordinate
+        return coord.latitude != 0.0 || coord.longitude != 0.0
     }
 
     private func cachedViewerAddress(for userId: String) -> ResolvedAddressCoordinate? {
