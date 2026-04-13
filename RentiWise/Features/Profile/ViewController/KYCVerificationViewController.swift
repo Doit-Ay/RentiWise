@@ -6,8 +6,6 @@
 //
 
 import UIKit
-import SwiftUI
-import DiditSDK
 import Supabase
 
 // MARK: - KYC Verification Screen
@@ -25,18 +23,8 @@ final class KYCVerificationViewController: UIViewController {
     private let subtitleLabel = UILabel()
     private let verifyButton = UIButton(type: .system)
     private let activityIndicator = UIActivityIndicatorView(style: .large)
-    private let urlSession: URLSession = {
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.timeoutIntervalForRequest = 20
-        configuration.timeoutIntervalForResource = 30
-        configuration.waitsForConnectivity = false
-        return URLSession(configuration: configuration)
-    }()
 
     private var currentStatus: String = "none"
-
-    // Didit Workflow ID
-    private let workflowId = "52b212b3-1bac-46c4-a647-fb6b042157d7"
 
     // MARK: - Lifecycle
 
@@ -45,7 +33,6 @@ final class KYCVerificationViewController: UIViewController {
         title = "Identity Verification"
         view.backgroundColor = .systemGroupedBackground
         setupUI()
-        addDigitVerificationModifier()
         Task { await loadStatus() }
     }
 
@@ -112,21 +99,6 @@ final class KYCVerificationViewController: UIViewController {
         ])
     }
 
-    // MARK: - Didit SwiftUI bridge
-
-    /// Embeds an invisible SwiftUI view that carries the `.diditVerification` modifier.
-    private func addDigitVerificationModifier() {
-        let bridge = DiditBridgeView { [weak self] result in
-            self?.handleVerificationResult(result)
-        }
-        let hostingVC = UIHostingController(rootView: bridge)
-        hostingVC.view.frame = .zero
-        hostingVC.view.isHidden = true
-        addChild(hostingVC)
-        view.addSubview(hostingVC.view)
-        hostingVC.didMove(toParent: self)
-    }
-
     // MARK: - Load status
 
     private func loadStatus() async {
@@ -180,147 +152,15 @@ final class KYCVerificationViewController: UIViewController {
     // MARK: - Verify action
 
     @objc private func verifyTapped() {
-        activityIndicator.startAnimating()
-        verifyButton.isEnabled = false
-
-        Task {
-            do {
-                // Call our Supabase Edge Function to create a Didit session
-                let session = try await SupabaseManager.shared.client.auth.session
-                let supabaseUrl = Bundle.main.object(forInfoDictionaryKey: "SUPABASE_URL") as? String ?? ""
-                let functionUrl = "\(supabaseUrl)/functions/v1/create-kyc-session"
-                guard let url = URL(string: functionUrl) else {
-                    throw NSError(
-                        domain: "KYC",
-                        code: 0,
-                        userInfo: [NSLocalizedDescriptionKey: "KYC service is not configured correctly."]
-                    )
-                }
-
-                var request = URLRequest(url: url)
-                request.httpMethod = "POST"
-                request.timeoutInterval = 20
-                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
-
-                // Get anon key from Info.plist
-                let anonKey = Bundle.main.object(forInfoDictionaryKey: "SUPABASE_ANON_KEY") as? String ?? ""
-                request.setValue(anonKey, forHTTPHeaderField: "apikey")
-
-                let (data, response) = try await urlSession.data(for: request)
-
-                guard let httpResponse = response as? HTTPURLResponse else {
-                    throw NSError(domain: "KYC", code: 0, userInfo: [NSLocalizedDescriptionKey: "Invalid response"])
-                }
-
-                guard httpResponse.statusCode == 200 else {
-                    let errorBody = String(data: data, encoding: .utf8) ?? "Unknown error"
-                    debugLog("[KYC] Edge function returned status \(httpResponse.statusCode)")
-                    throw NSError(domain: "KYC", code: httpResponse.statusCode,
-                                  userInfo: [NSLocalizedDescriptionKey: "Failed to create session: \(errorBody)"])
-                }
-
-                // Parse the session token
-                let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-                let sessionToken = json?["session_token"] as? String ?? ""
-
-                if sessionToken.isEmpty {
-                    throw NSError(domain: "KYC", code: 0,
-                                  userInfo: [NSLocalizedDescriptionKey: "No session token returned"])
-                }
-
-                // Use Option A: pass the session token to the SDK
-                await MainActor.run {
-                    #if DEBUG
-                    let config = DiditSdk.Configuration(loggingEnabled: true)
-                    #else
-                    let config = DiditSdk.Configuration(loggingEnabled: false)
-                    #endif
-                    DiditSdk.shared.startVerification(
-                        token: sessionToken,
-                        configuration: config
-                    )
-                }
-            } catch {
-                await MainActor.run {
-                    activityIndicator.stopAnimating()
-                    verifyButton.isEnabled = true
-                    showAlert(title: "Error", message: error.localizedDescription)
-                }
-            }
-        }
-    }
-
-    // MARK: - Handle result
-
-    private func handleVerificationResult(_ result: VerificationResult) {
-        Task { @MainActor in
-            activityIndicator.stopAnimating()
-            verifyButton.isEnabled = true
-
-            switch result {
-            case .completed(let session):
-                let statusString: String
-                switch session.status {
-                case .approved:
-                    statusString = "approved"
-                case .declined:
-                    statusString = "declined"
-                case .pending:
-                    statusString = "pending"
-                @unknown default:
-                    statusString = "pending"
-                }
-
-                // Save to Supabase
-                Task {
-                    try? await kycService.updateKYCStatus(
-                        sessionId: session.sessionId,
-                        status: statusString
-                    )
-                }
-
-                currentStatus = statusString
-                updateUI(for: statusString)
-                onComplete?(statusString)
-
-                if statusString == "approved" {
-                    showAlert(title: "Verified! ✅", message: "Your identity has been successfully verified.")
-                } else if statusString == "declined" {
-                    showAlert(title: "Verification Failed", message: "Please try again with valid documents.")
-                } else {
-                    showAlert(title: "Under Review", message: "Your documents are being reviewed.")
-                }
-
-            case .cancelled:
-                showAlert(title: "Cancelled", message: "You cancelled the verification process. You can try again anytime.")
-
-            case .failed(let error, _):
-                showAlert(title: "Error", message: error.localizedDescription)
-            @unknown default:
-                showAlert(title: "Verification Update", message: "Verification finished with a status this build does not recognise yet.")
-            }
-        }
+        showAlert(
+            title: "Coming Soon",
+            message: "Identity verification is being updated and will be available again shortly."
+        )
     }
 
     private func showAlert(title: String, message: String) {
         let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "OK", style: .default))
         present(alert, animated: true)
-    }
-}
-
-// MARK: - SwiftUI Bridge View
-
-/// An invisible SwiftUI view that carries the `.diditVerification` result handler.
-private struct DiditBridgeView: View {
-    let onResult: (VerificationResult) -> Void
-
-    var body: some View {
-        Color.clear
-            .frame(width: 0, height: 0)
-            .diditVerification { result in
-                onResult(result)
-            }
     }
 }

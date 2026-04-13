@@ -33,7 +33,7 @@ final class AppLocationManager: NSObject {
         case reverseGeocodeFailed
     }
 
-    /// Returns the device's current coordinates, or nil if unavailable or outside India.
+    /// Returns the device's current coordinates, or nil if unavailable.
     /// Does NOT prompt for permission — returns nil if not authorized.
     func currentCoordinates() async -> CLLocationCoordinate2D? {
         let status = manager.authorizationStatus
@@ -45,11 +45,7 @@ final class AppLocationManager: NSObject {
                 self.locationContinuation = continuation
                 self.manager.requestLocation()
             }
-            // Validate: reject simulator/non-India coordinates
-            guard Self.isInIndia(loc.coordinate) else {
-                debugLog("[AppLocationManager] GPS coordinate outside India (\(loc.coordinate.latitude), \(loc.coordinate.longitude)) — ignoring")
-                return nil
-            }
+            debugLog("[AppLocationManager] GPS coordinate: \(loc.coordinate.latitude), \(loc.coordinate.longitude)")
             return loc.coordinate
         } catch {
             return nil
@@ -103,20 +99,15 @@ extension AppLocationManager {
     }
 
     // One-shot current location (ensures authorization first).
-    // Returns India-validated location; falls back to Chennai if GPS is outside India.
+    // Returns the actual device GPS location.
     func currentLocation() async throws -> CLLocation {
         try await ensureWhenInUseAuthorization()
         let loc = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<CLLocation, Error>) in
             self.locationContinuation = continuation
             self.manager.requestLocation()
         }
-        // Validate: if GPS is outside India (e.g., simulator returns San Francisco), use Chennai
-        if Self.isInIndia(loc.coordinate) {
-            return loc
-        } else {
-            debugLog("[AppLocationManager] GPS outside India (\(loc.coordinate.latitude), \(loc.coordinate.longitude)) — using Chennai fallback")
-            return CLLocation(latitude: 13.0827, longitude: 80.2707) // Chennai city center
-        }
+        debugLog("[AppLocationManager] GPS location: \(loc.coordinate.latitude), \(loc.coordinate.longitude)")
+        return loc
     }
 
     // Reverse geocode to a nice display string (e.g., "Chennai, Tamil Nadu").

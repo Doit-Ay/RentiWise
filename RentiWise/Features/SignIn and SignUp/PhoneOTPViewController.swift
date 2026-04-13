@@ -205,6 +205,8 @@ final class PhoneOTPViewController: UIViewController {
         resendButton.titleLabel?.font = .preferredFont(forTextStyle: .footnote)
         resendButton.setTitleColor(brandTeal, for: .normal)
         resendButton.addTarget(self, action: #selector(sendOTPTapped), for: .touchUpInside)
+        resendButton.isHidden = true
+        resendButton.isHidden = true
 
         otpStack.axis = .vertical
         otpStack.spacing = 16

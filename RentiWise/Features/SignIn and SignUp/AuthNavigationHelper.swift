@@ -1,11 +1,5 @@
 import UIKit
 import Supabase
-#if canImport(AuthenticationServices)
-import AuthenticationServices
-#endif
-#if canImport(GoogleSignIn)
-import GoogleSignIn
-#endif
 
 enum AuthDestination {
     case signIn(routeContext: SignViewController.RoutingContext)
@@ -67,39 +61,3 @@ extension UIViewController {
         }
     }
 }
-
-#if canImport(GoogleSignIn)
-func googleSignInClientID() -> String? {
-    guard
-        let clientID = Bundle.main.infoDictionary?["GIDClientID"] as? String,
-        !clientID.isEmpty
-    else {
-        return nil
-    }
-
-    return clientID
-}
-
-func isGoogleSignInCancellation(_ error: Error) -> Bool {
-    isGoogleSignInCancellation(error as NSError)
-}
-
-private func isGoogleSignInCancellation(_ error: NSError) -> Bool {
-    if error.domain == kGIDSignInErrorDomain, error.code == GIDSignInError.canceled.rawValue {
-        return true
-    }
-
-#if canImport(AuthenticationServices)
-    if error.domain == ASWebAuthenticationSessionError.errorDomain,
-       error.code == ASWebAuthenticationSessionError.canceledLogin.rawValue {
-        return true
-    }
-#endif
-
-    if let underlyingError = error.userInfo[NSUnderlyingErrorKey] as? NSError {
-        return isGoogleSignInCancellation(underlyingError)
-    }
-
-    return false
-}
-#endif

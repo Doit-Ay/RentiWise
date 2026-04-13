@@ -169,6 +169,7 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
     // MARK: - Manage Listings state
     var isListingDataLoaded = false // track if listing data has been fetched
     var manageContainerView: UIView? // inserted inside listingUIView when user has items
+    var emptyListingBannerView: UIView? // inserted inside listingUIView when user has no items
 
     // MARK: - Cold start tracking
     /// True on first viewWillAppear; flipped to false after first load completes.
@@ -334,6 +335,7 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
         applyGlassToRentButtonsIfNeeded()
         // Apply round glass containers to notification and add-item buttons
         applyGlassToHeaderRoundButtons()
+        refreshEmptyListingBannerLayoutIfNeeded()
     }
 
 
@@ -868,34 +870,46 @@ private extension HomeViewController {
 // MARK: - Location handling (sheet + persistence)
 extension HomeViewController {
     func refreshLocationButtonTitle() {
-        // Force-clear stale non-India locations (e.g., simulator default "San Francisco")
-        if let stored = SavedAddressesStore.shared.getDefaultSelectedAddress() {
-            let lower = stored.lowercased()
-            let nonIndiaKeywords = ["san francisco", "california", "united states", "new york", "los angeles", "cupertino"]
-            if nonIndiaKeywords.contains(where: { lower.contains($0) }) {
-                SavedAddressesStore.shared.clearSelectedAddress()
-                DistanceService.shared.clearAllDistanceCaches()
-            }
-        }
-
-        // Ensure a default exists
+        // If no address is stored yet, try to resolve from GPS
         if SavedAddressesStore.shared.getDefaultSelectedAddress() == nil {
-            let defaultGeocodable = "Chennai, Tamil Nadu, India"
-            SavedAddressesStore.shared.setDefaultSelectedAddress(defaultGeocodable)
+            Task {
+                do {
+                    let loc = try await AppLocationManager.shared.currentLocation()
+                    let name = try await AppLocationManager.shared.placename(for: loc)
+                    SavedAddressesStore.shared.setDefaultSelectedAddress(name)
+                    DistanceService.shared.setViewerCoordinate(
+                        latitude: loc.coordinate.latitude,
+                        longitude: loc.coordinate.longitude
+                    )
+                    await MainActor.run {
+                        self.updateLocationButtonDisplay(name)
+                    }
+                } catch {
+                    await MainActor.run {
+                        self.updateLocationButtonDisplay("Current Location")
+                    }
+                }
+            }
+            // Show placeholder while GPS resolves
+            updateLocationButtonDisplay("Locating...")
+            return
         }
 
-        let storedAddress = SavedAddressesStore.shared.getDefaultSelectedAddress() ?? "Chennai"
-        
+        let storedAddress = SavedAddressesStore.shared.getDefaultSelectedAddress() ?? "Current Location"
+        updateLocationButtonDisplay(storedAddress)
+    }
+
+    private func updateLocationButtonDisplay(_ address: String) {
         let displayText: String = {
-            let trimmed = storedAddress.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty else { return "Chennai" }
+            let trimmed = address.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return "Current Location" }
             let components = trimmed.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             if let firstComponent = components.first(where: { !$0.isEmpty }) {
                 return firstComponent
             }
             return trimmed
         }()
-        
+
         locationTapped?.setTitle(displayText, for: .normal)
         locationTapped?.setTitleColor(UIColor(red: 112/255, green: 167/255, blue: 180/255, alpha: 1.0), for: .normal)
         locationTapped?.titleLabel?.font = .systemFont(ofSize: 14, weight: .semibold)

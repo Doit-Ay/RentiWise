@@ -11,7 +11,6 @@ import Supabase
 protocol SignInServicing {
     func signIn(credentials: SignInCredentials) async throws -> Session
     func upsertInitialProfile(userId: String, email: String?, fullName: String?) async throws
-    func signInWithGoogle(idToken: String, accessToken: String) async throws -> Session
 }
 
 final class SignInService: SignInServicing {
@@ -40,32 +39,6 @@ final class SignInService: SignInServicing {
                 message = error.localizedDescription
             }
             throw NSError(domain: "SignIn", code: -1, userInfo: [NSLocalizedDescriptionKey: message])
-        }
-    }
-
-    // Google Sign-In via Supabase: exchange Google tokens for a Supabase session
-    func signInWithGoogle(idToken: String, accessToken: String) async throws -> Session {
-        do {
-            // Supabase iOS supports exchanging OAuth provider tokens via signInWithIdToken
-            // Provider: .google, supply both idToken and accessToken
-            return try await client.auth.signInWithIdToken(
-                credentials: .init(
-                    provider: .google,
-                    idToken: idToken,
-                    accessToken: accessToken
-                )
-            )
-        } catch {
-            // Normalize common errors to a user-friendly message
-            let message: String
-            if let authError = error as? AuthError {
-                message = authError.errorDescription ?? "Google sign-in failed. Please try again."
-            } else if let httpError = error as? HTTPError {
-                message = httpError.errorDescription ?? "Network error. Please try again."
-            } else {
-                message = (error as NSError).localizedDescription
-            }
-            throw NSError(domain: "SignInGoogle", code: -1, userInfo: [NSLocalizedDescriptionKey: message])
         }
     }
 

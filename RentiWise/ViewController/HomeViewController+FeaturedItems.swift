@@ -11,59 +11,164 @@ import Supabase
 // MARK: - Featured items loading
 extension HomeViewController {
 
+    /// Maximum radius (in meters) within which items are shown on the home screen.
+    private static let nearbyRadiusMeters: Double = 20_000 // 20 km
+
     func loadFeaturedItems(forceRefresh: Bool = false) async {
         let me = await SupabaseManager.shared.currentUserId()
-        
-        // On cold start, use PreloadManager's cached data to avoid duplicate API call.
-        if !forceRefresh, PreloadManager.shared.isComplete, !PreloadManager.shared.allFetchedItems.isEmpty {
-            let allItems = PreloadManager.shared.allFetchedItems
-            let items = Array(allItems.sorted {
-                ($0.created_at ?? .distantPast) > ($1.created_at ?? .distantPast)
-            }.prefix(4))
 
-            // Still warm the distance cache in background
-            Task.detached(priority: .utility) {
-                await withTaskGroup(of: Void.self) { group in
-                    for item in allItems {
-                        group.addTask {
-                            _ = await DistanceService.shared.distanceText(for: item)
-                        }
+        // On cold start, use PreloadManager's cached data to avoid duplicate API call.
+        let allItems: [Item]
+        if !forceRefresh, PreloadManager.shared.isComplete, !PreloadManager.shared.allFetchedItems.isEmpty {
+            allItems = PreloadManager.shared.allFetchedItems
+        } else {
+            // Network fetch (subsequent refreshes or cache miss)
+            do {
+                allItems = try await itemsService.fetchItems(category: "")
+            } catch {
+                await MainActor.run {
+                    self.applyFeatured(items: [], currentUserId: me)
+                }
+                return
+            }
+        }
+
+        // Warm the distance cache for all items in background
+        Task.detached(priority: .utility) {
+            await withTaskGroup(of: Void.self) { group in
+                for item in allItems {
+                    group.addTask {
+                        _ = await DistanceService.shared.distanceText(for: item)
                     }
                 }
             }
+        }
 
-            await MainActor.run {
-                self.applyFeatured(items: items, currentUserId: me)
-                self.updateTrendingItems(from: allItems)
+        // Filter items within 20km radius and sort by distance (nearest first)
+        let nearbyItems = await filterAndSortByDistance(allItems, radiusMeters: Self.nearbyRadiusMeters)
+
+        let featured = Array(nearbyItems.prefix(4))
+
+        await MainActor.run {
+            self.applyFeatured(items: featured, currentUserId: me)
+            self.updateTrendingItems(from: nearbyItems)
+
+            // Show or hide the "Be the first to list" banner
+            if nearbyItems.isEmpty && !allItems.isEmpty {
+                self.showNoNearbyItemsBanner(true)
+            } else {
+                self.showNoNearbyItemsBanner(false)
             }
+        }
+    }
+
+    /// Filters items within the given radius and sorts by distance ascending.
+    private func filterAndSortByDistance(_ items: [Item], radiusMeters: Double) async -> [Item] {
+        // Compute distances concurrently
+        let itemsWithDistance: [(Item, Double)] = await withTaskGroup(of: (Item, Double).self) { group in
+            for item in items {
+                group.addTask {
+                    let meters = await DistanceService.shared.rankingDistanceMeters(for: item)
+                    return (item, meters)
+                }
+            }
+            var results: [(Item, Double)] = []
+            for await result in group {
+                results.append(result)
+            }
+            return results
+        }
+
+        // Filter within radius and sort by distance
+        return itemsWithDistance
+            .filter { $0.1 <= radiusMeters || $0.1 == 0 } // 0 means own item
+            .sorted { $0.1 < $1.1 }
+            .map { $0.0 }
+    }
+
+    /// Shows/hides a "Be the first to list" banner above the featured section.
+    @MainActor
+    func showNoNearbyItemsBanner(_ show: Bool) {
+        let bannerTag = 9876
+
+        if !show {
+            view.viewWithTag(bannerTag)?.removeFromSuperview()
             return
         }
 
-        // Network fetch (subsequent refreshes or cache miss)
-        do {
-            let allItems = try await itemsService.fetchItems(category: "")
-            let items = Array(allItems.sorted {
-                ($0.created_at ?? .distantPast) > ($1.created_at ?? .distantPast)
-            }.prefix(4))
+        // Don't add duplicate
+        if view.viewWithTag(bannerTag) != nil { return }
 
-            Task.detached(priority: .utility) {
-                await withTaskGroup(of: Void.self) { group in
-                    for item in allItems {
-                        group.addTask {
-                            _ = await DistanceService.shared.distanceText(for: item)
-                        }
-                    }
-                }
-            }
+        let banner = UIView()
+        banner.tag = bannerTag
+        banner.translatesAutoresizingMaskIntoConstraints = false
+        banner.backgroundColor = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 0.12)
+        banner.layer.cornerRadius = 14
+        banner.layer.borderWidth = 1
+        banner.layer.borderColor = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 0.3).cgColor
 
-            await MainActor.run {
-                self.applyFeatured(items: items, currentUserId: me)
-                self.updateTrendingItems(from: allItems)
-            }
-        } catch {
-            await MainActor.run {
-                self.applyFeatured(items: [], currentUserId: me)
-            }
+        let icon = UIImageView(image: UIImage(systemName: "mappin.and.ellipse"))
+        icon.tintColor = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1.0)
+        icon.contentMode = .scaleAspectFit
+        icon.translatesAutoresizingMaskIntoConstraints = false
+
+        let titleLabel = UILabel()
+        titleLabel.text = "No items nearby yet!"
+        titleLabel.font = .systemFont(ofSize: 16, weight: .semibold)
+        titleLabel.textColor = .label
+
+        let subtitleLabel = UILabel()
+        subtitleLabel.text = "Be the first to list your items in this area and start earning."
+        subtitleLabel.font = .systemFont(ofSize: 13, weight: .regular)
+        subtitleLabel.textColor = .secondaryLabel
+        subtitleLabel.numberOfLines = 2
+
+        let textStack = UIStackView(arrangedSubviews: [titleLabel, subtitleLabel])
+        textStack.axis = .vertical
+        textStack.spacing = 4
+        textStack.translatesAutoresizingMaskIntoConstraints = false
+
+        banner.addSubview(icon)
+        banner.addSubview(textStack)
+
+        NSLayoutConstraint.activate([
+            icon.leadingAnchor.constraint(equalTo: banner.leadingAnchor, constant: 16),
+            icon.centerYAnchor.constraint(equalTo: banner.centerYAnchor),
+            icon.widthAnchor.constraint(equalToConstant: 32),
+            icon.heightAnchor.constraint(equalToConstant: 32),
+            textStack.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 12),
+            textStack.trailingAnchor.constraint(equalTo: banner.trailingAnchor, constant: -16),
+            textStack.topAnchor.constraint(equalTo: banner.topAnchor, constant: 14),
+            textStack.bottomAnchor.constraint(equalTo: banner.bottomAnchor, constant: -14)
+        ])
+
+        // Insert the banner into the featured items stack view
+        if let stackView = item1CardView?.superview as? UIStackView {
+            stackView.insertArrangedSubview(banner, at: 0)
+        } else if let featuredCard = item1CardView?.superview ?? item1CardView {
+            let container: UIView = featuredCard.superview ?? self.view
+            container.addSubview(banner)
+            NSLayoutConstraint.activate([
+                banner.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
+                banner.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
+                banner.bottomAnchor.constraint(equalTo: featuredCard.topAnchor, constant: -12)
+            ])
+        } else {
+            // Fallback: place near the top of the scroll content
+            view.addSubview(banner)
+            NSLayoutConstraint.activate([
+                banner.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 16),
+                banner.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16),
+                banner.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 200)
+            ])
+        }
+
+        // Subtle entrance animation
+        banner.alpha = 0
+        banner.transform = CGAffineTransform(translationX: 0, y: 10)
+        UIView.animate(withDuration: 0.35, delay: 0.1, options: .curveEaseOut) {
+            banner.alpha = 1
+            banner.transform = .identity
         }
     }
 

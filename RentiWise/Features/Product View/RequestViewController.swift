@@ -812,19 +812,6 @@ class RequestViewController: UIViewController {
             return "Your borrowing is temporarily frozen until \(formatter.string(from: freezeUntil))."
         }
 
-        let declaredValue = item.declared_value ?? 0
-
-        if profile.totalRentalsAsBorrower == 0 && declaredValue > 1500 {
-            return "To keep borrowing safe for both lenders and new members, higher-value items unlock after your first completed rental. Right now, new accounts can request items up to ₹1,500. Once you finish one rental, this limit is removed."
-        }
-
-        if profile.totalRentalsAsBorrower > 0,
-           profile.averageRating > 0,
-           profile.averageRating < 3.5,
-           declaredValue > 2000 {
-            return "Your rating must be 3.5 or higher to borrow items above 2,000 INR."
-        }
-
         return nil
     }
 

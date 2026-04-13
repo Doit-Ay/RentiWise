@@ -6,9 +6,6 @@
 //
 
 import UIKit
-#if canImport(GoogleSignIn)
-import GoogleSignIn
-#endif
 
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -33,16 +30,5 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     func application(_ application: UIApplication,
                      didDiscardSceneSessions sceneSessions: Set<UISceneSession>) {
         // Release any resources that were specific to the discarded scenes.
-    }
-
-    func application(_ app: UIApplication,
-                     open url: URL,
-                     options: [UIApplication.OpenURLOptionsKey : Any] = [:]) -> Bool {
-#if canImport(GoogleSignIn)
-        if GIDSignIn.sharedInstance.handle(url) {
-            return true
-        }
-#endif
-        return false
     }
 }

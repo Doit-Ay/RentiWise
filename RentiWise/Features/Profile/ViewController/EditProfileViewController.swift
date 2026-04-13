@@ -35,7 +35,6 @@ class EditProfileViewController: UITableViewController {
             phone: "",
             phoneVerified: false,
             kycStatus: "unverified",
-            isLenderPro: false,
             upiId: "",
             collegeEmail: "",
             isCollegeVerified: false,

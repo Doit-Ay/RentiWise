@@ -2,7 +2,6 @@ import Foundation
 
 enum StoredAuthProvider: String {
     case password
-    case google
 }
 
 enum AuthSessionStateStore {

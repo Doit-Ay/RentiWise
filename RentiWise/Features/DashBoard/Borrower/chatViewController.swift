@@ -300,6 +300,15 @@ final class ChatThreadViewController: UIViewController {
                 return
             }
 
+            // Content moderation check (UGC Guideline 1.2)
+            if let violation = ChatContentFilter.check(text) {
+                await MainActor.run {
+                    self.inputField.text = text // restore text so user can edit
+                    self.presentError(violation)
+                }
+                return
+            }
+
             // Optimistic UX: clear input immediately
             await MainActor.run { self.inputField.text = nil }
 

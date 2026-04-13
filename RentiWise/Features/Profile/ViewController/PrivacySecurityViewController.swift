@@ -198,8 +198,8 @@ enum LegalDocument {
             Your choices:
             - You can update profile information inside the app.
             - You can review blocked users from Privacy & Security.
-            - You can delete your account by contacting support@rentiwise.com. That flow is designed to remove your login, profile, listings, requests, messages, support history, and saved data from Rentiwise.
-            - For privacy questions or deletion help, contact support@rentiwise.com.
+            - You can delete your account from the Manage Data section in the app. That flow is designed to remove your login, profile, listings, requests, messages, support history, and saved data from Rentiwise.
+            - If the secure deletion flow is unavailable or you need privacy help, contact support@rentiwise.com.
             """
         }
     }

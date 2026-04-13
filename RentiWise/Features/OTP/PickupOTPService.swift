@@ -45,24 +45,7 @@ final class PickupOTPService {
         return code
     }
 
-    // MARK: - Borrower: Regenerate Pickup Code
 
-    func regeneratePickupCode(requestId: String) async throws -> String {
-        let request = try await fetchRequest(requestId: requestId)
-        try await assertBorrowerAccess(for: request)
-
-        guard request.rentalStatus == .accepted else {
-            throw makeError("Pickup OTP can only be generated while the request is awaiting handoff.")
-        }
-
-        guard let payment = try await fetchLatestConfirmedPayment(requestId: requestId) else {
-            throw makeError("Payment must be confirmed before generating a pickup OTP.")
-        }
-
-        let code = generateCode()
-        try await storePickupCodeOnPayment(code, paymentId: payment.id)
-        return code
-    }
 
     // MARK: - Lender: Verify Pickup Code
 

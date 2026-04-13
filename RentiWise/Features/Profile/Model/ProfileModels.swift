@@ -15,7 +15,6 @@ struct UserProfile {
     let phone: String
     let phoneVerified: Bool
     let kycStatus: String
-    let isLenderPro: Bool
     let upiId: String
     let collegeEmail: String
     let isCollegeVerified: Bool

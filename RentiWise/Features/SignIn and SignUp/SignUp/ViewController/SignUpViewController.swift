@@ -7,9 +7,6 @@
 
 import UIKit
 import Supabase
-#if canImport(GoogleSignIn)
-import GoogleSignIn
-#endif
 
 @MainActor
 final class SignUpViewController: UIViewController, UITextViewDelegate {
@@ -17,6 +14,7 @@ final class SignUpViewController: UIViewController, UITextViewDelegate {
     @IBOutlet private weak var authFormStackView: UIStackView!
     @IBOutlet private weak var signUpEmailText: UITextField!
     @IBOutlet private weak var signUpPasswordText: UITextField!
+    @IBOutlet private weak var signUpConfirmPasswordText: UITextField!
     @IBOutlet private weak var signUpFullNameText: UITextField!
     @IBOutlet private weak var signUpNumberText: UITextField!
     @IBOutlet private weak var signUpButton: UIButton!
@@ -25,7 +23,6 @@ final class SignUpViewController: UIViewController, UITextViewDelegate {
     private let validation = AuthValidationService()
     private var signUpService: SignUpServicing
     private var isLoading: Bool = false
-    private let signInService = SignInService()
     private var hasAcceptedAccountLegalConsent = false
     private let legalNoticeTextView = UITextView()
 
@@ -53,9 +50,14 @@ final class SignUpViewController: UIViewController, UITextViewDelegate {
         signUpEmailText?.keyboardType = .emailAddress
         signUpEmailText?.autocapitalizationType = .none
         signUpPasswordText?.isSecureTextEntry = true
-        signUpPasswordText?.textContentType = .oneTimeCode /* Disables the yellow strong password overlay */
+        signUpPasswordText?.textContentType = .oneTimeCode
         signUpPasswordText?.autocorrectionType = .no
         signUpPasswordText?.spellCheckingType = .no
+
+        signUpConfirmPasswordText?.isSecureTextEntry = true
+        signUpConfirmPasswordText?.textContentType = .oneTimeCode
+        signUpConfirmPasswordText?.autocorrectionType = .no
+        signUpConfirmPasswordText?.spellCheckingType = .no
 
         signUpFullNameText?.autocapitalizationType = .words
         signUpFullNameText?.autocorrectionType = .no
@@ -70,7 +72,9 @@ final class SignUpViewController: UIViewController, UITextViewDelegate {
             action: #selector(backToProfile)
         )
 
-        configureSocialAuthButtons()
+        // Hide social auth (Google) — only manual sign-up is supported
+        socialAuthStackView?.isHidden = true
+
         configureLegalNotice()
     }
 
@@ -93,13 +97,11 @@ final class SignUpViewController: UIViewController, UITextViewDelegate {
         present(alert, animated: true)
     }
 
+    // Legacy IBAction kept so XIB connection doesn't crash; does nothing
     @IBAction private func GoogleSignIn(_ sender: UIButton) {
-#if canImport(GoogleSignIn)
-        Task { await signUpWithGoogle() }
-#else
-        presentAlert(title: "Unavailable", message: "Google Sign-In isn't available in this build.")
-#endif
+        // Google Sign-In removed — no-op
     }
+
     @IBAction private func signUpTapped(_ sender: UIButton) {
         Task { await signUp() }
     }
@@ -129,11 +131,16 @@ final class SignUpViewController: UIViewController, UITextViewDelegate {
 
         let email = signUpEmailText.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let password = signUpPasswordText.text ?? ""
+        let confirmPassword = signUpConfirmPasswordText.text ?? ""
         let fullName = signUpFullNameText.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let phone = signUpNumberText.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
 
-        guard !email.isEmpty, !password.isEmpty, !fullName.isEmpty else {
-            presentAlert(title: "Missing fields", message: "Please enter name, email and password.")
+        guard !email.isEmpty, !password.isEmpty, !confirmPassword.isEmpty, !fullName.isEmpty else {
+            presentAlert(title: "Missing fields", message: "Please fill in all the required fields.")
+            return
+        }
+        guard password == confirmPassword else {
+            presentAlert(title: "Passwords do not match", message: "Your password and confirm password must be the same.")
             return
         }
         guard validation.isValidEmail(email) else {
@@ -161,6 +168,7 @@ final class SignUpViewController: UIViewController, UITextViewDelegate {
                     profile: profile
                 )
                 AuthSessionStateStore.markSignedIn(provider: .password)
+                await DeviceSessionManager.registerDeviceSession(userId: session.user.id.uuidString)
 
                 // Sanity-check the session is live
                 _ = try await SupabaseManager.shared.client.auth.session
@@ -176,60 +184,6 @@ final class SignUpViewController: UIViewController, UITextViewDelegate {
             presentAlert(title: "Sign Up Failed", message: error.localizedDescription)
         }
     }
-
-    private func signUpWithGoogle() async {
-#if canImport(GoogleSignIn)
-        guard await ensureAccountLegalConsentIfNeeded(anchor: signUpButton) else { return }
-        guard !isLoading else { return }
-
-        isLoading = true
-        signUpButton?.isEnabled = false
-        setSocialButtonsEnabled(false)
-        defer {
-            isLoading = false
-            signUpButton?.isEnabled = true
-            setSocialButtonsEnabled(true)
-        }
-
-        do {
-            guard let clientID = googleSignInClientID() else {
-                presentAlert(title: "Configuration Error", message: "Google Client ID is missing from this build.")
-                return
-            }
-
-            GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: clientID)
-
-            let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: self)
-            guard let idToken = result.user.idToken?.tokenString else {
-                presentAlert(title: "Google Sign-In Failed", message: "Missing Google ID token.")
-                return
-            }
-
-            let session = try await signInService.signInWithGoogle(
-                idToken: idToken,
-                accessToken: result.user.accessToken.tokenString
-            )
-            let fullName = googleDisplayName(from: session.user)
-
-            try await signInService.upsertInitialProfile(
-                userId: session.user.id.uuidString,
-                email: session.user.email,
-                fullName: fullName
-            )
-            AuthSessionStateStore.markSignedIn(provider: .google)
-
-            _ = try await SupabaseManager.shared.client.auth.session
-            await MainActor.run { self.routeToProfileTab() }
-        } catch {
-            if isGoogleSignInCancellation(error) { return }
-            presentAlert(title: "Google Sign-In Failed", message: error.localizedDescription)
-        }
-#else
-        presentAlert(title: "Unavailable", message: "Google Sign-In isn't available in this build.")
-#endif
-    }
-
-
 
     private func configureLegalNotice() {
         legalNoticeTextView.translatesAutoresizingMaskIntoConstraints = false
@@ -289,31 +243,6 @@ final class SignUpViewController: UIViewController, UITextViewDelegate {
         return false
     }
 
-    private func configureSocialAuthButtons() {
-        socialAuthStackView?.isHidden = false
-        socialAuthStackView?.arrangedSubviews
-            .compactMap { $0 as? UIButton }
-            .forEach {
-                $0.setTitle(nil, for: .normal)
-                $0.setAttributedTitle(nil, for: .normal)
-                $0.accessibilityLabel = "Continue with Google"
-                if var configuration = $0.configuration {
-                    configuration.title = nil
-                    $0.configuration = configuration
-                }
-            }
-    }
-
-    private func setSocialButtonsEnabled(_ isEnabled: Bool) {
-        socialAuthStackView?.arrangedSubviews
-            .compactMap { $0 as? UIButton }
-            .forEach { $0.isEnabled = isEnabled }
-    }
-
-    private func googleDisplayName(from user: User) -> String? {
-        user.userMetadata["full_name"]?.stringValue ?? user.userMetadata["name"]?.stringValue
-    }
-
     private func ensureAccountLegalConsentIfNeeded(anchor: UIView?) async -> Bool {
         if hasAcceptedAccountLegalConsent { return true }
 
@@ -345,10 +274,6 @@ final class SignUpViewController: UIViewController, UITextViewDelegate {
             present(alert, animated: true)
         }
     }
-
-    // MARK: - Phone Verification (disabled — MSG91 pending)
-    // Phone OTP verification is temporarily disabled.
-    // Users proceed directly to the app after sign-up.
 
     // MARK: - Routing to Profile tab
     private func routeToProfileTab() {

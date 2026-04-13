@@ -201,11 +201,100 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
+    // MARK: - 1-Hour Return Reminder
+
+    /// Schedules a local notification **1 hour before** the rental return deadline.
+    /// Call this on the borrower's device once the rental becomes active (status = "approved").
+    /// - Parameters:
+    ///   - requestId: Unique booking ID (dedup key).
+    ///   - itemTitle: Item name for the notification body.
+    ///   - endDateString: "yyyy-MM-dd" end date.
+    ///   - pickupTimeString: Optional "HH:mm:ssXXXXX" pickup time.
+    ///   - rentalUnit: "hour" or "day".
+    func scheduleReturnReminder(
+        requestId: String,
+        itemTitle: String,
+        endDateString: String,
+        pickupTimeString: String? = nil,
+        rentalUnit: String = "day"
+    ) {
+        ensureAuthorizedThenSchedule { [weak self] in
+            guard let self else { return }
+
+            let calendar = Calendar.current
+            let dateFormatter = DateFormatter()
+            dateFormatter.calendar = Calendar(identifier: .gregorian)
+            dateFormatter.timeZone = .current
+            dateFormatter.dateFormat = "yyyy-MM-dd"
+
+            guard let endDate = dateFormatter.date(from: endDateString) else {
+                debugLog("[Notifications] Could not parse end date: \(endDateString)")
+                return
+            }
+
+            // Compute the actual return deadline
+            let returnDeadline: Date
+            if rentalUnit == "hour", let pickupStr = pickupTimeString, !pickupStr.isEmpty {
+                // For hourly rentals the end_date might be same-day; combine end_date + pickup_time
+                let timeParser = DateFormatter()
+                timeParser.calendar = Calendar(identifier: .gregorian)
+                timeParser.timeZone = .current
+                timeParser.dateFormat = "HH:mm:ssXXXXX"
+                if let time = timeParser.date(from: pickupStr) {
+                    let timeComps = calendar.dateComponents([.hour, .minute], from: time)
+                    var combined = calendar.dateComponents([.year, .month, .day], from: endDate)
+                    combined.hour = timeComps.hour
+                    combined.minute = timeComps.minute
+                    returnDeadline = calendar.date(from: combined) ?? endDate
+                } else {
+                    returnDeadline = endDate
+                }
+            } else {
+                // Daily rentals: end of the rental day (default 6 PM if no specific time)
+                var endComps = calendar.dateComponents([.year, .month, .day], from: endDate)
+                endComps.hour = 18  // Default 6 PM deadline for daily rentals
+                endComps.minute = 0
+                returnDeadline = calendar.date(from: endComps) ?? endDate
+            }
+
+            // Schedule 1 hour before the deadline
+            guard let reminderDate = calendar.date(byAdding: .hour, value: -1, to: returnDeadline),
+                  reminderDate > Date()
+            else {
+                debugLog("[Notifications] Return reminder in the past — skipping")
+                return
+            }
+
+            let components = calendar.dateComponents(
+                [.year, .month, .day, .hour, .minute],
+                from: reminderDate
+            )
+
+            let content = UNMutableNotificationContent()
+            content.title = "Return Due Soon ⏰"
+            content.body = "Your rental of \"\(itemTitle)\" ends in 1 hour. Please arrange to return it to the lender."
+            content.sound = .default
+            content.categoryIdentifier = "RETURN_REMINDER"
+
+            let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+            let id = "return_reminder_\(requestId)"
+
+            let request = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
+            self.center.add(request) { error in
+                if let error = error {
+                    debugLog("[Notifications] Failed to schedule return reminder: \(error)")
+                } else {
+                    debugLog("[Notifications] Scheduled return reminder for \(requestId) at \(reminderDate)")
+                }
+            }
+        }
+    }
+
     // MARK: - Cleanup
 
     /// Removes all pending notifications for a specific request (e.g., after completion/cancellation).
     func cancelNotifications(forRequestId requestId: String) {
-        let prefixes = ["rental_due_\(requestId)", "status_\(requestId)"]
+        let prefixes = ["rental_due_\(requestId)", "status_\(requestId)", "return_reminder_\(requestId)"]
         center.getPendingNotificationRequests { requests in
             let idsToRemove = requests
                 .map(\.identifier)

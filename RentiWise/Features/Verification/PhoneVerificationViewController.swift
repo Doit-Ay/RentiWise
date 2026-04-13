@@ -289,13 +289,14 @@ final class PhoneVerificationViewController: UIViewController, UITextFieldDelega
         resendButton.addTarget(self, action: #selector(resendTapped), for: .touchUpInside)
         resendButton.isEnabled = false
         resendStack.addArrangedSubview(resendButton)
+        resendStack.isHidden = true
 
         cooldownLabel.text = ""
         cooldownLabel.font = .systemFont(ofSize: 13)
         cooldownLabel.textColor = captionColor
-        cooldownLabel.textAlignment = .center
         resendStack.addArrangedSubview(cooldownLabel)
 
+        resendStack.isHidden = true // Disabled per single-OTP requirement
         contentStack.addArrangedSubview(resendStack)
 
         // Change number

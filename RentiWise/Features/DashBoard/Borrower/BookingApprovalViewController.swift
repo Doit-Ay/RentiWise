@@ -1385,7 +1385,7 @@ class BookingApprovalViewController: UIViewController {
         guard mode == .myRentals else {
             paymentButton.isHidden = true
             paymentButton.isEnabled = false
-            paymentButton.alpha = 0.5
+            paymentButton.alpha = 0
             paymentStatus?.isHidden = true
             viewCodeUIView.isHidden = true
             viewCodeHeight?.constant = 0
@@ -1397,7 +1397,7 @@ class BookingApprovalViewController: UIViewController {
 
         paymentButton.isHidden = !showsPaymentCTA
         paymentButton.isEnabled = showsPaymentCTA
-        paymentButton.alpha = showsPaymentCTA ? 1.0 : 0.5
+        paymentButton.alpha = showsPaymentCTA ? 1.0 : 0  // Must be 0 when hidden to prevent overlap with paymentStatus
 
         paymentStatus?.isHidden = showsPaymentCTA
 
@@ -1459,6 +1459,7 @@ class BookingApprovalViewController: UIViewController {
             tickimage.tintColor = .white
             // Hide payment and action buttons
             paymentButton.isHidden = true
+            paymentButton.alpha = 0  // Ensure it doesn't overlap paymentStatus
             extendReturnButtonsStack?.isHidden = true
             returnStatusLabel?.isHidden = true
             extensionStatusLabel?.isHidden = true
@@ -1469,6 +1470,7 @@ class BookingApprovalViewController: UIViewController {
             tickimage.tintColor = .white
             // Hide payment and action buttons
             paymentButton.isHidden = true
+            paymentButton.alpha = 0  // Ensure it doesn't overlap paymentStatus
             extendReturnButtonsStack?.isHidden = true
             returnStatusLabel?.isHidden = true
             extensionStatusLabel?.isHidden = true
@@ -1480,6 +1482,7 @@ class BookingApprovalViewController: UIViewController {
             circ2?.backgroundColor = brandTeal
             // Hide payment and action buttons (rental is done)
             paymentButton.isHidden = true
+            paymentButton.alpha = 0  // Ensure it doesn't overlap paymentStatus
             extendReturnButtonsStack?.isHidden = true
             returnStatusLabel?.isHidden = true
             extensionStatusLabel?.isHidden = true
@@ -1498,6 +1501,12 @@ class BookingApprovalViewController: UIViewController {
         // Update paymentStatus label to show rental status text
         updatePaymentStatusLabel()
         refreshPaymentRowVisibility()
+
+        // Ensure paymentStatus label is visible and in front when payment button is hidden
+        if paymentButton.isHidden, let statusLabel = paymentStatus {
+            statusLabel.font = .systemFont(ofSize: 15, weight: .medium)
+            statusView?.bringSubviewToFront(statusLabel)
+        }
 
         // Update extend/return button titles based on current request status
         updateReturnButtonForRequestStatus()
@@ -1588,6 +1597,12 @@ class BookingApprovalViewController: UIViewController {
             ownNameLabel?.text = mode == .history ? "Loading borrower..." : "Loading lender..."
             renderOwnerInitials(fullName: participantFallback)
         }
+
+        // Schedule 1-hour return reminder for active rentals (approved/pickup_verified)
+        let currentDBStatus = req.rentalStatus
+        if currentDBStatus == .approved {
+            scheduleReturnReminderIfNeeded(for: req)
+        }
     }
 
     private func selectClause() -> String {
@@ -1605,6 +1620,7 @@ class BookingApprovalViewController: UIViewController {
     }
 
     private func mapRefreshedRow(_ fresh: RequestWithItem) {
+        let previousStatus = self.request?.status.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         self.request = fresh
         
         // Recompute the presentation to handle extended dates and time
@@ -1620,6 +1636,13 @@ class BookingApprovalViewController: UIViewController {
         }
         
         self.updateDatesUI()
+        
+        // Schedule 1-hour return reminder when the rental becomes active
+        let freshStatus = fresh.status.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if (freshStatus == "approved" || freshStatus == "pickup_verified"),
+           previousStatus != "approved", previousStatus != "pickup_verified" {
+            scheduleReturnReminderIfNeeded(for: fresh)
+        }
         
         // Also fire off a UI update for the new amounts (so the price breakdown updates)
         Task { [weak self] in
@@ -2351,5 +2374,25 @@ class BookingApprovalViewController: UIViewController {
             }
             present(a, animated: true)
         }
+    }
+
+    // MARK: - Return Reminder Scheduling
+
+    /// Schedules a 1-hour-before-end local notification when the rental becomes active.
+    /// Uses a UserDefaults flag to avoid re-scheduling on every DB refresh cycle.
+    private func scheduleReturnReminderIfNeeded(for req: RequestWithItem) {
+        let key = "return_reminder_scheduled_\(req.id)"
+        guard !UserDefaults.standard.bool(forKey: key) else { return }
+
+        NotificationService.shared.scheduleReturnReminder(
+            requestId: req.id,
+            itemTitle: req.items?.title ?? "Item",
+            endDateString: req.end_date,
+            pickupTimeString: req.pickup_time,
+            rentalUnit: req.rental_unit ?? "day"
+        )
+
+        UserDefaults.standard.set(true, forKey: key)
+        debugLog("[BookingApproval] Scheduled 1-hour return reminder for request \(req.id)")
     }
 }

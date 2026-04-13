@@ -1,9 +1,6 @@
 import UIKit
 import Supabase
 import CoreLocation
-#if canImport(GoogleSignIn)
-import GoogleSignIn
-#endif
 
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
@@ -60,6 +57,15 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     func sceneDidBecomeActive(_ scene: UIScene) {
         Task {
+            // Single-device enforcement: verify this device's session is still valid
+            if let userId = await SupabaseManager.shared.currentUserId() {
+                let isValid = await DeviceSessionManager.validateDeviceSession(userId: userId)
+                if !isValid {
+                    await MainActor.run { DeviceSessionManager.forceSignOutWithAlert() }
+                    return  // Don't proceed with other work
+                }
+            }
+
             // Only reuse location if the user already granted access.
             // This avoids prompting for permissions during app activation.
             let coordinates = await AppLocationManager.shared.currentCoordinates()
@@ -106,10 +112,10 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             guard existing.isEmpty else { return }
 
             // Reverse geocode to fill required columns
-            var city = "Chennai"
-            var state = "Tamil Nadu"
-            var country = "India"
-            var postalCode = "600001"
+            var city = "Unknown"
+            var state = ""
+            var country = ""
+            var postalCode = ""
             var addressLine1 = "Auto-detected location"
 
             let location = CLLocation(latitude: lat, longitude: lon)
@@ -233,12 +239,6 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
         // Handle exactly one URL, once.
         guard let url = URLContexts.first?.url else { return }
-
-#if canImport(GoogleSignIn)
-        if GIDSignIn.sharedInstance.handle(url) {
-            return
-        }
-#endif
 
         // Handle deep links for item sharing (rentiwise://item/{id})
         handleDeepLink(url)

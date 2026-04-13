@@ -14,10 +14,11 @@ final class DistanceService {
     private let ttl: TimeInterval = 30 * 24 * 60 * 60
     private let transportType: MKDirectionsTransportType = .automobile
     private let viewerAddressCacheTTL: TimeInterval = 5 * 60
-    private let defaultViewerAddress = "Chennai, Tamil Nadu, India"
+    private let defaultViewerAddress = "Current Location"
 
-    // Fallback coordinate: Chennai city center. Used when all else fails.
-    private let fallbackCoordinate = CLLocation(latitude: 13.0827, longitude: 80.2707)
+    // Fallback coordinate: used only when ALL lookups fail (no GPS, no DB, no saved address).
+    // This is a last-resort and should rarely be hit.
+    private let fallbackCoordinate = CLLocation(latitude: 0.0, longitude: 0.0)
 
     // MARK: - In-memory caches
     private var geocodeCache = NSCache<NSString, CLLocation>()
@@ -28,14 +29,14 @@ final class DistanceService {
     private let geocoder = CLGeocoder()
 
     // MARK: - UserDefaults keys for the viewer's resolved default address
-    private let viewerAddressUserIdKey = "RW_ViewerAddressUserId"
-    private let viewerAddressLatKey = "RW_ViewerAddressLatitude"
-    private let viewerAddressLonKey = "RW_ViewerAddressLongitude"
-    private let viewerAddressHashKey = "RW_ViewerAddressHash"
-    private let viewerAddressFetchedAtKey = "RW_ViewerAddressFetchedAt"
+    private let viewerAddressUserIdKeyBase = "RW_ViewerAddressUserId"
+    private let viewerAddressLatKeyBase = "RW_ViewerAddressLatitude"
+    private let viewerAddressLonKeyBase = "RW_ViewerAddressLongitude"
+    private let viewerAddressHashKeyBase = "RW_ViewerAddressHash"
+    private let viewerAddressFetchedAtKeyBase = "RW_ViewerAddressFetchedAt"
     /// When true, the viewer coordinate was explicitly set by the user (e.g. picking a saved address).
     /// In this case, resolveViewerAddress() should NOT overwrite it with the DB default.
-    private let viewerAddressExplicitKey = "RW_ViewerAddressExplicit"
+    private let viewerAddressExplicitKeyBase = "RW_ViewerAddressExplicit"
 
     private init(client: SupabaseClient = SupabaseManager.shared.client) {
         self.client = client
@@ -46,22 +47,36 @@ final class DistanceService {
         ownerCoordCache.countLimit = 128
     }
 
+    private func normalizedViewerScope(for userId: String? = nil) -> String {
+        let rawUserId = userId ?? SupabaseManager.shared.currentUserIdSync() ?? "anonymous"
+        let normalized = rawUserId.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return normalized.isEmpty ? "anonymous" : normalized
+    }
+
+    private func viewerAddressKey(_ baseKey: String, userId: String? = nil) -> String {
+        "\(baseKey).\(normalizedViewerScope(for: userId))"
+    }
+
     // MARK: - Public API
 
     /// Returns the viewer's resolved coordinate from the local cache, or nil if it has not
     /// been resolved from `addresses` yet.
     func cachedViewerCoordinate() -> CLLocation? {
-        cachedViewerAddressLocation()
+        cachedViewerAddressLocation(for: normalizedViewerScope())
     }
 
     func clearViewerAddressCache() {
+        clearViewerAddressCache(for: normalizedViewerScope())
+    }
+
+    private func clearViewerAddressCache(for userId: String) {
         let defaults = UserDefaults.standard
-        defaults.removeObject(forKey: viewerAddressUserIdKey)
-        defaults.removeObject(forKey: viewerAddressLatKey)
-        defaults.removeObject(forKey: viewerAddressLonKey)
-        defaults.removeObject(forKey: viewerAddressHashKey)
-        defaults.removeObject(forKey: viewerAddressFetchedAtKey)
-        defaults.removeObject(forKey: viewerAddressExplicitKey)
+        defaults.removeObject(forKey: viewerAddressKey(viewerAddressUserIdKeyBase, userId: userId))
+        defaults.removeObject(forKey: viewerAddressKey(viewerAddressLatKeyBase, userId: userId))
+        defaults.removeObject(forKey: viewerAddressKey(viewerAddressLonKeyBase, userId: userId))
+        defaults.removeObject(forKey: viewerAddressKey(viewerAddressHashKeyBase, userId: userId))
+        defaults.removeObject(forKey: viewerAddressKey(viewerAddressFetchedAtKeyBase, userId: userId))
+        defaults.removeObject(forKey: viewerAddressKey(viewerAddressExplicitKeyBase, userId: userId))
     }
 
     /// Clears ALL distance caches — viewer address, in-memory directions/geocode, and owner cache.
@@ -77,7 +92,7 @@ final class DistanceService {
     /// Directly set the viewer's coordinate, bypassing DB/GPS lookups.
     /// Used when the user picks a saved address with known lat/lon from the location picker.
     func setViewerCoordinate(latitude: Double, longitude: Double) {
-        let userId = SupabaseManager.shared.currentUserIdSync() ?? "anonymous"
+        let userId = normalizedViewerScope()
         let location = CLLocation(latitude: latitude, longitude: longitude)
         let resolved = ResolvedAddressCoordinate(
             userId: userId,
@@ -89,7 +104,7 @@ final class DistanceService {
         ownerCoordCache.removeAllObjects()
         saveViewerAddress(resolved)
         // Mark as explicitly set so resolveViewerAddress doesn't overwrite with DB default
-        UserDefaults.standard.set(true, forKey: viewerAddressExplicitKey)
+        UserDefaults.standard.set(true, forKey: viewerAddressKey(viewerAddressExplicitKeyBase, userId: userId))
         print("[DistanceService] Viewer coordinate explicitly set: \(latitude), \(longitude)")
     }
 
@@ -261,18 +276,35 @@ final class DistanceService {
 
     private func resolveViewerAddress() async -> ResolvedAddressCoordinate {
         // Use a placeholder user id when not logged in so we can still compute distance
-        let userId = await SupabaseManager.shared.currentUserId() ?? "anonymous"
+        let userId = normalizedViewerScope(for: await SupabaseManager.shared.currentUserId())
 
         if let cached = cachedViewerAddress(for: userId) {
             return cached
         }
 
         // Check if user explicitly set coordinates via location picker.
-        // If so, honour the explicit selection and DON'T overwrite with the DB default.
-        let isExplicit = UserDefaults.standard.bool(forKey: viewerAddressExplicitKey)
+        let isExplicit = UserDefaults.standard.bool(forKey: viewerAddressKey(viewerAddressExplicitKeyBase, userId: userId))
 
+        // 1) HIGHEST PRIORITY: Try device GPS (real-time location)
         if !isExplicit {
-            // 1) Try DB addresses table first (user's saved default address — most reliable)
+            if let coordinates = await AppLocationManager.shared.currentCoordinates() {
+                let location = CLLocation(latitude: coordinates.latitude, longitude: coordinates.longitude)
+                let resolved = ResolvedAddressCoordinate(
+                    userId: userId,
+                    location: location,
+                    hash: viewerAddressHash(for: location)
+                )
+                print("[DistanceService] Viewer resolved from GPS: \(coordinates.latitude), \(coordinates.longitude)")
+                saveViewerAddress(resolved)
+                if userId != "anonymous" {
+                    await autoSaveAddressIfNeeded(userId: userId, location: location)
+                }
+                return resolved
+            }
+        }
+
+        // 2) Try DB addresses table (user's saved default address)
+        if !isExplicit {
             if userId != "anonymous", let resolved = await fetchViewerAddressCoordinate(userId: userId) {
                 print("[DistanceService] Viewer resolved from DB: \(resolved.location.coordinate.latitude), \(resolved.location.coordinate.longitude)")
                 saveViewerAddress(resolved)
@@ -280,11 +312,9 @@ final class DistanceService {
             }
         }
 
-        // 2) Try SavedAddressesStore (local UserDefaults — user's explicit selection)
+        // 3) Try SavedAddressesStore (local UserDefaults — user's explicit selection)
         let savedAddress = SavedAddressesStore.shared.getDefaultSelectedAddress()?.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let savedAddress, !savedAddress.isEmpty {
-            // Check if it looks like coordinates were encoded (from setViewerCoordinate)
-            // Otherwise geocode the text
+        if let savedAddress, !savedAddress.isEmpty, savedAddress != "Current Location" {
             if let location = await geocodeAddressString(savedAddress) {
                 let resolved = ResolvedAddressCoordinate(
                     userId: userId,
@@ -297,31 +327,30 @@ final class DistanceService {
             }
         }
 
-        // 3) If explicit was set but the cache expired, fall back to DB now
+        // 4) If explicit was set but the cache expired, fall back to DB now
         if isExplicit, userId != "anonymous", let resolved = await fetchViewerAddressCoordinate(userId: userId) {
             print("[DistanceService] Viewer resolved from DB (explicit cache expired): \(resolved.location.coordinate.latitude), \(resolved.location.coordinate.longitude)")
             saveViewerAddress(resolved)
             return resolved
         }
 
-        // 4) Try device GPS (only if no saved address exists)
-        if let coordinates = await AppLocationManager.shared.currentCoordinates() {
-            let location = CLLocation(latitude: coordinates.latitude, longitude: coordinates.longitude)
+        // 5) Ultimate fallback: try GPS one more time with authorization prompt
+        do {
+            let loc = try await AppLocationManager.shared.currentLocation()
             let resolved = ResolvedAddressCoordinate(
                 userId: userId,
-                location: location,
-                hash: viewerAddressHash(for: location)
+                location: loc,
+                hash: viewerAddressHash(for: loc)
             )
-            print("[DistanceService] Viewer resolved from GPS: \(coordinates.latitude), \(coordinates.longitude)")
+            print("[DistanceService] Viewer resolved from GPS (with auth): \(loc.coordinate.latitude), \(loc.coordinate.longitude)")
             saveViewerAddress(resolved)
-            if userId != "anonymous" {
-                await autoSaveAddressIfNeeded(userId: userId, location: location)
-            }
             return resolved
+        } catch {
+            // GPS truly unavailable
         }
 
-        // 5) Ultimate fallback: hardcoded Chennai coordinate
-        print("[DistanceService] Viewer: ALL lookups failed, using Chennai fallback")
+        // 6) No location at all — return a zero-coordinate marker
+        print("[DistanceService] ⚠️ Viewer: ALL lookups failed, no location available")
         let resolved = ResolvedAddressCoordinate(
             userId: userId,
             location: fallbackCoordinate,
@@ -493,39 +522,43 @@ final class DistanceService {
 
     private func cachedViewerAddress(for userId: String) -> ResolvedAddressCoordinate? {
         let defaults = UserDefaults.standard
+        let viewerUserIdKey = viewerAddressKey(viewerAddressUserIdKeyBase, userId: userId)
+        let fetchedAtKey = viewerAddressKey(viewerAddressFetchedAtKeyBase, userId: userId)
+        let hashKey = viewerAddressKey(viewerAddressHashKeyBase, userId: userId)
 
-        guard defaults.string(forKey: viewerAddressUserIdKey)?.caseInsensitiveCompare(userId) == .orderedSame else {
+        guard defaults.string(forKey: viewerUserIdKey)?.caseInsensitiveCompare(userId) == .orderedSame else {
             return nil
         }
 
-        let fetchedAt = defaults.double(forKey: viewerAddressFetchedAtKey)
+        let fetchedAt = defaults.double(forKey: fetchedAtKey)
         guard fetchedAt > 0 else { return nil }
 
         let age = Date().timeIntervalSince1970 - fetchedAt
         guard age <= viewerAddressCacheTTL else { return nil }
 
-        guard let location = cachedViewerAddressLocation(),
-              let hash = defaults.string(forKey: viewerAddressHashKey) else {
+        guard let location = cachedViewerAddressLocation(for: userId),
+              let hash = defaults.string(forKey: hashKey) else {
             return nil
         }
 
         return ResolvedAddressCoordinate(userId: userId, location: location, hash: hash)
     }
 
-    private func cachedViewerAddressLocation() -> CLLocation? {
+    private func cachedViewerAddressLocation(for userId: String) -> CLLocation? {
         let defaults = UserDefaults.standard
-        let latitude = defaults.double(forKey: viewerAddressLatKey)
-        let longitude = defaults.double(forKey: viewerAddressLonKey)
+        let latitude = defaults.double(forKey: viewerAddressKey(viewerAddressLatKeyBase, userId: userId))
+        let longitude = defaults.double(forKey: viewerAddressKey(viewerAddressLonKeyBase, userId: userId))
         return validatedLocation(latitude: latitude, longitude: longitude)
     }
 
     private func saveViewerAddress(_ address: ResolvedAddressCoordinate) {
         let defaults = UserDefaults.standard
-        defaults.set(address.userId, forKey: viewerAddressUserIdKey)
-        defaults.set(address.location.coordinate.latitude, forKey: viewerAddressLatKey)
-        defaults.set(address.location.coordinate.longitude, forKey: viewerAddressLonKey)
-        defaults.set(address.hash, forKey: viewerAddressHashKey)
-        defaults.set(Date().timeIntervalSince1970, forKey: viewerAddressFetchedAtKey)
+        let userId = normalizedViewerScope(for: address.userId)
+        defaults.set(userId, forKey: viewerAddressKey(viewerAddressUserIdKeyBase, userId: userId))
+        defaults.set(address.location.coordinate.latitude, forKey: viewerAddressKey(viewerAddressLatKeyBase, userId: userId))
+        defaults.set(address.location.coordinate.longitude, forKey: viewerAddressKey(viewerAddressLonKeyBase, userId: userId))
+        defaults.set(address.hash, forKey: viewerAddressKey(viewerAddressHashKeyBase, userId: userId))
+        defaults.set(Date().timeIntervalSince1970, forKey: viewerAddressKey(viewerAddressFetchedAtKeyBase, userId: userId))
     }
 
     private func autoSaveAddressIfNeeded(userId: String, location: CLLocation) async {
@@ -554,10 +587,10 @@ final class DistanceService {
             guard existing.isEmpty else { return }
 
             // Reverse geocode to get city/state for the DB row
-            var city = "Chennai"
-            var state = "Tamil Nadu"
-            var country = "India"
-            var postalCode = "600001"
+            var city = "Unknown"
+            var state = ""
+            var country = ""
+            var postalCode = ""
             var addressLine1 = "Auto-detected location"
 
             do {

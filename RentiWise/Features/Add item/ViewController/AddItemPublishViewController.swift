@@ -123,34 +123,7 @@ class AddItemPublishViewController: UIViewController {
     }
 
     private func checkFreeTierAndPublish() async {
-        do {
-            let isPro = await IAPManager.shared.isProUser()
-            if !isPro {
-                guard let userId = await SupabaseManager.shared.currentUserId() else {
-                    await publish()
-                    return
-                }
-                let resp = try await SupabaseManager.shared.client
-                    .from("items")
-                    .select("id", head: true, count: .exact)
-                    .eq("owner_id", value: userId)
-                    .execute()
-                let count = resp.count ?? 0
-                if count >= 3 {
-                    await MainActor.run {
-                        let upgradeVC = UpgradeProViewController()
-                        upgradeVC.hidesBottomBarWhenPushed = true
-                        upgradeVC.onSubscribed = { [weak self] in
-                            Task { await self?.publish() }
-                        }
-                        self.navigationController?.pushViewController(upgradeVC, animated: true)
-                    }
-                    return
-                }
-            }
-        } catch {
-            debugLog("[AddItem] Free tier check error: \(error)")
-        }
+        // Lender Pro removed — all users can publish unlimited listings
         await publish()
     }
 

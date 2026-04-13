@@ -17,13 +17,9 @@ final class BorrowerOTPViewController: UIViewController {
     // MARK: - UI
     private let otpLabel = UILabel()
     private let instructionLabel = UILabel()
-    private let regenerateButton = UIButton(type: .system)
     private let spinner = UIActivityIndicatorView(style: .large)
     private let statusLabel = UILabel()
     private let brandTeal = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1.0)
-
-    private var cooldownTimer: Timer?
-    private var cooldownSeconds = 0
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -33,9 +29,7 @@ final class BorrowerOTPViewController: UIViewController {
         loadPickupOTP()
     }
 
-    deinit {
-        cooldownTimer?.invalidate()
-    }
+
 
     // MARK: - UI Setup
     private func setupUI() {
@@ -54,12 +48,7 @@ final class BorrowerOTPViewController: UIViewController {
         otpLabel.text = "----"
         otpLabel.translatesAutoresizingMaskIntoConstraints = false
 
-        // Regenerate button
-        regenerateButton.setTitle("Regenerate Code", for: .normal)
-        regenerateButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
-        regenerateButton.tintColor = brandTeal
-        regenerateButton.addTarget(self, action: #selector(regenerateTapped), for: .touchUpInside)
-        regenerateButton.translatesAutoresizingMaskIntoConstraints = false
+
 
         // Status label (for cooldown)
         statusLabel.font = .systemFont(ofSize: 14)
@@ -73,7 +62,7 @@ final class BorrowerOTPViewController: UIViewController {
         spinner.color = brandTeal
         spinner.translatesAutoresizingMaskIntoConstraints = false
 
-        let stack = UIStackView(arrangedSubviews: [instructionLabel, otpLabel, spinner, regenerateButton, statusLabel])
+        let stack = UIStackView(arrangedSubviews: [instructionLabel, otpLabel, spinner, statusLabel])
         stack.axis = .vertical
         stack.spacing = 24
         stack.alignment = .center
@@ -93,8 +82,6 @@ final class BorrowerOTPViewController: UIViewController {
         spinner.startAnimating()
         otpLabel.text = "----"
         statusLabel.text = "Loading pickup code..."
-        regenerateButton.isHidden = true
-        regenerateButton.isEnabled = false
 
         Task {
             do {
@@ -102,9 +89,7 @@ final class BorrowerOTPViewController: UIViewController {
                 await MainActor.run {
                     self.spinner.stopAnimating()
                     self.otpLabel.text = code
-                    self.regenerateButton.isHidden = false
-                    self.regenerateButton.isEnabled = true
-                    self.statusLabel.text = "Only the borrower can generate this pickup OTP."
+                    self.statusLabel.text = "Show this code to the lender at pickup."
                 }
             } catch {
                 await MainActor.run {
@@ -115,8 +100,6 @@ final class BorrowerOTPViewController: UIViewController {
                     self.spinner.stopAnimating()
                     self.otpLabel.text = "Error"
                     self.statusLabel.text = error.localizedDescription
-                    self.regenerateButton.isHidden = false
-                    self.regenerateButton.isEnabled = true
                 }
             }
         }
@@ -129,55 +112,5 @@ final class BorrowerOTPViewController: UIViewController {
         otpLabel.font = .systemFont(ofSize: 34, weight: .bold)
         otpLabel.text = "No Code"
         statusLabel.text = message
-        regenerateButton.isHidden = true
-        regenerateButton.isEnabled = false
-    }
-
-    // MARK: - Regenerate OTP
-    private func generateOTP() {
-        spinner.startAnimating()
-        otpLabel.text = "----"
-        regenerateButton.isHidden = false
-        regenerateButton.isEnabled = false
-        statusLabel.text = "Generating pickup code..."
-
-        Task {
-            do {
-                let code = try await PickupOTPService.shared.regeneratePickupCode(requestId: requestId)
-
-                await MainActor.run {
-                    self.spinner.stopAnimating()
-                    self.otpLabel.text = code
-                    self.startCooldown()
-                    self.statusLabel.text = "Only the borrower can generate this pickup OTP."
-                }
-            } catch {
-                await MainActor.run {
-                    self.spinner.stopAnimating()
-                    self.otpLabel.text = "Error"
-                    self.statusLabel.text = error.localizedDescription
-                    self.regenerateButton.isEnabled = true
-                }
-            }
-        }
-    }
-
-    @objc private func regenerateTapped() {
-        generateOTP()
-    }
-
-    // MARK: - Cooldown
-    private func startCooldown() {
-        cooldownSeconds = 30
-        regenerateButton.isEnabled = false
-        cooldownTimer?.invalidate()
-        cooldownTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] timer in
-            guard let self = self else { timer.invalidate(); return }
-            self.cooldownSeconds -= 1
-            if self.cooldownSeconds <= 0 {
-                timer.invalidate()
-                self.regenerateButton.isEnabled = true
-            }
-        }
     }
 }

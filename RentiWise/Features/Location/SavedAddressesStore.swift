@@ -13,15 +13,31 @@ final class SavedAddressesStore {
     static let shared = SavedAddressesStore()
 
     private let defaults: UserDefaults
-    private let addressesKey = "rw.savedAddresses"
-    private let selectedAddressKey = "rw.selectedAddress"
+    private let currentUserIdProvider: () -> String?
+    private let addressesKeyBase = "rw.savedAddresses"
+    private let selectedAddressKeyBase = "rw.selectedAddress"
 
-    init(defaults: UserDefaults = .standard) {
+    init(
+        defaults: UserDefaults = .standard,
+        currentUserIdProvider: @escaping () -> String? = { SupabaseManager.shared.currentUserIdSync() }
+    ) {
         self.defaults = defaults
+        self.currentUserIdProvider = currentUserIdProvider
         bootstrapIfNeeded()
     }
 
     // MARK: - Bootstrap
+
+    private func scopedKey(for baseKey: String) -> String {
+        let scope = currentUserIdProvider()?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        let normalizedScope = (scope?.isEmpty == false) ? scope! : "guest"
+        return "\(baseKey).\(normalizedScope)"
+    }
+
+    private var addressesKey: String { scopedKey(for: addressesKeyBase) }
+    private var selectedAddressKey: String { scopedKey(for: selectedAddressKeyBase) }
 
     private func bootstrapIfNeeded() {
         // Do not seed demo data. If nothing saved yet, keep it empty.
@@ -33,7 +49,8 @@ final class SavedAddressesStore {
     // MARK: - Addresses CRUD
 
     func allAddresses() -> [String] {
-        (defaults.array(forKey: addressesKey) as? [String]) ?? []
+        bootstrapIfNeeded()
+        return (defaults.array(forKey: addressesKey) as? [String]) ?? []
     }
 
     func add(_ address: String) {
@@ -71,6 +88,7 @@ final class SavedAddressesStore {
     }
 
     func replaceAll(with addresses: [String]) {
+        bootstrapIfNeeded()
         let trimmed = addresses
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
@@ -80,6 +98,7 @@ final class SavedAddressesStore {
     // MARK: - Selected address
 
     func setDefaultSelectedAddress(_ address: String) {
+        bootstrapIfNeeded()
         let trimmed = address.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             defaults.removeObject(forKey: selectedAddressKey)
@@ -91,6 +110,7 @@ final class SavedAddressesStore {
     }
 
     func getDefaultSelectedAddress() -> String? {
+        bootstrapIfNeeded()
         guard let s = defaults.string(forKey: selectedAddressKey),
               !s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return nil
@@ -99,6 +119,7 @@ final class SavedAddressesStore {
     }
 
     func clearSelectedAddress() {
+        bootstrapIfNeeded()
         defaults.removeObject(forKey: selectedAddressKey)
     }
     

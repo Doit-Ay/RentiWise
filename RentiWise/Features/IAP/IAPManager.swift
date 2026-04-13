@@ -3,9 +3,8 @@
 //  RentiWise
 //
 //  Manages in-app purchase entitlements.
-//  Payment processing is handled by Razorpay (see RazorpayPaymentService).
-//  This manager handles entitlement checks against the user_entitlements table.
-//  Products: Listing Boost (consumable), Lender Pro (subscription), Verified Badge (non-consumable).
+//  Lender Pro and in-app payment features have been removed.
+//  All users have unlimited access.
 //
 
 import Foundation
@@ -16,34 +15,17 @@ final class IAPManager {
 
     static let shared = IAPManager()
 
-    // Product IDs
+    // Product IDs (retained for entitlement checks only)
     static let boostProductId = "com.rentiwise.boost7"
-    static let lenderProProductId = "com.rentiwise.lenderpro"
     static let verifiedBadgeProductId = "com.rentiwise.verifiedbadge"
 
     private init() {}
 
     // MARK: - Entitlement Checks
 
+    /// Always returns true — Lender Pro has been removed and all users have unlimited access.
     func isProUser() async -> Bool {
-        guard let userId = await currentUserId() else { return false }
-        do {
-            struct EntRow: Decodable { let id: String }
-            let resp = try await SupabaseManager.shared.client
-                .from("user_entitlements")
-                .select("id")
-                .eq("user_id", value: userId)
-                .eq("product_id", value: Self.lenderProProductId)
-                .eq("is_active", value: true)
-                .gt("expires_at", value: ISO8601DateFormatter().string(from: Date()))
-                .limit(1)
-                .execute()
-            let rows = try JSONDecoder().decode([EntRow].self, from: resp.data)
-            return !rows.isEmpty
-        } catch {
-            debugLog("[IAP] Error checking pro status: \(error)")
-            return false
-        }
+        return true
     }
 
     func hasBoostedItem(itemId: String) async -> Bool {

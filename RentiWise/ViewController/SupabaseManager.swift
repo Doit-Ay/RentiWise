@@ -118,8 +118,10 @@ final class SupabaseManager {
     func signOut() async throws {
         defer {
             AuthSessionStateStore.clear()
+            DeviceSessionManager.clearLocalToken()
             CommunitySafetyService.shared.clearLocalState()
             PreloadManager.shared.reset()
+            DistanceService.shared.clearAllDistanceCaches()
         }
         try await client.auth.signOut()
     }

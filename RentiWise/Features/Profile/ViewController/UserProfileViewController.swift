@@ -27,6 +27,9 @@ final class UserProfileViewController: UIViewController, UITableViewDataSource, 
     private let listingsHeaderLabel = UILabel()
     private let statusLabel = UILabel()
     private let listingsTableView = UITableView(frame: .zero, style: .insetGrouped)
+    private let emptyStateBannerView = UIView()
+    private let emptyStateTitleLabel = UILabel()
+    private let emptyStateIconView = UIImageView()
     private let emptyStateLabel = UILabel()
     private var listings: [Item] = []
     private let currencyFormatter: NumberFormatter = {
@@ -98,15 +101,34 @@ final class UserProfileViewController: UIViewController, UITableViewDataSource, 
         statusLabel.isHidden = true
         view.addSubview(statusLabel)
 
-        // Empty state
+        // Empty state banner
+        emptyStateBannerView.translatesAutoresizingMaskIntoConstraints = false
+        emptyStateBannerView.backgroundColor = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 0.10)
+        emptyStateBannerView.layer.cornerRadius = 18
+        emptyStateBannerView.layer.borderWidth = 1
+        emptyStateBannerView.layer.borderColor = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 0.22).cgColor
+        emptyStateBannerView.isHidden = true
+        view.addSubview(emptyStateBannerView)
+
+        emptyStateIconView.translatesAutoresizingMaskIntoConstraints = false
+        emptyStateIconView.image = UIImage(systemName: "shippingbox")
+        emptyStateIconView.tintColor = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1.0)
+        emptyStateIconView.contentMode = .scaleAspectFit
+        emptyStateBannerView.addSubview(emptyStateIconView)
+
+        emptyStateTitleLabel.translatesAutoresizingMaskIntoConstraints = false
+        emptyStateTitleLabel.font = .systemFont(ofSize: 17, weight: .semibold)
+        emptyStateTitleLabel.textColor = .label
+        emptyStateTitleLabel.text = "No active listings"
+        emptyStateBannerView.addSubview(emptyStateTitleLabel)
+
         emptyStateLabel.translatesAutoresizingMaskIntoConstraints = false
-        emptyStateLabel.font = .systemFont(ofSize: 15, weight: .regular)
+        emptyStateLabel.font = .systemFont(ofSize: 14, weight: .regular)
         emptyStateLabel.textColor = .secondaryLabel
-        emptyStateLabel.textAlignment = .center
+        emptyStateLabel.textAlignment = .left
         emptyStateLabel.numberOfLines = 0
-        emptyStateLabel.text = "This user has no active listings right now."
-        emptyStateLabel.isHidden = true
-        view.addSubview(emptyStateLabel)
+        emptyStateLabel.text = "This user has not published any live listings yet. Check back later for availability."
+        emptyStateBannerView.addSubview(emptyStateLabel)
 
         // Listings table
         listingsTableView.translatesAutoresizingMaskIntoConstraints = false
@@ -140,9 +162,23 @@ final class UserProfileViewController: UIViewController, UITableViewDataSource, 
             statusLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
             statusLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
 
-            emptyStateLabel.topAnchor.constraint(equalTo: statusLabel.bottomAnchor, constant: 12),
-            emptyStateLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
-            emptyStateLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
+            emptyStateBannerView.topAnchor.constraint(equalTo: statusLabel.bottomAnchor, constant: 16),
+            emptyStateBannerView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            emptyStateBannerView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+
+            emptyStateIconView.leadingAnchor.constraint(equalTo: emptyStateBannerView.leadingAnchor, constant: 18),
+            emptyStateIconView.topAnchor.constraint(equalTo: emptyStateBannerView.topAnchor, constant: 18),
+            emptyStateIconView.widthAnchor.constraint(equalToConstant: 24),
+            emptyStateIconView.heightAnchor.constraint(equalToConstant: 24),
+
+            emptyStateTitleLabel.topAnchor.constraint(equalTo: emptyStateBannerView.topAnchor, constant: 18),
+            emptyStateTitleLabel.leadingAnchor.constraint(equalTo: emptyStateIconView.trailingAnchor, constant: 12),
+            emptyStateTitleLabel.trailingAnchor.constraint(equalTo: emptyStateBannerView.trailingAnchor, constant: -18),
+
+            emptyStateLabel.topAnchor.constraint(equalTo: emptyStateTitleLabel.bottomAnchor, constant: 8),
+            emptyStateLabel.leadingAnchor.constraint(equalTo: emptyStateTitleLabel.leadingAnchor),
+            emptyStateLabel.trailingAnchor.constraint(equalTo: emptyStateBannerView.trailingAnchor, constant: -18),
+            emptyStateLabel.bottomAnchor.constraint(equalTo: emptyStateBannerView.bottomAnchor, constant: -18),
 
             listingsTableView.topAnchor.constraint(equalTo: statusLabel.bottomAnchor, constant: 8),
             listingsTableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
@@ -163,8 +199,9 @@ final class UserProfileViewController: UIViewController, UITableViewDataSource, 
         if safetyService.isBlocked(userId) {
             statusLabel.text = "You have blocked this user."
             statusLabel.isHidden = false
+            listingsHeaderLabel.text = nil
             listingsHeaderLabel.isHidden = true
-            emptyStateLabel.isHidden = true
+            emptyStateBannerView.isHidden = true
             listingsTableView.isHidden = true
             return
         }
@@ -237,6 +274,10 @@ final class UserProfileViewController: UIViewController, UITableViewDataSource, 
 
                 await MainActor.run {
                     self.listings = fetched
+                    if self.statusLabel.text == "We couldn't load this user's listings right now." {
+                        self.statusLabel.text = nil
+                        self.statusLabel.isHidden = true
+                    }
                     self.refreshListingsUI()
                 }
             } catch {
@@ -255,9 +296,12 @@ final class UserProfileViewController: UIViewController, UITableViewDataSource, 
     private func refreshListingsUI() {
         guard !safetyService.isBlocked(userId) else { return }
 
-        listingsHeaderLabel.isHidden = false
-        listingsHeaderLabel.text = listings.isEmpty ? "Listings" : "Listings (\(listings.count))"
-        emptyStateLabel.isHidden = !listings.isEmpty
+        let hasStatusMessage = !(statusLabel.text?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+        let shouldShowEmptyBanner = listings.isEmpty && !hasStatusMessage
+
+        listingsHeaderLabel.text = listings.isEmpty ? nil : "Listings (\(listings.count))"
+        listingsHeaderLabel.isHidden = listings.isEmpty
+        emptyStateBannerView.isHidden = !shouldShowEmptyBanner
         listingsTableView.isHidden = listings.isEmpty
         listingsTableView.reloadData()
     }
@@ -281,8 +325,9 @@ final class UserProfileViewController: UIViewController, UITableViewDataSource, 
             if isBlocked {
                 self.safetyService.unblock(userId: self.userId)
                 self.presentInfo("User Unblocked", message: "Their content will be visible again.")
+                self.statusLabel.text = nil
                 self.statusLabel.isHidden = true
-                self.listingsHeaderLabel.isHidden = false
+                self.loadListings()
             } else {
                 self.confirmBlockUser()
             }
@@ -391,7 +436,10 @@ final class UserProfileViewController: UIViewController, UITableViewDataSource, 
             self.safetyService.block(userId: self.userId, displayName: self.displayName ?? "User")
             self.statusLabel.text = "You have blocked this user."
             self.statusLabel.isHidden = false
+            self.listingsHeaderLabel.text = nil
             self.listingsHeaderLabel.isHidden = true
+            self.emptyStateBannerView.isHidden = true
+            self.listingsTableView.isHidden = true
             self.presentInfo("User Blocked", message: "Their content is now hidden from your account.")
         })
         present(alert, animated: true)

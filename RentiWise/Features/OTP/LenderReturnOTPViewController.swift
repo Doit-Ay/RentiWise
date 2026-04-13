@@ -19,13 +19,9 @@ final class LenderReturnOTPViewController: UIViewController {
     // MARK: - UI
     private let otpLabel = UILabel()
     private let instructionLabel = UILabel()
-    private let regenerateButton = UIButton(type: .system)
     private let spinner = UIActivityIndicatorView(style: .large)
     private let statusLabel = UILabel()
     private let brandTeal = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1.0)
-
-    private var cooldownTimer: Timer?
-    private var cooldownSeconds = 0
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -35,9 +31,7 @@ final class LenderReturnOTPViewController: UIViewController {
         generateOTP()
     }
 
-    deinit {
-        cooldownTimer?.invalidate()
-    }
+
 
     // MARK: - UI Setup
     private func setupUI() {
@@ -54,11 +48,7 @@ final class LenderReturnOTPViewController: UIViewController {
         otpLabel.text = "----"
         otpLabel.translatesAutoresizingMaskIntoConstraints = false
 
-        regenerateButton.setTitle("Regenerate Code", for: .normal)
-        regenerateButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
-        regenerateButton.tintColor = brandTeal
-        regenerateButton.addTarget(self, action: #selector(regenerateTapped), for: .touchUpInside)
-        regenerateButton.translatesAutoresizingMaskIntoConstraints = false
+
 
         statusLabel.font = .systemFont(ofSize: 14)
         statusLabel.textColor = .secondaryLabel
@@ -69,7 +59,7 @@ final class LenderReturnOTPViewController: UIViewController {
         spinner.color = brandTeal
         spinner.translatesAutoresizingMaskIntoConstraints = false
 
-        let stack = UIStackView(arrangedSubviews: [instructionLabel, otpLabel, spinner, regenerateButton, statusLabel])
+        let stack = UIStackView(arrangedSubviews: [instructionLabel, otpLabel, spinner, statusLabel])
         stack.axis = .vertical
         stack.spacing = 24
         stack.alignment = .center
@@ -89,7 +79,6 @@ final class LenderReturnOTPViewController: UIViewController {
         spinner.startAnimating()
         otpLabel.text = "----"
         statusLabel.text = "Generating return code..."
-        regenerateButton.isEnabled = false
 
         Task {
             do {
@@ -102,44 +91,20 @@ final class LenderReturnOTPViewController: UIViewController {
                         self.spinner.stopAnimating()
                         self.otpLabel.text = "Error"
                         self.statusLabel.text = errorMessage
-                        self.regenerateButton.isEnabled = true
                         return
                     }
 
                     self.spinner.stopAnimating()
                     self.otpLabel.text = result.otp
                     self.onCodeGenerated?()
-                    self.startCooldown()
+                    self.statusLabel.text = "Show this code to the borrower at return."
                 }
             } catch {
                 await MainActor.run {
                     self.spinner.stopAnimating()
                     self.otpLabel.text = "Error"
                     self.statusLabel.text = error.localizedDescription
-                    self.regenerateButton.isEnabled = true
                 }
-            }
-        }
-    }
-
-    @objc private func regenerateTapped() {
-        generateOTP()
-    }
-
-    private func startCooldown() {
-        cooldownSeconds = 30
-        regenerateButton.isEnabled = false
-        statusLabel.text = "Regenerate available in \(cooldownSeconds)s"
-        cooldownTimer?.invalidate()
-        cooldownTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] timer in
-            guard let self = self else { timer.invalidate(); return }
-            self.cooldownSeconds -= 1
-            if self.cooldownSeconds <= 0 {
-                timer.invalidate()
-                self.regenerateButton.isEnabled = true
-                self.statusLabel.text = ""
-            } else {
-                self.statusLabel.text = "Regenerate available in \(self.cooldownSeconds)s"
             }
         }
     }

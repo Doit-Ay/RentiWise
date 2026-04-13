@@ -22,6 +22,7 @@ class RequestApprovalViewController: UIViewController {
     private var bookingId: String = ""
     private var requestData: [String: Any] = [:]
     private var currentSubRequestStatus: String = "pending"
+    private var rentalUnit: String = "day"  // Track rental unit for proper display
     
     // MARK: - IBOutlets
     
@@ -164,10 +165,9 @@ class RequestApprovalViewController: UIViewController {
                 
                 await MainActor.run {
                     self.currentSubRequestStatus = request.status.lowercased()
-                    self.originalEndDateLabel?.text = "Original End: \(request.original_end_date)"
-                    self.newEndDateLabel?.text = "New End: \(request.new_end_date)"
-                    // The unit label will be corrected in fetchBookingDetails once rental_unit is loaded
-                    self.additionalDaysLabel?.text = "\(request.additional_days) additional day\(request.additional_days == 1 ? "" : "s") - ₹\(String(format: "%.0f", request.additional_cost))"
+                    self.originalEndDateLabel?.text = "Original End: \(self.formatDateString(request.original_end_date))"
+                    self.newEndDateLabel?.text = "New End: \(self.formatDateString(request.new_end_date))"
+                    self.additionalDaysLabel?.text = "\(request.additional_days) additional \(self.rentalUnit == "hour" ? "hour" : "day")\(request.additional_days == 1 ? "" : "s") - ₹\(String(format: "%.0f", request.additional_cost))"
                     self.updateUI()
                 }
             }
@@ -215,11 +215,24 @@ class RequestApprovalViewController: UIViewController {
             await fetchBorrowerName(borrowerId: booking.borrower_id)
             
             await MainActor.run {
-                self.rentalPeriodLabel?.text = "\(booking.start_date) to \(booking.end_date)"
-                if booking.rental_unit == "hour" {
-                    if let text = self.additionalDaysLabel?.text {
-                        self.additionalDaysLabel?.text = text.replacingOccurrences(of: "days", with: "hours")
-                    }
+                self.rentalUnit = booking.rental_unit ?? "day"
+                let startFormatted = self.formatDateString(booking.start_date)
+                let endFormatted = self.formatDateString(booking.end_date)
+
+                // Calculate and display duration
+                let durationText = self.calculateDuration(start: booking.start_date, end: booking.end_date, unit: self.rentalUnit)
+
+                if startFormatted == endFormatted {
+                    // Same day — show single date with duration
+                    self.rentalPeriodLabel?.text = "\(startFormatted) · \(durationText)"
+                } else {
+                    self.rentalPeriodLabel?.text = "\(startFormatted) → \(endFormatted) · \(durationText)"
+                }
+
+                // Re-format extension labels with correct unit now that we know rental_unit
+                if let text = self.additionalDaysLabel?.text, self.rentalUnit == "hour" {
+                    self.additionalDaysLabel?.text = text.replacingOccurrences(of: "days", with: "hours")
+                        .replacingOccurrences(of: "day", with: "hour")
                 }
             }
         } catch {
@@ -607,5 +620,46 @@ class RequestApprovalViewController: UIViewController {
             onConfirm()
         })
         present(alert, animated: true)
+    }
+
+    // MARK: - Date Formatting Helpers
+
+    /// Converts a raw date string ("2026-04-11" or ISO8601) into a user-friendly format ("Apr 11, 2026").
+    private func formatDateString(_ raw: String) -> String {
+        // Try yyyy-MM-dd first
+        let inputFormatter = DateFormatter()
+        inputFormatter.locale = Locale(identifier: "en_US_POSIX")
+
+        for format in ["yyyy-MM-dd", "yyyy-MM-dd'T'HH:mm:ss", "yyyy-MM-dd'T'HH:mm:ssZ", "yyyy-MM-dd'T'HH:mm:ss.SSSZ"] {
+            inputFormatter.dateFormat = format
+            if let date = inputFormatter.date(from: raw) {
+                let outputFormatter = DateFormatter()
+                outputFormatter.dateFormat = "MMM d, yyyy"
+                outputFormatter.locale = Locale(identifier: "en_IN")
+                return outputFormatter.string(from: date)
+            }
+        }
+        return raw  // Fallback to raw if parsing fails
+    }
+
+    /// Calculates a human-readable duration string between two date strings.
+    private func calculateDuration(start: String, end: String, unit: String) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+
+        for format in ["yyyy-MM-dd", "yyyy-MM-dd'T'HH:mm:ss", "yyyy-MM-dd'T'HH:mm:ssZ"] {
+            formatter.dateFormat = format
+            if let startDate = formatter.date(from: start),
+               let endDate = formatter.date(from: end) {
+                if unit == "hour" {
+                    let hours = max(1, Int(endDate.timeIntervalSince(startDate) / 3600))
+                    return "\(hours) hour\(hours == 1 ? "" : "s")"
+                } else {
+                    let days = max(1, Calendar.current.dateComponents([.day], from: startDate, to: endDate).day ?? 1)
+                    return "\(days) day\(days == 1 ? "" : "s")"
+                }
+            }
+        }
+        return unit == "hour" ? "hourly" : "daily"
     }
 }

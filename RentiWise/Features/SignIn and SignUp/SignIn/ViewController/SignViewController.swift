@@ -7,9 +7,6 @@
 
 import UIKit
 import Supabase
-#if canImport(GoogleSignIn)
-import GoogleSignIn
-#endif
 
 @MainActor
 final class SignViewController: UIViewController, UITextViewDelegate {
@@ -68,14 +65,16 @@ final class SignViewController: UIViewController, UITextViewDelegate {
             action: #selector(backToProfile)
         )
 
-
         signInEmailText?.keyboardType = UIKeyboardType.emailAddress
         signInEmailText?.autocapitalizationType = UITextAutocapitalizationType.none
         signInPasswordText?.isSecureTextEntry = true
         signInPasswordText?.textContentType = .oneTimeCode /* Disables the yellow strong password overlay */
         signInPasswordText?.autocorrectionType = .no
         signInPasswordText?.spellCheckingType = .no
-        configureSocialAuthButtons()
+
+        // Hide social auth (Google) — only manual sign-in is supported
+        socialAuthStackView?.isHidden = true
+
         configureLegalNotice()
     }
     
@@ -86,13 +85,12 @@ final class SignViewController: UIViewController, UITextViewDelegate {
     }
 
     // MARK: - Actions
+
+    // Legacy IBAction kept so XIB connection doesn't crash; does nothing
     @IBAction private func GoogleSignIn(_ sender: UIButton) {
-#if canImport(GoogleSignIn)
-        Task { await signInWithGoogle() }
-#else
-        presentAlert(title: "Unavailable", message: "Google Sign-In isn't available in this build.")
-#endif
+        // Google Sign-In removed — no-op
     }
+
     @IBAction private func forgotPassword(_ sender: UIButton) {
         let vc = ForgotPasswordViewController(nibName: "ForgotPasswordViewController", bundle: nil)
         vc.title = ""
@@ -111,8 +109,8 @@ final class SignViewController: UIViewController, UITextViewDelegate {
         Task { await signIn() }
     }
 
-    // NEW: IBAction for “Sign Up” button at the bottom
-    // Connect your button’s Touch Up Inside to this action (signUpSwitch:)
+    // NEW: IBAction for "Sign Up" button at the bottom
+    // Connect your button's Touch Up Inside to this action (signUpSwitch:)
     @IBAction private func signUpSwitch(_ sender: UIButton) {
         let nibName = "SignUpViewController"
         let vc: SignUpViewController
@@ -181,6 +179,7 @@ final class SignViewController: UIViewController, UITextViewDelegate {
                 fullName: session.user.userMetadata["full_name"]?.stringValue
             )
             AuthSessionStateStore.markSignedIn(provider: .password)
+            await DeviceSessionManager.registerDeviceSession(userId: session.user.id.uuidString)
 
             // Sanity-check the session is live
             _ = try await SupabaseManager.shared.client.auth.session
@@ -191,59 +190,6 @@ final class SignViewController: UIViewController, UITextViewDelegate {
             presentAlert(title: "Sign In Failed", message: error.localizedDescription)
         }
     }
-
-    private func signInWithGoogle() async {
-#if canImport(GoogleSignIn)
-        guard !isLoading else { return }
-
-        isLoading = true
-        signInButton?.isEnabled = false
-        setSocialButtonsEnabled(false)
-        defer {
-            isLoading = false
-            signInButton?.isEnabled = true
-            setSocialButtonsEnabled(true)
-        }
-
-        do {
-            guard let clientID = googleSignInClientID() else {
-                presentAlert(title: "Configuration Error", message: "Google Client ID is missing from this build.")
-                return
-            }
-
-            GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: clientID)
-
-            let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: self)
-            guard let idToken = result.user.idToken?.tokenString else {
-                presentAlert(title: "Google Sign-In Failed", message: "Missing Google ID token.")
-                return
-            }
-
-            let session = try await signInService.signInWithGoogle(
-                idToken: idToken,
-                accessToken: result.user.accessToken.tokenString
-            )
-            let fullName = googleDisplayName(from: session.user)
-
-            try await signInService.upsertInitialProfile(
-                userId: session.user.id.uuidString,
-                email: session.user.email,
-                fullName: fullName
-            )
-            AuthSessionStateStore.markSignedIn(provider: .google)
-
-            _ = try await SupabaseManager.shared.client.auth.session
-            await MainActor.run { self.routeToProfileTab() }
-        } catch {
-            if isGoogleSignInCancellation(error) { return }
-            presentAlert(title: "Google Sign-In Failed", message: error.localizedDescription)
-        }
-#else
-        presentAlert(title: "Unavailable", message: "Google Sign-In isn't available in this build.")
-#endif
-    }
-
-
 
     private func configureLegalNotice() {
         legalNoticeTextView.translatesAutoresizingMaskIntoConstraints = false
@@ -302,35 +248,6 @@ final class SignViewController: UIViewController, UITextViewDelegate {
         }
         return false
     }
-
-    private func configureSocialAuthButtons() {
-        socialAuthStackView?.isHidden = false
-        socialAuthStackView?.arrangedSubviews
-            .compactMap { $0 as? UIButton }
-            .forEach {
-                $0.setTitle(nil, for: .normal)
-                $0.setAttributedTitle(nil, for: .normal)
-                $0.accessibilityLabel = "Continue with Google"
-                if var configuration = $0.configuration {
-                    configuration.title = nil
-                    $0.configuration = configuration
-                }
-            }
-    }
-
-    private func setSocialButtonsEnabled(_ isEnabled: Bool) {
-        socialAuthStackView?.arrangedSubviews
-            .compactMap { $0 as? UIButton }
-            .forEach { $0.isEnabled = isEnabled }
-    }
-
-    private func googleDisplayName(from user: User) -> String? {
-        user.userMetadata["full_name"]?.stringValue ?? user.userMetadata["name"]?.stringValue
-    }
-
-    // MARK: - Phone Verification (disabled — MSG91 pending)
-    // Phone OTP verification is temporarily disabled.
-    // Users proceed directly to the app after sign-in.
 
     // MARK: - Auto-route if already authenticated
     private func autoRouteIfAlreadySignedIn() async {

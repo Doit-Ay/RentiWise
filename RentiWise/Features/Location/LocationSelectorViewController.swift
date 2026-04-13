@@ -182,6 +182,20 @@ final class LocationSelectorViewController: UIViewController {
         let parts = [addr.city, addr.state].filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         return parts.joined(separator: ", ")
     }
+
+    private func persistedSelectionString(for addr: Address) -> String {
+        [
+            addr.address_line1,
+            addr.address_line2,
+            addr.city,
+            addr.state,
+            addr.postal_code,
+            addr.country
+        ]
+        .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .filter { !$0.isEmpty }
+        .joined(separator: ", ")
+    }
 }
 
 // MARK: - UITableViewDataSource
@@ -292,12 +306,9 @@ extension LocationSelectorViewController: UITableViewDelegate {
                     DistanceService.shared.clearAllDistanceCaches()
                 }
 
-                // Build a geocodable string for SavedAddressesStore (city, state, country)
-                let geocodableString = [address.city, address.state, address.country]
-                    .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-                    .joined(separator: ", ")
+                let persistedSelection = self.persistedSelectionString(for: address)
                 SavedAddressesStore.shared.setDefaultSelectedAddress(
-                    geocodableString.isEmpty ? display : geocodableString
+                    persistedSelection.isEmpty ? display : persistedSelection
                 )
                 self.onSelectedAddress?(display)
             }

@@ -2,6 +2,14 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSCameraUsageDescription</key>
+	<string>RentiWise uses the camera to capture item, handoff, and damage photos for your listings and disputes.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>RentiWise uses your location while the app is open to show nearby items, pickup relevance, and distance estimates.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>RentiWise may save selected handoff or damage photos to your library when you choose to export them.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>RentiWise uses your photo library so you can attach listing and damage photos to items, handoffs, and disputes.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -14,19 +22,7 @@
 				<string>rentiwise</string>
 			</array>
 		</dict>
-		<dict>
-			<key>CFBundleTypeRole</key>
-			<string>Editor</string>
-			<key>CFBundleURLName</key>
-			<string>google-sign-in</string>
-			<key>CFBundleURLSchemes</key>
-			<array>
-				<string>com.googleusercontent.apps.1077911784517-bdqkvofusmbagv4nrdlbk8bessohh8fj</string>
-			</array>
-		</dict>
 	</array>
-	<key>GIDClientID</key>
-	<string>1077911784517-bdqkvofusmbagv4nrdlbk8bessohh8fj.apps.googleusercontent.com</string>
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>upi</string>
@@ -54,12 +50,6 @@
 			</array>
 		</dict>
 	</dict>
-	<key>com.apple.developer.nfc.readersession.iso7816.select-identifiers</key>
-	<array>
-		<string>D23300000045737445494420763335</string>
-		<string>A0000002471001</string>
-		<string>A0000002472001</string>
-		<string>00000000000000</string>
-	</array>
+
 </dict>
 </plist>

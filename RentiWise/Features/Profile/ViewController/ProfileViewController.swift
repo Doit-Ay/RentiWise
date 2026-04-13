@@ -24,7 +24,6 @@ final class ProfileViewController: UITableViewController {
     private var userPhone: String = ""
     private var phoneVerified: Bool = false
     private var kycStatus: String = "none"
-    private var isLenderPro: Bool = false
     private var currentProfile: UserProfile?
 
     private var showsAddPhoneRow: Bool {
@@ -140,7 +139,6 @@ final class ProfileViewController: UITableViewController {
             phone: userPhone,
             phoneVerified: phoneVerified,
             kycStatus: kycStatus,
-            isLenderPro: isLenderPro,
             upiId: "",
             collegeEmail: "",
             isCollegeVerified: false,
@@ -237,8 +235,7 @@ final class ProfileViewController: UITableViewController {
                 displayName: displayName,
                 email: userEmail,
                 phone: userPhone,
-                isLoggedIn: isLoggedIn,
-                isLenderPro: isLenderPro
+                isLoggedIn: isLoggedIn
             )
             return headerCell
         default:
@@ -514,7 +511,6 @@ final class ProfileViewController: UITableViewController {
                 userPhone = ""
                 phoneVerified = false
                 kycStatus = "none"
-                isLenderPro = false
             }
         }
         
@@ -539,7 +535,6 @@ final class ProfileViewController: UITableViewController {
                 self.userPhone = ""
                 self.phoneVerified = false
                 self.kycStatus = "none"
-                self.isLenderPro = false
             }
         }
     }
@@ -551,7 +546,6 @@ final class ProfileViewController: UITableViewController {
         userPhone = profile.phone
         phoneVerified = profile.phoneVerified
         kycStatus = profile.kycStatus
-        isLenderPro = profile.isLenderPro
     }
 
 
@@ -593,16 +587,12 @@ private class AccountHeaderCell: UITableViewCell {
     private let iconView = UIImageView()
     private let nameRow = UIStackView()
     private let nameLabel = UILabel()
-    private let proBadgeView = UIStackView()
-    private let proBadgeIconView = UIImageView()
-    private let proBadgeLabel = UILabel()
     private let emailLabel = UILabel()
     private let phoneLabel = UILabel()
     private let messageLabel = UILabel()
     
     // App brand color
     private let brandTeal = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0)
-    private let proGold = UIColor(red: 0.85, green: 0.65, blue: 0.13, alpha: 1.0)
     
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
@@ -628,27 +618,7 @@ private class AccountHeaderCell: UITableViewCell {
         nameRow.alignment = .center
         nameRow.spacing = 8
 
-        proBadgeView.axis = .horizontal
-        proBadgeView.alignment = .center
-        proBadgeView.spacing = 4
-        proBadgeView.isLayoutMarginsRelativeArrangement = true
-        proBadgeView.layoutMargins = UIEdgeInsets(top: 4, left: 8, bottom: 4, right: 8)
-        proBadgeView.backgroundColor = UIColor(red: 0.98, green: 0.90, blue: 0.63, alpha: 1.0)
-        proBadgeView.layer.cornerRadius = 10
-        proBadgeView.isHidden = true
-
-        proBadgeIconView.image = UIImage(systemName: "crown.fill")
-        proBadgeIconView.tintColor = UIColor(red: 0.68, green: 0.47, blue: 0.04, alpha: 1.0)
-        proBadgeIconView.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 11, weight: .semibold)
-
-        proBadgeLabel.text = "PRO"
-        proBadgeLabel.font = .systemFont(ofSize: 11, weight: .bold)
-        proBadgeLabel.textColor = UIColor(red: 0.42, green: 0.28, blue: 0.02, alpha: 1.0)
-
         nameRow.addArrangedSubview(nameLabel)
-        proBadgeView.addArrangedSubview(proBadgeIconView)
-        proBadgeView.addArrangedSubview(proBadgeLabel)
-        nameRow.addArrangedSubview(proBadgeView)
         
         // Labels stack
         let stack = UIStackView(arrangedSubviews: [nameRow, emailLabel, phoneLabel, messageLabel])
@@ -679,24 +649,9 @@ private class AccountHeaderCell: UITableViewCell {
         ])
     }
     
-    func configure(displayName: String, email: String, phone: String, isLoggedIn: Bool, isLenderPro: Bool) {
+    func configure(displayName: String, email: String, phone: String, isLoggedIn: Bool) {
         nameLabel.text = displayName.isEmpty ? "Guest User" : displayName
-        proBadgeView.isHidden = !isLenderPro
-        proBadgeView.accessibilityLabel = isLenderPro ? "Lender Pro active" : nil
-        
-        // Golden profile icon for Pro users
-        if isLenderPro {
-            iconView.tintColor = proGold
-            iconView.layer.shadowColor = proGold.cgColor
-            iconView.layer.shadowRadius = 6
-            iconView.layer.shadowOpacity = 0.5
-            iconView.layer.shadowOffset = .zero
-        } else {
-            iconView.tintColor = brandTeal
-            iconView.layer.shadowColor = nil
-            iconView.layer.shadowRadius = 0
-            iconView.layer.shadowOpacity = 0
-        }
+        iconView.tintColor = brandTeal
         
         if isLoggedIn {
             emailLabel.text = email.isEmpty ? nil : email
@@ -705,7 +660,6 @@ private class AccountHeaderCell: UITableViewCell {
             phoneLabel.isHidden = phone.isEmpty
             messageLabel.isHidden = true
         } else {
-            proBadgeView.isHidden = true
             emailLabel.isHidden = true
             phoneLabel.isHidden = true
             messageLabel.text = "Create an account to sync and manage bookings"
