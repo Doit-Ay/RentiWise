@@ -99,42 +99,48 @@ final class MapLocationPickerViewController: UIViewController {
     private func setupPin() {
         let pinCenterY = -(cardHeight / 2 + 20)
 
-        // Pulse ring
+        // Subtle pulse dot — small ring that breathes under the pin tip
         pulseRing.translatesAutoresizingMaskIntoConstraints = false
-        pulseRing.backgroundColor = brandTeal.withAlphaComponent(0.22)
-        pulseRing.layer.cornerRadius = 16
+        pulseRing.backgroundColor = brandTeal.withAlphaComponent(0.18)
+        pulseRing.layer.cornerRadius = 6
         view.addSubview(pulseRing)
         NSLayoutConstraint.activate([
             pulseRing.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            pulseRing.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: pinCenterY),
-            pulseRing.widthAnchor.constraint(equalToConstant: 32),
-            pulseRing.heightAnchor.constraint(equalToConstant: 32)
+            pulseRing.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: pinCenterY + 2),
+            pulseRing.widthAnchor.constraint(equalToConstant: 12),
+            pulseRing.heightAnchor.constraint(equalToConstant: 12)
         ])
 
-        // Shadow dot
+        // Shadow ellipse beneath pin tip
         pinShadowView.translatesAutoresizingMaskIntoConstraints = false
-        pinShadowView.backgroundColor = UIColor.black.withAlphaComponent(0.15)
-        pinShadowView.layer.cornerRadius = 4
+        pinShadowView.backgroundColor = UIColor.black.withAlphaComponent(0.12)
+        pinShadowView.layer.cornerRadius = 3.5
         view.addSubview(pinShadowView)
         NSLayoutConstraint.activate([
             pinShadowView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            pinShadowView.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: pinCenterY + 4),
-            pinShadowView.widthAnchor.constraint(equalToConstant: 12),
-            pinShadowView.heightAnchor.constraint(equalToConstant: 5)
+            pinShadowView.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: pinCenterY + 2),
+            pinShadowView.widthAnchor.constraint(equalToConstant: 10),
+            pinShadowView.heightAnchor.constraint(equalToConstant: 4)
         ])
 
-        // Pin icon
-        let pinConfig = UIImage.SymbolConfiguration(pointSize: 34, weight: .bold)
-        pinImageView.image = UIImage(systemName: "mappin.circle.fill", withConfiguration: pinConfig)
+        // Clean bare mappin — premium Apple Maps style (no circle)
+        let pinConfig = UIImage.SymbolConfiguration(pointSize: 38, weight: .bold)
+        pinImageView.image = UIImage(systemName: "mappin", withConfiguration: pinConfig)
         pinImageView.tintColor = brandTeal
         pinImageView.contentMode = .scaleAspectFit
         pinImageView.translatesAutoresizingMaskIntoConstraints = false
+        // Subtle pin drop-shadow for depth
+        pinImageView.layer.shadowColor = UIColor.black.cgColor
+        pinImageView.layer.shadowOpacity = 0.22
+        pinImageView.layer.shadowRadius = 4
+        pinImageView.layer.shadowOffset = CGSize(width: 0, height: 3)
         view.addSubview(pinImageView)
         NSLayoutConstraint.activate([
             pinImageView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            pinImageView.bottomAnchor.constraint(equalTo: view.centerYAnchor, constant: pinCenterY + 4),
-            pinImageView.widthAnchor.constraint(equalToConstant: 40),
-            pinImageView.heightAnchor.constraint(equalToConstant: 40)
+            // Pin tip (bottom of the symbol) sits at the map centre point
+            pinImageView.bottomAnchor.constraint(equalTo: view.centerYAnchor, constant: pinCenterY + 2),
+            pinImageView.widthAnchor.constraint(equalToConstant: 44),
+            pinImageView.heightAnchor.constraint(equalToConstant: 44)
         ])
 
         startPulseAnimation()
