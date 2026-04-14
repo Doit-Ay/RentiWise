@@ -52,7 +52,12 @@ extension HomeViewController {
 
         let visibleNonOwnItems = makeHomeFeedItems(from: allItems, currentUserId: me)
         let nearbyItems = await DistanceService.shared.filterItemsWithinRadius(visibleNonOwnItems)
-        let newArrivals = makeNewArrivalsItems(from: visibleNonOwnItems)
+
+        // New Arrivals: include the user's own newly-listed items (no reviews yet)
+        // so lenders can see their listings on the home feed right after publishing.
+        let allVisibleItems = CommunitySafetyService.shared.visibleItems(from: allItems)
+        let nearbyAllItems = await DistanceService.shared.filterItemsWithinRadius(allVisibleItems)
+        let newArrivals = makeNewArrivalsItems(from: nearbyAllItems, currentUserId: me)
 
         await MainActor.run {
             self.applyFeatured(items: newArrivals, currentUserId: me)
@@ -68,9 +73,16 @@ extension HomeViewController {
         }
     }
 
-    private func makeNewArrivalsItems(from items: [Item]) -> [Item] {
-        Array(
-            items
+    private func makeNewArrivalsItems(from items: [Item], currentUserId: String?) -> [Item] {
+        // New Arrivals shows items that have no reviews yet (truly "new"),
+        // sorted newest-first. The user's own items ARE included here so
+        // they can see their listing appear right after publishing.
+        let newItems = items.filter { item in
+            let hasReviews = (item.review_count ?? 0) > 0
+            return !hasReviews
+        }
+        return Array(
+            newItems
                 .sorted { lhs, rhs in
                     let lhsDate = lhs.created_at ?? .distantPast
                     let rhsDate = rhs.created_at ?? .distantPast

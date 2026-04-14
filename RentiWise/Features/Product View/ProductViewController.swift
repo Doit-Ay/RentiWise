@@ -846,7 +846,7 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         // No images: show placeholder
         guard !images.isEmpty else {
             heroImageView?.isHidden = false
-            heroImageView?.contentMode = .scaleAspectFill
+            heroImageView?.contentMode = .scaleAspectFit
             heroImageView?.image = UIImage(systemName: "photo")
             heroImageView?.tintColor = .secondaryLabel
             heroImageView?.backgroundColor = .secondarySystemBackground
@@ -856,7 +856,7 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         // One image: load into heroImageView
         if images.count == 1 {
             heroImageView?.isHidden = false
-            heroImageView?.contentMode = .scaleAspectFill
+            heroImageView?.contentMode = .scaleAspectFit
             heroImageView?.clipsToBounds = true
             heroImageView?.backgroundColor = .systemBackground  // Add background
             let path = images[0]
@@ -910,7 +910,7 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
         for (index, path) in images.enumerated() {
             let iv = UIImageView()
             iv.translatesAutoresizingMaskIntoConstraints = false
-            iv.contentMode = .scaleAspectFill
+            iv.contentMode = .scaleAspectFit
             iv.clipsToBounds = true
             iv.layer.cornerRadius = heroImageView?.layer.cornerRadius ?? 12
             iv.backgroundColor = .systemBackground
@@ -1168,9 +1168,20 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
                 editButton.isHidden = !isMine
                 editButton.isEnabled = isMine
 
+                let deleteButton = UIButton(type: .system)
+                deleteButton.setTitle("Delete", for: .normal)
+                deleteButton.titleLabel?.font = .systemFont(ofSize: 13, weight: .semibold)
+                deleteButton.setTitleColor(.systemRed, for: .normal)
+                deleteButton.addAction(UIAction(handler: { [weak self] _ in
+                    self?.confirmDeleteReview(review)
+                }), for: .touchUpInside)
+                deleteButton.isHidden = !isMine
+                deleteButton.isEnabled = isMine
+
                 topRow.addArrangedSubview(dateLabel)
                 topRow.addArrangedSubview(spacer)
                 topRow.addArrangedSubview(editButton)
+                topRow.addArrangedSubview(deleteButton)
                 v.addArrangedSubview(topRow)
 
                 // Avatar + Name + Stars
@@ -1360,6 +1371,39 @@ final class ProductViewController: UIViewController, UIScrollViewDelegate {
             .update(payload)
             .eq("id", value: reviewId)
             .execute()
+    }
+
+    private func deleteReviewInSupabase(reviewId: String) async throws {
+        _ = try await SupabaseManager.shared.client
+            .from("reviews")
+            .delete()
+            .eq("id", value: reviewId)
+            .execute()
+    }
+
+    private func confirmDeleteReview(_ review: Review) {
+        let ac = UIAlertController(title: "Delete Review", message: "Are you sure you want to delete this review?", preferredStyle: .alert)
+        ac.addAction(UIAlertAction(title: "Cancel", style: .cancel, handler: nil))
+        ac.addAction(UIAlertAction(title: "Delete", style: .destructive, handler: { [weak self] _ in
+            guard let self = self else { return }
+            Task {
+                do {
+                    try await self.deleteReviewInSupabase(reviewId: review.id)
+                } catch {
+                    await MainActor.run { self.presentError(error.localizedDescription) }
+                    return
+                }
+                
+                await MainActor.run {
+                    self.reviews.removeAll(where: { $0.id == review.id })
+                    self.renderReviews()
+                }
+                
+                // Refresh from DB to stay canonical
+                await self.loadReviews()
+            }
+        }))
+        present(ac, animated: true)
     }
 
     private func presentEditReview(_ review: Review) {

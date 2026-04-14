@@ -35,7 +35,7 @@ final class SignInService: SignInServicing {
         let lowercased = normalized.lowercased()
 
         if lowercased.contains("invalid login credentials") {
-            return "Invalid login credentials. Reset the password if needed, and make sure this email exists in Supabase Auth for the current project."
+            return "Invalid login credentials. Reset the password if needed."
         }
 
         if lowercased.contains("email not confirmed") {

@@ -34,11 +34,12 @@ extension HomeViewController {
 
     func applyGlassToRentButtonsIfNeeded() {
         let buttons: [UIButton?] = [rentButton1, rentButton2, rentButton3, rentButton4]
+        let brandTeal = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0)
         for b in buttons {
             guard let v = b else { continue }
 
             let tintColorOverride: UIColor = .white
-            let titleColor: UIColor = .label
+            let titleColor: UIColor = brandTeal
 
             var configuration = v.configuration ?? UIButton.Configuration.plain()
             var titleAttributes = AttributeContainer()

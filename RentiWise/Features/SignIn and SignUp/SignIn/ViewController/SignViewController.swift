@@ -146,6 +146,17 @@ final class SignViewController: UIViewController, UITextViewDelegate, UITextFiel
         passwordField.autocorrectionType = .no
         passwordField.spellCheckingType = .no
         passwordField.returnKeyType = .done
+        
+        let eyeButton = UIButton(type: .custom)
+        eyeButton.setImage(UIImage(systemName: "eye.slash"), for: .normal)
+        eyeButton.setImage(UIImage(systemName: "eye"), for: .selected)
+        eyeButton.tintColor = brandTeal
+        eyeButton.frame = CGRect(x: 0, y: 0, width: 40, height: 40)
+        eyeButton.addTarget(self, action: #selector(togglePasswordVisibility), for: .touchUpInside)
+        let rightViewContainer = UIView(frame: CGRect(x: 0, y: 0, width: 48, height: 40))
+        rightViewContainer.addSubview(eyeButton)
+        passwordField.rightView = rightViewContainer
+        passwordField.rightViewMode = .always
 
         for item in [emailLabel, emailField, passwordLabel, passwordField] {
             formStack.addArrangedSubview(item)
@@ -166,11 +177,14 @@ final class SignViewController: UIViewController, UITextViewDelegate, UITextFiel
 
         // Sign In button
         signInButton.translatesAutoresizingMaskIntoConstraints = false
-        signInButton.setTitle("Sign In", for: .normal)
-        signInButton.setTitleColor(.white, for: .normal)
-        signInButton.titleLabel?.font = .systemFont(ofSize: 18, weight: .semibold)
-        signInButton.backgroundColor = brandTeal
-        signInButton.layer.cornerRadius = 12
+        var config = UIButton.Configuration.filled()
+        config.baseBackgroundColor = brandTeal
+        config.baseForegroundColor = .white
+        config.background.cornerRadius = 12
+        var attributedTitle = AttributedString("Sign In")
+        attributedTitle.font = .systemFont(ofSize: 18, weight: .semibold)
+        config.attributedTitle = attributedTitle
+        signInButton.configuration = config
         signInButton.addTarget(self, action: #selector(signInTapped), for: .touchUpInside)
         contentView.addSubview(signInButton)
 
@@ -403,6 +417,11 @@ final class SignViewController: UIViewController, UITextViewDelegate, UITextFiel
         }
     }
 
+    @objc private func togglePasswordVisibility(_ sender: UIButton) {
+        sender.isSelected.toggle()
+        passwordField.isSecureTextEntry = !sender.isSelected
+    }
+
     // MARK: - Sign In Logic
 
     private func signIn() async {
@@ -419,7 +438,20 @@ final class SignViewController: UIViewController, UITextViewDelegate, UITextFiel
         }
 
         signInButton.isEnabled = false
-        defer { signInButton.isEnabled = true }
+        var loadingConfig = signInButton.configuration
+        loadingConfig?.showsActivityIndicator = true
+        loadingConfig?.attributedTitle = nil
+        signInButton.configuration = loadingConfig
+
+        defer { 
+            var finalConfig = self.signInButton.configuration
+            finalConfig?.showsActivityIndicator = false
+            var finalTitle = AttributedString("Sign In")
+            finalTitle.font = .systemFont(ofSize: 18, weight: .semibold)
+            finalConfig?.attributedTitle = finalTitle
+            self.signInButton.configuration = finalConfig
+            self.signInButton.isEnabled = true 
+        }
 
         do {
             let credentials = SignInCredentials(email: email, password: password)

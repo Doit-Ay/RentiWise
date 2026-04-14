@@ -159,7 +159,7 @@ final class CategoryItemCell: UITableViewCell {
         currentItemId = nil
     }
 
-    func configure(with item: Item, currencyFormatter: NumberFormatter) {
+    func configure(with item: Item, currencyFormatter: NumberFormatter, currentUserId: String?) {
         itemName?.text = item.title
 
         let amount = NSNumber(value: item.price_per_day)
@@ -219,6 +219,17 @@ final class CategoryItemCell: UITableViewCell {
             itemimage?.image = nil
         }
         */
+
+        // Disable Rent button if user is the owner
+        if let currentUserId = currentUserId, currentUserId.caseInsensitiveCompare(item.owner_id) == .orderedSame {
+            rentbutton?.isEnabled = false
+            rentbutton?.alpha = 0.5
+            rentbutton?.setTitle("Rent", for: .normal)
+        } else {
+            rentbutton?.isEnabled = true
+            rentbutton?.alpha = 1.0
+            rentbutton?.setTitle("Rent", for: .normal)
+        }
     }
 
     // MARK: - Distance resolution (owner-level, cached, reuse-safe, with progressive loading)

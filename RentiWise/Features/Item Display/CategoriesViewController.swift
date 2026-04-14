@@ -6,6 +6,7 @@
 //
 
 import UIKit
+import Supabase
 
 final class CategoriesViewController: UIViewController {
 
@@ -23,9 +24,16 @@ final class CategoriesViewController: UIViewController {
     private var isLoading = false {
         didSet {
             tableViewForItem?.reloadData()
-            if isLoading { tableViewForItem?.backgroundView?.isHidden = true }
+            if isLoading {
+                tableViewForItem?.backgroundView?.isHidden = true
+            } else {
+                updateEmptyState()
+            }
         }
     }
+    private var isAuthenticated = true
+    private var currentUserId: String?
+
     private var isFiltering: Bool {
         guard let text = categorySearchBar?.text?.trimmingCharacters(in: .whitespacesAndNewlines) else { return false }
         return !text.isEmpty
@@ -155,6 +163,14 @@ final class CategoriesViewController: UIViewController {
 
     private func updateEmptyState() {
         guard let table = tableViewForItem else { return }
+        
+        if !isAuthenticated {
+            table.backgroundView?.isHidden = false
+            let catName = category?.isEmpty == false ? category! : "this category"
+            emptyStateLabel.text = "Sign up to check out \(catName)"
+            return
+        }
+
         // If there are no items in the current data source, show the label; otherwise hide.
         let current = isFiltering ? filteredItems : items
         let shouldShow = current.isEmpty
@@ -175,26 +191,51 @@ final class CategoriesViewController: UIViewController {
 
     private func loadItems() async {
         isLoading = true
+        showLoading(true)
         defer {
             Task { @MainActor in
                 self.isLoading = false
                 self.showLoading(false)
             }
         }
-        showLoading(true)
 
         do {
+            let isUserAuthenticated: Bool
+            let userId: String?
+            do {
+                let session = try await SupabaseManager.shared.client.auth.session
+                isUserAuthenticated = true
+                userId = session.user.id.uuidString
+            } catch {
+                isUserAuthenticated = false
+                userId = nil
+            }
+
+            await MainActor.run {
+                self.isAuthenticated = isUserAuthenticated
+                self.currentUserId = userId
+            }
+
+            if !isUserAuthenticated {
+                await MainActor.run {
+                    self.items = []
+                    self.filteredItems = []
+                }
+                return
+            }
+
             let cat = category ?? ""
             let fetched = try await service.fetchItems(category: cat)
             // Apply 30km geofence — only show items within the user's nearby radius.
             // This is the core peer-to-peer local rental premise.
             let nearbyItems = await DistanceService.shared.filterItemsWithinRadius(fetched)
-            self.items = nearbyItems
-            applyFilter(text: categorySearchBar?.text)
-            await MainActor.run { self.reloadUI() }
+            
+            await MainActor.run {
+                self.items = nearbyItems
+                self.applyFilter(text: self.categorySearchBar?.text)
+            }
         } catch {
             await MainActor.run {
-                self.reloadUI()
                 self.presentError(error.localizedDescription)
             }
         }
@@ -338,7 +379,7 @@ extension CategoriesViewController: UITableViewDataSource {
         }
 
         let item = data[indexPath.row]
-        cell.configure(with: item, currencyFormatter: currencyFormatter)
+        cell.configure(with: item, currencyFormatter: currencyFormatter, currentUserId: currentUserId)
         cell.delegate = self
 
         // No accessory arrow

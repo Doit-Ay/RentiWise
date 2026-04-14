@@ -13,8 +13,8 @@ final class AnimatedSplashViewController: UIViewController {
 
     var onComplete: (() -> Void)?
 
-    private let tealLight  = UIColor(red: 0xD6/255.0, green: 0xEB/255.0, blue: 0xEF/255.0, alpha: 1.0)
-    private let tealMedium = UIColor(red: 0xC4/255.0, green: 0xE1/255.0, blue: 0xE7/255.0, alpha: 1.0)
+    private let tealLight  = UIColor(red: 0xD6/255.0, green: 0xEB/255.0, blue: 0xEF/255.0, alpha: 0.65)
+    private let tealMedium = UIColor(red: 0xC4/255.0, green: 0xE1/255.0, blue: 0xE7/255.0, alpha: 0.65)
 
     private let rectLeft  = UIView()
     private let rectRight = UIView()
@@ -107,28 +107,32 @@ final class AnimatedSplashViewController: UIViewController {
         let screenW = view.bounds.width
         
         // Push rects fully off screen
-        rectLeft.transform  = CGAffineTransform(translationX: -screenW, y: 0)
-        rectRight.transform = CGAffineTransform(translationX:  screenW, y: 0)
+        rectLeft.transform  = CGAffineTransform(translationX: -screenW, y: -50)
+        rectRight.transform = CGAffineTransform(translationX:  screenW, y: 50)
+        rectLeft.alpha = 0
+        rectRight.alpha = 0
         
         logoImageView.alpha = 0
         logoImageView.transform = CGAffineTransform(scaleX: 0.8, y: 0.8)
     }
 
     private func animateIn() {
-        // Slide in
-        UIView.animate(withDuration: 0.6, delay: 0.0,
+        // Slide & fade in
+        UIView.animate(withDuration: 0.8, delay: 0.0,
                        usingSpringWithDamping: 0.82, initialSpringVelocity: 0.4, options: []) {
             self.rectLeft.transform = .identity
+            self.rectLeft.alpha = 1
         }
         
-        UIView.animate(withDuration: 0.6, delay: 0.12,
+        UIView.animate(withDuration: 0.8, delay: 0.15,
                        usingSpringWithDamping: 0.82, initialSpringVelocity: 0.4, options: []) {
             self.rectRight.transform = .identity
+            self.rectRight.alpha = 1
         }
         
         // Logo pops in
-        UIView.animate(withDuration: 0.5, delay: 0.55,
-                       usingSpringWithDamping: 0.75, initialSpringVelocity: 0.5, options: []) {
+        UIView.animate(withDuration: 0.6, delay: 0.6,
+                       usingSpringWithDamping: 0.70, initialSpringVelocity: 0.5, options: []) {
             self.logoImageView.alpha = 1
             self.logoImageView.transform = .identity
         }

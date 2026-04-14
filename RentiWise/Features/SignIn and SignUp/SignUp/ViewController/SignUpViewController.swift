@@ -135,6 +135,16 @@ final class SignUpViewController: UIViewController, UITextViewDelegate, UITextFi
         passwordField.autocapitalizationType = .none
         passwordField.autocorrectionType = .no
         passwordField.spellCheckingType = .no
+        let eyeButton1 = UIButton(type: .custom)
+        eyeButton1.setImage(UIImage(systemName: "eye.slash"), for: .normal)
+        eyeButton1.setImage(UIImage(systemName: "eye"), for: .selected)
+        eyeButton1.tintColor = brandTeal
+        eyeButton1.frame = CGRect(x: 0, y: 0, width: 40, height: 40)
+        eyeButton1.addTarget(self, action: #selector(toggleVisibility), for: .touchUpInside)
+        let rightViewContainer1 = UIView(frame: CGRect(x: 0, y: 0, width: 48, height: 40))
+        rightViewContainer1.addSubview(eyeButton1)
+        passwordField.rightView = rightViewContainer1
+        passwordField.rightViewMode = .always
 
         // Confirm Password
         configureFieldLabel(confirmPasswordLabel, text: "Confirm Password")
@@ -144,6 +154,16 @@ final class SignUpViewController: UIViewController, UITextViewDelegate, UITextFi
         confirmPasswordField.autocapitalizationType = .none
         confirmPasswordField.autocorrectionType = .no
         confirmPasswordField.spellCheckingType = .no
+        let eyeButton2 = UIButton(type: .custom)
+        eyeButton2.setImage(UIImage(systemName: "eye.slash"), for: .normal)
+        eyeButton2.setImage(UIImage(systemName: "eye"), for: .selected)
+        eyeButton2.tintColor = brandTeal
+        eyeButton2.frame = CGRect(x: 0, y: 0, width: 40, height: 40)
+        eyeButton2.addTarget(self, action: #selector(toggleVisibility), for: .touchUpInside)
+        let rightViewContainer2 = UIView(frame: CGRect(x: 0, y: 0, width: 48, height: 40))
+        rightViewContainer2.addSubview(eyeButton2)
+        confirmPasswordField.rightView = rightViewContainer2
+        confirmPasswordField.rightViewMode = .always
 
         // Full Name
         configureFieldLabel(fullNameLabel, text: "Full Name")
@@ -180,11 +200,14 @@ final class SignUpViewController: UIViewController, UITextViewDelegate, UITextFi
 
         // Sign Up button
         signUpButton.translatesAutoresizingMaskIntoConstraints = false
-        signUpButton.setTitle("Sign Up", for: .normal)
-        signUpButton.setTitleColor(.white, for: .normal)
-        signUpButton.titleLabel?.font = .systemFont(ofSize: 18, weight: .semibold)
-        signUpButton.backgroundColor = brandTeal
-        signUpButton.layer.cornerRadius = 12
+        var config = UIButton.Configuration.filled()
+        config.baseBackgroundColor = brandTeal
+        config.baseForegroundColor = .white
+        config.background.cornerRadius = 12
+        var attributedTitle = AttributedString("Sign Up")
+        attributedTitle.font = .systemFont(ofSize: 18, weight: .semibold)
+        config.attributedTitle = attributedTitle
+        signUpButton.configuration = config
         signUpButton.addTarget(self, action: #selector(signUpTapped), for: .touchUpInside)
         contentView.addSubview(signUpButton)
 
@@ -436,6 +459,17 @@ final class SignUpViewController: UIViewController, UITextViewDelegate, UITextFi
         }
     }
 
+    @objc private func toggleVisibility(_ sender: UIButton) {
+        sender.isSelected.toggle()
+        if let container = sender.superview {
+            if passwordField.rightView == container {
+                passwordField.isSecureTextEntry = !sender.isSelected
+            } else if confirmPasswordField.rightView == container {
+                confirmPasswordField.isSecureTextEntry = !sender.isSelected
+            }
+        }
+    }
+
     // MARK: - Sign Up Logic
 
     private func signUp() async {
@@ -480,7 +514,20 @@ final class SignUpViewController: UIViewController, UITextViewDelegate, UITextFi
         }
 
         signUpButton.isEnabled = false
-        defer { signUpButton.isEnabled = true }
+        var loadingConfig = signUpButton.configuration
+        loadingConfig?.showsActivityIndicator = true
+        loadingConfig?.attributedTitle = nil
+        signUpButton.configuration = loadingConfig
+
+        defer { 
+            var finalConfig = self.signUpButton.configuration
+            finalConfig?.showsActivityIndicator = false
+            var finalTitle = AttributedString("Sign Up")
+            finalTitle.font = .systemFont(ofSize: 18, weight: .semibold)
+            finalConfig?.attributedTitle = finalTitle
+            self.signUpButton.configuration = finalConfig
+            self.signUpButton.isEnabled = true 
+        }
 
         do {
             let credentials = SignUpCredentials(email: email, password: password)
