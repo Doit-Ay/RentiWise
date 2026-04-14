@@ -32,8 +32,24 @@ final class AnimatedSplashViewController: UIViewController {
 
     func beginSplashSequence() {
         animateIn()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.8) { [weak self] in self?.dismissSplash() }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) { [weak self] in self?.dismissSplash() }
+        // Wait for preload data before dismissing, with a minimum animation time
+        Task {
+            let minAnimationTime: TimeInterval = 2.0
+            let start = Date()
+            
+            // Wait for data to be ready (up to 5s total max)
+            await PreloadManager.shared.waitForCompletion(timeout: 3.0)
+            
+            // Ensure minimum animation duration for visual polish
+            let elapsed = Date().timeIntervalSince(start)
+            if elapsed < minAnimationTime {
+                try? await Task.sleep(nanoseconds: UInt64((minAnimationTime - elapsed) * 1_000_000_000))
+            }
+            
+            await MainActor.run { [weak self] in
+                self?.dismissSplash()
+            }
+        }
     }
 
     private func buildUI() {

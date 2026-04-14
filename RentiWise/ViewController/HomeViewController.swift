@@ -250,7 +250,7 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
         // Trending scroller inside trendingUiView
         setupTrendingCollection()
 
-        Task { await loadFeaturedItems() }
+        // Data loading is handled in viewWillAppear — no duplicate Task here.
 
         // Ensure aspect fit and clipping on the single image view
         homeimage?.contentMode = .scaleAspectFit
@@ -366,16 +366,23 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
 
         // On cold start, use PreloadManager's cache (already fetched).
         // On subsequent appears (tab switches, back-nav), force a network refresh.
-        let needsRefresh = !isFirstLoad
+        let isColdStart = isFirstLoad
         isFirstLoad = false
 
-        Task { await checkAndUpdateListingSection(forceRefresh: needsRefresh) }
-        // Refresh location button on appear as well
         refreshLocationButtonTitle()
-        // Update notification badge
-        Task { await updateNotificationBadge() }
-        // Refresh featured items & new arrivals so newly added items appear // Pass forceRefresh: needsRefresh so it updates properly on tab switches if not isFirstLoad
-        Task { await loadFeaturedItems(forceRefresh: needsRefresh) }
+        
+        Task {
+            // On cold start, wait for PreloadManager so items + location are ready
+            if isColdStart, !PreloadManager.shared.isComplete {
+                await PreloadManager.shared.waitForCompletion(timeout: 4.0)
+            }
+            
+            async let listings: () = checkAndUpdateListingSection(forceRefresh: !isColdStart)
+            async let badge: () = updateNotificationBadge()
+            // Always force refresh to ensure data actually loads
+            async let featured: () = loadFeaturedItems(forceRefresh: true)
+            _ = await (listings, badge, featured)
+        }
     }
 
 

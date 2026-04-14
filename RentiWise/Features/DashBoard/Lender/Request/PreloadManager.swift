@@ -2,6 +2,7 @@
 import Foundation
 import Supabase
 import UIKit
+import CoreLocation
 
 /// Central preload orchestrator.
 /// Starts immediately in AppDelegate and caches featured items + request lists.
@@ -39,13 +40,14 @@ final class PreloadManager {
             // 1) Warm up auth/session
             let userId = await SupabaseManager.shared.currentUserId()
 
-            // 2) In parallel, fetch everything
+            // 2) In parallel, fetch everything + pre-resolve viewer location for distance computation
             async let featured = self.fetchFeaturedItems()
             async let lender   = self.fetchLenderRequests(userId: userId)
             async let borrower = self.fetchBorrowerRequests(userId: userId)
             async let listings = self.checkUserHasListings(userId: userId)
+            async let location = self.warmViewerLocation()
 
-            let (fi, lr, br, hasListings) = await (featured, lender, borrower, listings)
+            let (fi, lr, br, hasListings, _) = await (featured, lender, borrower, listings, location)
 
             await MainActor.run {
                 self.allFetchedItems  = fi
@@ -170,5 +172,21 @@ final class PreloadManager {
         } catch {
             return false
         }
+    }
+
+    /// Pre-resolves the viewer's GPS/DB location so DistanceService has it cached
+    /// before the home screen calls filterItemsWithinRadius().
+    private func warmViewerLocation() async {
+        // Try GPS first (fast path if already authorized)
+        if let coords = await AppLocationManager.shared.currentCoordinates() {
+            DistanceService.shared.setViewerCoordinate(
+                latitude: coords.latitude,
+                longitude: coords.longitude
+            )
+            return
+        }
+        // Fallback: trigger a full resolution through DistanceService
+        // which checks DB, then GPS with auth prompt, etc.
+        _ = DistanceService.shared.cachedViewerCoordinate()
     }
 }

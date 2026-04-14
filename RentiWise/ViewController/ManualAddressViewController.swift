@@ -253,7 +253,7 @@ final class ManualAddressViewController: UIViewController {
         phoneField.smartDashesType = .no
         phoneField.smartQuotesType = .no
         phoneField.smartInsertDeleteType = .no
-        phoneField.inputAccessoryView = makeDoneToolbar()
+
         // Add "+91" prefix label
         let phonePrefixLabel = UILabel()
         phonePrefixLabel.text = " +91 "
@@ -296,7 +296,7 @@ final class ManualAddressViewController: UIViewController {
         postalField.smartDashesType = .no
         postalField.smartQuotesType = .no
         postalField.smartInsertDeleteType = .no
-        postalField.inputAccessoryView = makeDoneToolbar()
+
 
         countryField = makeStyledField("Country",
                                        keyboard: .default,
@@ -352,11 +352,7 @@ final class ManualAddressViewController: UIViewController {
         postalCol.widthAnchor.constraint(equalTo: countryCol.widthAnchor).isActive = true
         addressSection.addArrangedSubview(rowPostalCountry)
 
-        // Prefill location button
-        prefillLocationButton.setTitle("Use current location to prefill City/State/Country", for: .normal)
-        prefillLocationButton.titleLabel?.font = .systemFont(ofSize: 14, weight: .semibold)
-        prefillLocationButton.addTarget(self, action: #selector(prefillFromLocation), for: .touchUpInside)
-        addressSection.addArrangedSubview(prefillLocationButton)
+
 
         // Default row
         let h = UIStackView()
@@ -368,6 +364,7 @@ final class ManualAddressViewController: UIViewController {
         defaultLabel.font = .systemFont(ofSize: 16, weight: .regular)
         h.addArrangedSubview(defaultLabel)
         h.addArrangedSubview(UIView())
+        defaultSwitch.onTintColor = brandTeal
         h.addArrangedSubview(defaultSwitch)
         defaultSection.addArrangedSubview(h)
     }
@@ -536,14 +533,7 @@ final class ManualAddressViewController: UIViewController {
         updateSaveEnabled()
     }
 
-    private func makeDoneToolbar() -> UIToolbar {
-        let tb = UIToolbar()
-        tb.sizeToFit()
-        let flex = UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil)
-        let done = UIBarButtonItem(barButtonSystemItem: .done, target: self, action: #selector(dismissKeyboard))
-        tb.items = [flex, done]
-        return tb
-    }
+
 
     @objc private func prefillFromLocation() {
         Task {
@@ -810,14 +800,30 @@ extension ManualAddressViewController: UITextFieldDelegate {
 
 // Simple padded text field to add left/right insets
 private final class PaddedTextField: UITextField {
-    private let inset = UIEdgeInsets(top: 10, left: 12, bottom: 10, right: 12)
     override func textRect(forBounds bounds: CGRect) -> CGRect {
-        return bounds.inset(by: inset)
+        let leftInset = leftView == nil ? 12.0 : 4.0
+        var rect = super.textRect(forBounds: bounds)
+        rect.origin.x += leftInset
+        rect.size.width -= (leftInset + 12.0)
+        return rect
     }
     override func editingRect(forBounds bounds: CGRect) -> CGRect {
-        return bounds.inset(by: inset)
+        let leftInset = leftView == nil ? 12.0 : 4.0
+        var rect = super.editingRect(forBounds: bounds)
+        rect.origin.x += leftInset
+        rect.size.width -= (leftInset + 12.0)
+        return rect
     }
     override func placeholderRect(forBounds bounds: CGRect) -> CGRect {
-        return bounds.inset(by: inset)
+        let leftInset = leftView == nil ? 12.0 : 4.0
+        var rect = super.placeholderRect(forBounds: bounds)
+        rect.origin.x += leftInset
+        rect.size.width -= (leftInset + 12.0)
+        return rect
+    }
+    override func leftViewRect(forBounds bounds: CGRect) -> CGRect {
+        var rect = super.leftViewRect(forBounds: bounds)
+        rect.origin.x += 12.0
+        return rect
     }
 }

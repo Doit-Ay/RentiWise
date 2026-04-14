@@ -93,11 +93,18 @@ final class AddressDetailViewController: UIViewController {
         ])
     }
 
+    /// Brand teal used throughout the app
+    private var brandTeal: UIColor {
+        UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1.0)
+    }
+
     private func addCard(title: String, stack: UIStackView) {
         let container = UIView()
         container.backgroundColor = .white
         container.layer.cornerRadius = 12
         container.layer.masksToBounds = true
+        container.layer.borderWidth = 1
+        container.layer.borderColor = UIColor(red: 0xD6/255.0, green: 0xEB/255.0, blue: 0xEF/255.0, alpha: 1.0).cgColor
 
         let inner = UIStackView()
         inner.axis = .vertical
@@ -108,7 +115,7 @@ final class AddressDetailViewController: UIViewController {
         let header = UILabel()
         header.text = title
         header.font = .systemFont(ofSize: 15, weight: .semibold)
-        header.textColor = .secondaryLabel
+        header.textColor = brandTeal
 
         inner.addArrangedSubview(header)
         inner.addArrangedSubview(stack)
@@ -148,14 +155,28 @@ final class AddressDetailViewController: UIViewController {
         actionsRow.spacing = 12
         actionsRow.distribution = .fillEqually
 
-        let defaultButton = makeActionButton(title: address.is_default ? "Default Address" : "Set as Default",
-                                             filled: !address.is_default,
-                                             color: .systemGreen,
-                                             selector: #selector(makeDefaultTapped))
-        let deleteButton = makeActionButton(title: "Delete",
-                                            filled: false,
-                                            color: .systemRed,
-                                            selector: #selector(deleteTapped))
+        // Default button: theme color filled, white semibold 18, corner radius 14, height 44
+        let defaultButton = UIButton(type: .system)
+        defaultButton.setTitle(address.is_default ? "Default Address" : "Set as Default", for: .normal)
+        defaultButton.titleLabel?.font = .systemFont(ofSize: 18, weight: .semibold)
+        defaultButton.layer.cornerRadius = 14
+        defaultButton.layer.masksToBounds = true
+        defaultButton.backgroundColor = brandTeal
+        defaultButton.setTitleColor(.white, for: .normal)
+        defaultButton.layer.borderWidth = 0
+        defaultButton.addTarget(self, action: #selector(makeDefaultTapped), for: .touchUpInside)
+
+        // Delete button: theme color outline, red text semibold 18, corner radius 14, height 44
+        let deleteButton = UIButton(type: .system)
+        deleteButton.setTitle("Delete", for: .normal)
+        deleteButton.titleLabel?.font = .systemFont(ofSize: 18, weight: .semibold)
+        deleteButton.layer.cornerRadius = 14
+        deleteButton.layer.masksToBounds = true
+        deleteButton.backgroundColor = .clear
+        deleteButton.setTitleColor(.systemRed, for: .normal)
+        deleteButton.layer.borderWidth = 1.5
+        deleteButton.layer.borderColor = brandTeal.cgColor
+        deleteButton.addTarget(self, action: #selector(deleteTapped), for: .touchUpInside)
 
         actionsRow.addArrangedSubview(defaultButton)
         actionsRow.addArrangedSubview(deleteButton)
@@ -173,23 +194,7 @@ final class AddressDetailViewController: UIViewController {
         contentStack.addArrangedSubview(actionsContainer)
     }
 
-    private func makeActionButton(title: String, filled: Bool, color: UIColor, selector: Selector) -> UIButton {
-        let b = UIButton(type: .system)
-        b.setTitle(title, for: .normal)
-        b.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
-        b.layer.cornerRadius = 10
-        b.layer.borderWidth = 1
-        b.layer.borderColor = color.cgColor
-        if filled {
-            b.backgroundColor = color
-            b.setTitleColor(.white, for: .normal)
-        } else {
-            b.backgroundColor = .clear
-            b.setTitleColor(color, for: .normal)
-        }
-        b.addTarget(self, action: selector, for: .touchUpInside)
-        return b
-    }
+    // makeActionButton removed — buttons are now styled directly in setupSections()
 
     private func labeledValue(_ label: String, _ value: String?) -> UIStackView {
         let title = UILabel()
@@ -235,7 +240,21 @@ final class AddressDetailViewController: UIViewController {
 
         // Meta
         metaSection.addArrangedSubview(labeledValue("Default", address.is_default ? "Yes" : "No"))
-        metaSection.addArrangedSubview(labeledValue("Created", address.created_at))
+        metaSection.addArrangedSubview(labeledValue("Created", formattedDate(from: address.created_at)))
+    }
+
+    private func formattedDate(from string: String?) -> String {
+        guard let string = string else { return "—" }
+        // Attempt to parse standard ISO8601
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = formatter.date(from: string) {
+            let displayFmt = DateFormatter()
+            displayFmt.dateStyle = .medium
+            displayFmt.timeStyle = .short
+            return displayFmt.string(from: date)
+        }
+        return string
     }
 
     // MARK: - Actions
@@ -272,13 +291,14 @@ final class AddressDetailViewController: UIViewController {
     }
 
     private func updateDefaultButtonTitle() {
-        // Update the button title in the last actions row
+        // Update the button title and style in the last actions row
         if let actionsContainer = contentStack.arrangedSubviews.last,
            let actionsRow = actionsContainer.subviews.first as? UIStackView,
            let defaultButton = actionsRow.arrangedSubviews.first as? UIButton {
             defaultButton.setTitle(address.is_default ? "Default Address" : "Set as Default", for: .normal)
-            defaultButton.backgroundColor = address.is_default ? .clear : .systemGreen
-            defaultButton.setTitleColor(address.is_default ? .systemGreen : .white, for: .normal)
+            defaultButton.backgroundColor = brandTeal
+            defaultButton.setTitleColor(.white, for: .normal)
+            defaultButton.layer.borderWidth = 0
         }
         // Also refresh the meta section
         applyAddress()

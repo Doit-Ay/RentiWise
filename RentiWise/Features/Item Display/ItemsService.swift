@@ -104,35 +104,16 @@ final class ItemsService: ItemsServicing {
     }
     
     private func fetchRatingStats(for itemIds: [String]) async -> [String: ItemRatingStats] {
-        debugLog("📦 ItemsService: Fetching rating stats for \(itemIds.count) items")
+        debugLog("📦 ItemsService: Fetching rating stats for \(itemIds.count) items (batch)")
         
-        let result = await withTaskGroup(of: (String, ItemRatingStats?, Error?).self) { group in
-            for itemId in itemIds {
-                group.addTask {
-                    do {
-                        let stats = try await self.reviewService.fetchItemStats(itemId: itemId)
-                        return (itemId, stats, nil)
-                    } catch {
-                        debugLog("❌ ItemsService: Error fetching stats for \(itemId): \(error)")
-                        return (itemId, nil, error)
-                    }
-                }
-            }
-            
-            var statsMap: [String: ItemRatingStats] = [:]
-            for await (itemId, stats, error) in group {
-                if let error = error {
-                    debugLog("❌ ItemsService: Failed to get stats for \(itemId): \(error.localizedDescription)")
-                }
-                if let stats = stats {
-                    debugLog("✅ ItemsService: Got stats for \(itemId) - avg: \(stats.average_rating ?? 0), count: \(stats.review_count)")
-                    statsMap[itemId] = stats
-                }
-            }
-            debugLog("📊 ItemsService: Total stats fetched: \(statsMap.count)/\(itemIds.count)")
+        do {
+            let statsMap = try await reviewService.fetchItemStatsBatch(itemIds: itemIds)
+            debugLog("📊 ItemsService: Batch stats fetched: \(statsMap.count)/\(itemIds.count)")
             return statsMap
+        } catch {
+            debugLog("❌ ItemsService: Batch stats error: \(error.localizedDescription)")
+            // Fallback: return empty stats for all items
+            return [:]
         }
-        
-        return result
     }
 }

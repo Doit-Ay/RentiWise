@@ -59,41 +59,14 @@ extension HomeViewController {
                 return item.owner_id.lowercased() != me.lowercased()
             }
 
-            let fallbackSorted = filteredItems.sorted(by: self.isPreferredTrendingItem(_:over:))
-            let initialTrending = Array(fallbackSorted.prefix(6))
+            // Items already arrive sorted by distance from filterItemsWithinRadius(),
+            // so we just need to take the top 6. Apply preference tiebreaker for equal-distance items.
+            let sorted = filteredItems.sorted(by: self.isPreferredTrendingItem(_:over:))
+            let trending = Array(sorted.prefix(6))
             
             await MainActor.run {
                 guard self.trendingSortGeneration == requestGeneration else { return }
-                self.trendingItems = initialTrending
-                self.trendingCollectionView?.reloadData()
-                self.updateTrendingEmptyState()
-            }
-
-            let rankedItems = await withTaskGroup(of: (Item, Double).self, returning: [(Item, Double)].self) { group in
-                for item in filteredItems {
-                    group.addTask {
-                        let distance = await DistanceService.shared.rankingDistanceMeters(for: item)
-                        return (item, distance)
-                    }
-                }
-
-                var results: [(Item, Double)] = []
-                for await result in group {
-                    results.append(result)
-                }
-                return results
-            }
-
-            let distanceSorted = rankedItems.sorted { lhs, rhs in
-                if lhs.1 != rhs.1 {
-                    return lhs.1 < rhs.1
-                }
-                return self.isPreferredTrendingItem(lhs.0, over: rhs.0)
-            }.map(\.0)
-
-            await MainActor.run {
-                guard self.trendingSortGeneration == requestGeneration else { return }
-                self.trendingItems = Array(distanceSorted.prefix(6))
+                self.trendingItems = trending
                 self.trendingCollectionView?.reloadData()
                 self.updateTrendingEmptyState()
             }
@@ -153,9 +126,9 @@ extension HomeViewController {
         let trendingLabel = host.superview?.subviews.compactMap({ $0 as? UILabel }).first(where: { $0.text == "Trending near you" })
 
         if trendingItems.isEmpty {
-            // Hide the heading, collapse the view, show empty state
-            trendingLabel?.isHidden = true
-            updateTrendingHeight(0)
+            // Keep the heading visible, show empty state placeholder inside the container
+            trendingLabel?.isHidden = false
+            updateTrendingHeight(40)
             trendingCollectionView?.isHidden = true
 
             if host.viewWithTag(Self.trendingEmptyTag) == nil {
@@ -166,7 +139,8 @@ extension HomeViewController {
                 NSLayoutConstraint.activate([
                     empty.leadingAnchor.constraint(equalTo: host.leadingAnchor, constant: 20),
                     empty.trailingAnchor.constraint(equalTo: host.trailingAnchor, constant: -20),
-                    empty.centerYAnchor.constraint(equalTo: host.centerYAnchor),
+                    empty.topAnchor.constraint(equalTo: host.topAnchor, constant: 0),
+                    empty.bottomAnchor.constraint(lessThanOrEqualTo: host.bottomAnchor, constant: 0),
                 ])
             }
         } else {
@@ -175,6 +149,9 @@ extension HomeViewController {
             trendingCollectionView?.isHidden = false
             host.viewWithTag(Self.trendingEmptyTag)?.removeFromSuperview()
         }
+
+        // Recalculate scroll content height after trending state changes
+        recalculateScrollContentHeight()
     }
 
     private func updateTrendingHeight(_ height: CGFloat) {
@@ -187,9 +164,27 @@ extension HomeViewController {
     }
 
     private func buildTrendingEmptyView() -> UIView {
-        // Intentionally empty/transparent — the section is collapsed to 0 height.
-        // This is a no-op placeholder; the real CTA is in showNoNearbyItemsBanner.
-        return UIView()
+        let container = UIView()
+        container.backgroundColor = .clear
+
+        // Placeholder text
+        let placeholderLabel = UILabel()
+        placeholderLabel.text = "No items listed near you, be the first one!"
+        placeholderLabel.font = .systemFont(ofSize: 15, weight: .medium)
+        placeholderLabel.textColor = .secondaryLabel
+        placeholderLabel.textAlignment = .center
+        placeholderLabel.numberOfLines = 0
+        placeholderLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        container.addSubview(placeholderLabel)
+        NSLayoutConstraint.activate([
+            placeholderLabel.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            placeholderLabel.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            placeholderLabel.topAnchor.constraint(equalTo: container.topAnchor),
+            placeholderLabel.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+        ])
+
+        return container
     }
 }
 

@@ -12,12 +12,33 @@ import Supabase
 extension HomeViewController {
 
     func loadFeaturedItems(forceRefresh: Bool = false) async {
+        // On cold start, wait for PreloadManager so we have data ready
+        if !forceRefresh, !PreloadManager.shared.isComplete {
+            await PreloadManager.shared.waitForCompletion(timeout: 4.0)
+        }
+
         let me = await SupabaseManager.shared.currentUserId()
+
+        // LOGGED OUT: Skip fetching — show placeholder instead
+        if me == nil {
+            await MainActor.run {
+                self.applyFeatured(items: [], currentUserId: nil)
+                self.trendingItems = []
+                self.trendingCollectionView?.reloadData()
+                self.updateTrendingEmptyState()
+                self.showNoNearbyItemsBanner(false)
+                self.recalculateScrollContentHeight()
+            }
+            return
+        }
 
         // On cold start, use PreloadManager's cached data to avoid duplicate API call.
         let allItems: [Item]
         if !forceRefresh, PreloadManager.shared.isComplete, !PreloadManager.shared.allFetchedItems.isEmpty {
             allItems = PreloadManager.shared.allFetchedItems
+        } else if !forceRefresh, PreloadManager.shared.isComplete, PreloadManager.shared.allFetchedItems.isEmpty {
+            // Preload completed but found no items — don't re-fetch
+            allItems = []
         } else {
             // Network fetch (subsequent refreshes or cache miss)
             do {
@@ -30,20 +51,7 @@ extension HomeViewController {
             }
         }
 
-        // Warm the distance cache for all items in background
-        Task.detached(priority: .utility) {
-            await withTaskGroup(of: Void.self) { group in
-                for item in allItems {
-                    group.addTask {
-                        _ = await DistanceService.shared.distanceText(for: item)
-                    }
-                }
-            }
-        }
-
         // Filter items within 30km radius and sort by distance (nearest first)
-        // Uses the centralized DistanceService filter which properly handles
-        // unresolved coordinates and own-item passthrough.
         let nearbyItems = await DistanceService.shared.filterItemsWithinRadius(allItems)
 
         let featured = Array(nearbyItems.prefix(4))
@@ -66,6 +74,7 @@ extension HomeViewController {
 
     /// Dynamically adjusts the homeBG (scroll content) height constraint
     /// so it wraps tightly around visible content instead of a fixed 1600pt.
+    /// Also repositions the "You ❤️ Rentiwise" tagline to sit right below the last content.
     @MainActor
     func recalculateScrollContentHeight() {
         guard let scrollContent = homeBG else { return }
@@ -73,13 +82,28 @@ extension HomeViewController {
         // Force layout so subview frames are up-to-date
         scrollContent.layoutIfNeeded()
 
-        // Find the bottom-most visible subview
+        // Find the bottom-most visible subview, excluding the bottom tagline
         var maxBottom: CGFloat = 0
         for subview in scrollContent.subviews where !subview.isHidden && subview.alpha > 0 {
+            // Skip the "You ❤️ Rentiwise" tagline — we'll reposition it afterwards
+            if subview === Homepagelastline { continue }
             let bottom = subview.frame.maxY
             if bottom > maxBottom {
                 maxBottom = bottom
             }
+        }
+
+        // Reposition the tagline label right below the last content item
+        if let tagline = Homepagelastline {
+            let taglinePadding: CGFloat = 20
+            tagline.frame = CGRect(
+                x: tagline.frame.origin.x,
+                y: maxBottom + taglinePadding,
+                width: tagline.frame.width,
+                height: tagline.frame.height
+            )
+            // Update maxBottom to include the repositioned tagline
+            maxBottom = tagline.frame.maxY
         }
 
         // Add padding at the bottom
@@ -189,13 +213,58 @@ extension HomeViewController {
         }
     }
 
+    /// Tag for the "sign up" placeholder under New Arrivals
+    private static let newArrivalsPlaceholderTag = 8899
+
     func applyFeatured(items: [Item], currentUserId: String?) {
         // Find and hide/show the "New Arrivals" label and featured card stack
         let newArrivalsLabel = item1CardView?.superview?.superview?.subviews
             .compactMap({ $0 as? UILabel })
             .first(where: { $0.text == "New Arrivals" })
         let cardStack = item1CardView?.superview as? UIStackView
+        let scrollContent = item1CardView?.superview?.superview
 
+        // Remove any existing placeholder
+        scrollContent?.viewWithTag(Self.newArrivalsPlaceholderTag)?.removeFromSuperview()
+
+        // LOGGED OUT: hide items, show sign-up placeholder
+        let isLoggedOut = (currentUserId == nil)
+        if isLoggedOut {
+            newArrivalsLabel?.isHidden = false
+            cardStack?.isHidden = true
+
+            // Add placeholder text below the "New Arrivals" label
+            if let scrollContent, let arrivalsLabel = newArrivalsLabel {
+                let placeholder = UILabel()
+                placeholder.tag = Self.newArrivalsPlaceholderTag
+                placeholder.text = "No items in New Arrivals.\nSign up to explore rentals near you!"
+                placeholder.font = .systemFont(ofSize: 15, weight: .medium)
+                placeholder.textColor = .secondaryLabel
+                placeholder.textAlignment = .center
+                placeholder.numberOfLines = 0
+                placeholder.translatesAutoresizingMaskIntoConstraints = false
+
+                scrollContent.addSubview(placeholder)
+                NSLayoutConstraint.activate([
+                    placeholder.topAnchor.constraint(equalTo: arrivalsLabel.bottomAnchor, constant: 16),
+                    placeholder.leadingAnchor.constraint(equalTo: scrollContent.leadingAnchor, constant: 20),
+                    placeholder.trailingAnchor.constraint(equalTo: scrollContent.trailingAnchor, constant: -20),
+                ])
+            }
+
+            // Clear all slots
+            let slots: [(UIImageView?, UILabel?, UILabel?, UILabel?, UILabel?, UILabel?, UIView?, UIButton?)] = [
+                (item1Image, item1Name, item1Rate, item1Rating, item1Distance, item1owner, item1CardView, rentButton1),
+                (item2Image, item2Name, item2Rate, item2Rating, item2Distance, item2owner, item2CardView, rentButton2),
+                (item3Image, item3Name, item3Rate, item3Rating, item3Distance, item3owner, item3CardView, rentButton3),
+                (item4Image, item4Name, item4Rate, item4Rating, item4Distance, item4owner, item4CardView, rentButton4)
+            ]
+            for slot in slots { clearFeaturedSlot(slot) }
+            self.featuredItems = []
+            return
+        }
+
+        // LOGGED IN: normal behavior
         if items.isEmpty {
             newArrivalsLabel?.isHidden = true
             cardStack?.isHidden = true
@@ -214,8 +283,6 @@ extension HomeViewController {
         for (i, slot) in slots.enumerated() {
             if i < items.count {
                 configureFeaturedSlot(slot, with: items[i], currentUserId: currentUserId)
-                // Resolve and set owner name for this slot
-                resolveOwnerName(for: items[i].owner_id, slotIndex: i)
 
                 // Wire Rent button to open RequestViewController for the corresponding featured item slot
                 if let btn = slot.7 {
@@ -238,6 +305,9 @@ extension HomeViewController {
             }
         }
         self.featuredItems = items
+        
+        // Batch resolve all owner names in a single query instead of 4 individual ones
+        resolveOwnerNamesBatch(for: items)
     }
 
     func configureFeaturedSlot(_ slot: (UIImageView?, UILabel?, UILabel?, UILabel?, UILabel?, UILabel?, UIView?, UIButton?), with item: Item, currentUserId: String?) {
@@ -318,6 +388,61 @@ extension HomeViewController {
     func capitalizingFirstLetter(_ s: String) -> String {
         guard let first = s.unicodeScalars.first else { return s }
         return String(first).uppercased() + String(s.unicodeScalars.dropFirst())
+    }
+
+    func resolveOwnerNamesBatch(for items: [Item]) {
+        guard !items.isEmpty else { return }
+        
+        // Collect unique owner IDs that need resolution
+        let ownerIds = Array(Set(items.map { $0.owner_id }))
+        
+        // Check cache first — if all are cached, apply immediately without a network call
+        let allCached = ownerIds.allSatisfy { ownerNameCache[$0] != nil }
+        if allCached {
+            for (i, item) in items.enumerated() {
+                let name = ownerNameCache[item.owner_id] ?? "Owner"
+                applyOwnerName(name, toSlotAt: i)
+            }
+            return
+        }
+        
+        Task {
+            // Single batch query for all owner names
+            struct NameDTO: Decodable {
+                let id: String
+                let full_name: String?
+            }
+            
+            do {
+                let response = try await SupabaseManager.shared.client
+                    .from("user_profiles")
+                    .select("id,full_name")
+                    .in("id", values: ownerIds)
+                    .execute()
+                
+                let profiles = try JSONDecoder().decode([NameDTO].self, from: response.data)
+                var nameMap: [String: String] = [:]
+                for profile in profiles {
+                    if let name = profile.full_name, !name.isEmpty {
+                        nameMap[profile.id] = capitalizingFirstLetter(name)
+                    }
+                }
+                
+                await MainActor.run {
+                    for (i, item) in items.enumerated() {
+                        let name = nameMap[item.owner_id] ?? "Owner"
+                        self.ownerNameCache[item.owner_id] = name
+                        self.applyOwnerName(name, toSlotAt: i)
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    for (i, _) in items.enumerated() {
+                        self.applyOwnerName("Owner", toSlotAt: i)
+                    }
+                }
+            }
+        }
     }
 
     func resolveOwnerName(for ownerId: String, slotIndex: Int) {

@@ -10,6 +10,7 @@ import Supabase
 
 protocol ReviewServicing {
     func fetchItemStats(itemId: String) async throws -> ItemRatingStats
+    func fetchItemStatsBatch(itemIds: [String]) async throws -> [String: ItemRatingStats]
     func fetchReviews(itemId: String) async throws -> [Review]
 }
 
@@ -54,6 +55,43 @@ final class ReviewService: ReviewServicing {
             average_rating: average,
             review_count: ratings.count
         )
+    }
+    
+    /// Batch fetch rating stats for multiple items in a single query.
+    /// Replaces N individual queries with 1, dramatically reducing load time.
+    func fetchItemStatsBatch(itemIds: [String]) async throws -> [String: ItemRatingStats] {
+        guard !itemIds.isEmpty else { return [:] }
+        
+        struct ReviewRow: Decodable {
+            let item_id: String
+            let rating: Int
+        }
+        
+        let response = try await client
+            .from("reviews")
+            .select("item_id,rating")
+            .in("item_id", values: itemIds)
+            .execute()
+        
+        let rows = try JSONDecoder().decode([ReviewRow].self, from: response.data)
+        
+        // Group by item_id and compute stats
+        var grouped: [String: [Int]] = [:]
+        for row in rows {
+            grouped[row.item_id, default: []].append(row.rating)
+        }
+        
+        var result: [String: ItemRatingStats] = [:]
+        for itemId in itemIds {
+            if let ratings = grouped[itemId], !ratings.isEmpty {
+                let sum = ratings.reduce(0, +)
+                let average = Double(sum) / Double(ratings.count)
+                result[itemId] = ItemRatingStats(average_rating: average, review_count: ratings.count)
+            } else {
+                result[itemId] = ItemRatingStats(average_rating: nil, review_count: 0)
+            }
+        }
+        return result
     }
     
     /// Fetch all reviews for a specific item

@@ -152,37 +152,14 @@ final class MapLocationPickerViewController: UIViewController {
         searchBar.translatesAutoresizingMaskIntoConstraints = false
         searchBar.delegate = self
         searchBar.placeholder = "Search for area, street, landmark…"
-        searchBar.searchBarStyle = .minimal
-        searchBar.autocapitalizationType = .none
-        searchBar.autocorrectionType = .no
-        searchBar.returnKeyType = .search
-        searchBar.tintColor = brandTeal
-        searchBar.backgroundColor = .clear
+        searchBar.applyRentiWiseStyle()
 
-        // Rounded glass background
-        let container = UIView()
-        container.translatesAutoresizingMaskIntoConstraints = false
-        container.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.92)
-        container.layer.cornerRadius = 14
-        container.layer.shadowColor = UIColor.black.cgColor
-        container.layer.shadowOpacity = 0.10
-        container.layer.shadowRadius = 8
-        container.layer.shadowOffset = CGSize(width: 0, height: 3)
-        container.layer.masksToBounds = false
-
-        view.addSubview(container)
-        container.addSubview(searchBar)
+        view.addSubview(searchBar)
 
         NSLayoutConstraint.activate([
-            container.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
-            container.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
-            container.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12),
-
-            searchBar.topAnchor.constraint(equalTo: container.topAnchor),
-            searchBar.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 4),
-            searchBar.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -4),
-            searchBar.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-            searchBar.heightAnchor.constraint(equalToConstant: 44)
+            searchBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
+            searchBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 4),
+            searchBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -4),
         ])
 
         // Search completer
