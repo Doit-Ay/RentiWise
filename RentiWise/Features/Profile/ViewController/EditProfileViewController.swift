@@ -16,6 +16,7 @@ class EditProfileViewController: UITableViewController {
 
     
     private let profile: UserProfile
+    private let validation = AuthValidationService()
     
     var onSaved: ((UserProfile) -> Void)?
     
@@ -65,14 +66,25 @@ class EditProfileViewController: UITableViewController {
     private func setupTextFields() {
         fullNameField.text = profile.fullName
         fullNameField.autocapitalizationType = .words
+        fullNameField.autocorrectionType = .no
         fullNameField.addTarget(self, action: #selector(textFieldChanged), for: .editingChanged)
         
         emailField.text = profile.email
         emailField.isEnabled = false
         emailField.textColor = .secondaryLabel
         
-        phoneField.text = profile.phone
-        phoneField.keyboardType = .phonePad
+        // Phone: show raw 10-digit portion, use numberPad + "+91" prefix
+        let rawPhone = profile.phone.hasPrefix("+91") ? String(profile.phone.dropFirst(3)) : profile.phone
+        phoneField.text = rawPhone
+        phoneField.keyboardType = .numberPad
+        phoneField.placeholder = "10-digit mobile number"
+        let prefixLabel = UILabel()
+        prefixLabel.text = " +91 "
+        prefixLabel.font = phoneField.font ?? .systemFont(ofSize: 16)
+        prefixLabel.textColor = .secondaryLabel
+        prefixLabel.sizeToFit()
+        phoneField.leftView = prefixLabel
+        phoneField.leftViewMode = .always
         
         upiIdField.text = profile.upiId
         upiIdField.placeholder = "yourname@upi"
@@ -113,12 +125,35 @@ class EditProfileViewController: UITableViewController {
         }
         
         let trimmedName = fullNameField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let trimmedPhone = phoneField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let trimmedPhoneRaw = phoneField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let trimmedUPI = upiIdField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        
-        if !trimmedUPI.isEmpty && !trimmedUPI.contains("@") {
+
+        // Validate name
+        if !validation.isValidFullName(trimmedName) {
             await MainActor.run {
-                presentInlineError("UPI ID should look like name@bank or name@upi.")
+                presentInlineError("Name must contain only letters and spaces (2–50 characters).")
+            }
+            return
+        }
+
+        // Validate phone (if provided)
+        let trimmedPhone: String
+        if !trimmedPhoneRaw.isEmpty {
+            if !validation.isValidPhone(trimmedPhoneRaw) {
+                await MainActor.run {
+                    presentInlineError("Please enter a valid 10-digit Indian phone number.")
+                }
+                return
+            }
+            trimmedPhone = validation.e164Phone(trimmedPhoneRaw)
+        } else {
+            trimmedPhone = ""
+        }
+
+        // Validate UPI (if provided)
+        if !trimmedUPI.isEmpty && !validation.isValidUPIId(trimmedUPI) {
+            await MainActor.run {
+                presentInlineError("UPI ID should look like name@bank (e.g. john@okaxis).")
             }
             return
         }

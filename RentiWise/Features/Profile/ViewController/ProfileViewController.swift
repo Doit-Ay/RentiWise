@@ -380,7 +380,7 @@ final class ProfileViewController: UITableViewController {
                 vc.hidesBottomBarWhenPushed = true
                 navigationController?.pushViewController(vc, animated: true)
             case 3:
-                let vc = SupportChatViewController()
+                let vc = SupportTicketListViewController()
                 vc.title = "Support"
                 vc.hidesBottomBarWhenPushed = true
                 navigationController?.pushViewController(vc, animated: true)

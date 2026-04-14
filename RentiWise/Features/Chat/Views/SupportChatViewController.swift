@@ -14,6 +14,9 @@ final class SupportChatViewController: UIViewController {
     
     private let chatService: SupportChatServicing = SupportChatService()
     
+    /// Set this before presentation to load a specific ticket (from SupportTicketListViewController).
+    var preloadedTicketId: String?
+    
     // MARK: - Properties
     
     private var currentTicket: SupportTicket?
@@ -342,15 +345,28 @@ final class SupportChatViewController: UIViewController {
                 let resolved_at: String?
             }
 
-            let ticketRows: [TicketRow] = try await SupabaseManager.shared.client
-                .from("support_tickets")
-                .select()
-                .eq("user_id", value: userId)
-                .in("status", values: ["open", "in_progress"])
-                .order("created_at", ascending: false)
-                .limit(1)
-                .execute()
-                .value
+            let ticketRows: [TicketRow]
+            if let preloadId = preloadedTicketId {
+                // Load the specific ticket requested by the caller
+                ticketRows = try await SupabaseManager.shared.client
+                    .from("support_tickets")
+                    .select()
+                    .eq("id", value: preloadId)
+                    .limit(1)
+                    .execute()
+                    .value
+            } else {
+                // Load the newest open/in_progress ticket
+                ticketRows = try await SupabaseManager.shared.client
+                    .from("support_tickets")
+                    .select()
+                    .eq("user_id", value: userId)
+                    .in("status", values: ["open", "in_progress"])
+                    .order("created_at", ascending: false)
+                    .limit(1)
+                    .execute()
+                    .value
+            }
 
             if let latestTicket = ticketRows.first {
                 // Convert to SupportTicket model

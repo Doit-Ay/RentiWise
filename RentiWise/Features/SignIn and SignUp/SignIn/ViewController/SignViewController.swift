@@ -162,7 +162,7 @@ final class SignViewController: UIViewController, UITextViewDelegate {
             return
         }
         guard validation.isValidEmail(email) else {
-            presentAlert(title: "Invalid Email", message: "Please enter a valid email address.")
+            presentAlert(title: "Invalid Email", message: "Please enter a valid email address (e.g. user@example.com).")
             return
         }
 

@@ -245,8 +245,8 @@ final class ManualAddressViewController: UIViewController {
                                         returnKey: .next,
                                         autocap: .words)
 
-        phoneField = makeStyledField("Enter phone number",
-                                     keyboard: .phonePad,
+        phoneField = makeStyledField("10-digit mobile number",
+                                     keyboard: .numberPad,
                                      contentType: .telephoneNumber,
                                      returnKey: .next,
                                      autocap: .none)
@@ -254,6 +254,14 @@ final class ManualAddressViewController: UIViewController {
         phoneField.smartQuotesType = .no
         phoneField.smartInsertDeleteType = .no
         phoneField.inputAccessoryView = makeDoneToolbar()
+        // Add "+91" prefix label
+        let phonePrefixLabel = UILabel()
+        phonePrefixLabel.text = " +91 "
+        phonePrefixLabel.font = phoneField.font ?? .systemFont(ofSize: 16)
+        phonePrefixLabel.textColor = .secondaryLabel
+        phonePrefixLabel.sizeToFit()
+        phoneField.leftView = phonePrefixLabel
+        phoneField.leftViewMode = .always
 
         contactSection.addArrangedSubview(labeledRow(label: "Label (optional)", field: labelField))
         contactSection.addArrangedSubview(labeledRow(label: "Full name", field: fullNameField))
@@ -280,14 +288,15 @@ final class ManualAddressViewController: UIViewController {
                                      contentType: .addressState,
                                      returnKey: .next,
                                      autocap: .words)
-        postalField = makeStyledField("Postal code",
-                                      keyboard: .numbersAndPunctuation,
+        postalField = makeStyledField("6-digit PIN code",
+                                      keyboard: .numberPad,
                                       contentType: .postalCode,
                                       returnKey: .next,
                                       autocap: .none)
         postalField.smartDashesType = .no
         postalField.smartQuotesType = .no
         postalField.smartInsertDeleteType = .no
+        postalField.inputAccessoryView = makeDoneToolbar()
 
         countryField = makeStyledField("Country",
                                        keyboard: .default,
@@ -453,6 +462,26 @@ final class ManualAddressViewController: UIViewController {
         required(stateField, stateError, "State is required.")
         required(postalField, postalError, "Postal code is required.")
         required(countryField, countryError, "Country is required.")
+
+        // Format validation: phone must be exactly 10 digits
+        if phoneError.isHidden {
+            let phoneDigits = (phoneField.text ?? "").filter { $0.isNumber }
+            if phoneDigits.count != 10 {
+                phoneError.text = "Enter a valid 10-digit phone number."
+                phoneError.isHidden = false
+                ok = false
+            }
+        }
+
+        // Format validation: postal code must be exactly 6 digits
+        if postalError.isHidden {
+            let postalDigits = (postalField.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if postalDigits.count != 6 || !postalDigits.allSatisfy({ $0.isNumber }) {
+                postalError.text = "Enter a valid 6-digit Indian PIN code."
+                postalError.isHidden = false
+                ok = false
+            }
+        }
 
         if ok == false {
             if !fullNameError.isHidden { scrollToView(fullNameField); return false }

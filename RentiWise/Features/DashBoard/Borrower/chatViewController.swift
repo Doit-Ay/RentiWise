@@ -301,10 +301,37 @@ final class ChatThreadViewController: UIViewController {
             }
 
             // Content moderation check (UGC Guideline 1.2)
-            if let violation = ChatContentFilter.check(text) {
+            if let _ = ChatContentFilter.check(text) {
+                let violationCount = ChatContentFilter.recordViolation()
+                let warningMessage = ChatContentFilter.currentWarningMessage
+
+                // Auto-report after escalation threshold
+                if ChatContentFilter.shouldAutoReport, let otherId = self.otherUserId {
+                    Task {
+                        try? await self.safetyService.reportUser(
+                            userId: otherId,
+                            displayName: self.otherParticipantDisplayName,
+                            context: "Chat auto-moderation",
+                            reason: "Auto-flagged: \(violationCount) content policy violations in session.",
+                            details: "Blocked message: \(text.prefix(100))"
+                        )
+                        // Also report conversation if available
+                        if let cId = self.conversation?.id {
+                            try? await self.safetyService.reportConversation(
+                                otherUserId: otherId,
+                                otherDisplayName: self.otherParticipantDisplayName,
+                                conversationId: cId,
+                                itemId: self.itemId,
+                                reason: "Auto-flagged: repeated content violations by sender.",
+                                details: nil
+                            )
+                        }
+                    }
+                }
+
                 await MainActor.run {
                     self.inputField.text = text // restore text so user can edit
-                    self.presentError(violation)
+                    self.presentError(warningMessage)
                 }
                 return
             }

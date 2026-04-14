@@ -9,7 +9,7 @@ import UIKit
 import Supabase
 
 @MainActor
-final class SignUpViewController: UIViewController, UITextViewDelegate {
+final class SignUpViewController: UIViewController, UITextViewDelegate, UITextFieldDelegate {
 
     @IBOutlet private weak var authFormStackView: UIStackView!
     @IBOutlet private weak var signUpEmailText: UITextField!
@@ -61,8 +61,19 @@ final class SignUpViewController: UIViewController, UITextViewDelegate {
 
         signUpFullNameText?.autocapitalizationType = .words
         signUpFullNameText?.autocorrectionType = .no
-        
-        signUpNumberText?.keyboardType = .phonePad
+        signUpFullNameText?.delegate = self
+
+        // Phone field: numeric pad + "+91" prefix label
+        signUpNumberText?.keyboardType = .numberPad
+        signUpNumberText?.delegate = self
+        signUpNumberText?.placeholder = "10-digit mobile number"
+        let prefixLabel = UILabel()
+        prefixLabel.text = "  +91 "
+        prefixLabel.font = signUpNumberText?.font ?? .systemFont(ofSize: 16)
+        prefixLabel.textColor = .secondaryLabel
+        prefixLabel.sizeToFit()
+        signUpNumberText?.leftView = prefixLabel
+        signUpNumberText?.leftViewMode = .always
 
         // Back to Profile button
         navigationItem.leftBarButtonItem = UIBarButtonItem(
@@ -133,10 +144,14 @@ final class SignUpViewController: UIViewController, UITextViewDelegate {
         let password = signUpPasswordText.text ?? ""
         let confirmPassword = signUpConfirmPasswordText.text ?? ""
         let fullName = signUpFullNameText.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let phone = signUpNumberText.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let phoneRaw = signUpNumberText.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
 
         guard !email.isEmpty, !password.isEmpty, !confirmPassword.isEmpty, !fullName.isEmpty else {
             presentAlert(title: "Missing fields", message: "Please fill in all the required fields.")
+            return
+        }
+        guard validation.isValidFullName(fullName) else {
+            presentAlert(title: "Invalid Name", message: "Name must contain only letters and spaces (2–50 characters).")
             return
         }
         guard password == confirmPassword else {
@@ -144,12 +159,23 @@ final class SignUpViewController: UIViewController, UITextViewDelegate {
             return
         }
         guard validation.isValidEmail(email) else {
-            presentAlert(title: "Invalid Email", message: "Please enter a valid email address.")
+            presentAlert(title: "Invalid Email", message: "Please enter a valid email address (e.g. user@example.com).")
             return
         }
         guard validation.isValidPassword(password) else {
-            presentAlert(title: "Weak Password", message: "Password should be at least 6 characters.")
+            presentAlert(title: "Weak Password", message: "Password must be at least 6 characters with an uppercase letter, a lowercase letter, and a digit.")
             return
+        }
+        // Phone is optional but if provided must be valid
+        let phone: String
+        if !phoneRaw.isEmpty {
+            guard validation.isValidPhone(phoneRaw) else {
+                presentAlert(title: "Invalid Phone", message: "Please enter a valid 10-digit Indian mobile number.")
+                return
+            }
+            phone = validation.e164Phone(phoneRaw)
+        } else {
+            phone = ""
         }
 
         signUpButton?.isEnabled = false
@@ -157,6 +183,7 @@ final class SignUpViewController: UIViewController, UITextViewDelegate {
 
         do {
             let credentials = SignUpCredentials(email: email, password: password)
+            // phone is already in E.164 format or empty
             let profile = SignUpUserProfile(fullName: fullName, phone: phone)
 
             let result = try await signUpService.signUp(credentials: credentials)
@@ -330,5 +357,31 @@ final class SignUpViewController: UIViewController, UITextViewDelegate {
         let a = UIAlertController(title: title, message: message, preferredStyle: .alert)
         a.addAction(UIAlertAction(title: "OK", style: .default))
         present(a, animated: true)
+    }
+
+    // MARK: - UITextFieldDelegate (input restrictions)
+
+    func textField(_ textField: UITextField, shouldChangeCharactersIn range: NSRange, replacementString string: String) -> Bool {
+        // Phone field: allow only digits, max 10 chars
+        if textField === signUpNumberText {
+            let allowedCharacters = CharacterSet.decimalDigits
+            if !string.isEmpty && string.rangeOfCharacter(from: allowedCharacters.inverted) != nil {
+                return false
+            }
+            let currentText = textField.text ?? ""
+            let newLength = currentText.count + string.count - range.length
+            return newLength <= 10
+        }
+        // Full name field: allow only letters and spaces
+        if textField === signUpFullNameText {
+            let allowed = CharacterSet.letters.union(.whitespaces)
+            if !string.isEmpty && string.unicodeScalars.contains(where: { !allowed.contains($0) }) {
+                return false
+            }
+            let currentText = textField.text ?? ""
+            let newLength = currentText.count + string.count - range.length
+            return newLength <= 50
+        }
+        return true
     }
 }
