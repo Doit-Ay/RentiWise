@@ -66,6 +66,7 @@ extension HomeViewController {
                 guard self.trendingSortGeneration == requestGeneration else { return }
                 self.trendingItems = initialTrending
                 self.trendingCollectionView?.reloadData()
+                self.updateTrendingEmptyState()
             }
 
             let rankedItems = await withTaskGroup(of: (Item, Double).self, returning: [(Item, Double)].self) { group in
@@ -94,6 +95,7 @@ extension HomeViewController {
                 guard self.trendingSortGeneration == requestGeneration else { return }
                 self.trendingItems = Array(distanceSorted.prefix(6))
                 self.trendingCollectionView?.reloadData()
+                self.updateTrendingEmptyState()
             }
         }
     }
@@ -136,6 +138,58 @@ extension HomeViewController {
 
         // Reversing sort to oldest first so newest items stay specifically in New Arrivals
         return (lhs.created_at ?? .distantPast) < (rhs.created_at ?? .distantPast)
+    }
+
+    // MARK: - Trending Empty State
+
+    /// The tag for the empty state overlay inside trendingUiView.
+    private static let trendingEmptyTag = 7788
+
+    /// Shows or hides the trending empty state based on trendingItems.count.
+    func updateTrendingEmptyState() {
+        guard let host = trendingUiView else { return }
+
+        // Find the "Trending near you" label (the label before trendingUiView in the scroll content)
+        let trendingLabel = host.superview?.subviews.compactMap({ $0 as? UILabel }).first(where: { $0.text == "Trending near you" })
+
+        if trendingItems.isEmpty {
+            // Hide the heading, collapse the view, show empty state
+            trendingLabel?.isHidden = true
+            updateTrendingHeight(0)
+            trendingCollectionView?.isHidden = true
+
+            if host.viewWithTag(Self.trendingEmptyTag) == nil {
+                let empty = buildTrendingEmptyView()
+                empty.tag = Self.trendingEmptyTag
+                empty.translatesAutoresizingMaskIntoConstraints = false
+                host.addSubview(empty)
+                NSLayoutConstraint.activate([
+                    empty.leadingAnchor.constraint(equalTo: host.leadingAnchor, constant: 20),
+                    empty.trailingAnchor.constraint(equalTo: host.trailingAnchor, constant: -20),
+                    empty.centerYAnchor.constraint(equalTo: host.centerYAnchor),
+                ])
+            }
+        } else {
+            trendingLabel?.isHidden = false
+            updateTrendingHeight(300)
+            trendingCollectionView?.isHidden = false
+            host.viewWithTag(Self.trendingEmptyTag)?.removeFromSuperview()
+        }
+    }
+
+    private func updateTrendingHeight(_ height: CGFloat) {
+        guard let host = trendingUiView else { return }
+        for c in host.constraints where c.firstAttribute == .height {
+            c.constant = height
+        }
+        host.superview?.setNeedsLayout()
+        host.superview?.layoutIfNeeded()
+    }
+
+    private func buildTrendingEmptyView() -> UIView {
+        // Intentionally empty/transparent — the section is collapsed to 0 height.
+        // This is a no-op placeholder; the real CTA is in showNoNearbyItemsBanner.
+        return UIView()
     }
 }
 

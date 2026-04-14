@@ -232,6 +232,21 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
         setupProductTap()
         setupFeaturedItemTaps()
 
+        // Hide featured cards initially to prevent storyboard placeholder text
+        // (e.g. "Item Name", "Rate", "Rating") from being visible before data loads.
+        for card in [item1CardView, item2CardView, item3CardView, item4CardView] {
+            card?.isHidden = true
+        }
+        // Also hide the "New Arrivals" section label until items are available
+        if let scrollContent = item1CardView?.superview?.superview {
+            for subview in scrollContent.subviews {
+                if let label = subview as? UILabel, label.text == "New Arrivals" {
+                    label.isHidden = true
+                    break
+                }
+            }
+        }
+
         // Trending scroller inside trendingUiView
         setupTrendingCollection()
 

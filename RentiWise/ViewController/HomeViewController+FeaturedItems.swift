@@ -53,18 +53,49 @@ extension HomeViewController {
             self.updateTrendingItems(from: nearbyItems)
 
             // Show or hide the "Be the first to list" banner
-            if nearbyItems.isEmpty && !allItems.isEmpty {
+            if nearbyItems.isEmpty {
                 self.showNoNearbyItemsBanner(true)
             } else {
                 self.showNoNearbyItemsBanner(false)
             }
+
+            // Recalculate the scroll content height to avoid excess whitespace
+            self.recalculateScrollContentHeight()
         }
     }
 
-    /// Shows/hides a "Be the first to list" banner above the featured section.
+    /// Dynamically adjusts the homeBG (scroll content) height constraint
+    /// so it wraps tightly around visible content instead of a fixed 1600pt.
+    @MainActor
+    func recalculateScrollContentHeight() {
+        guard let scrollContent = homeBG else { return }
+
+        // Force layout so subview frames are up-to-date
+        scrollContent.layoutIfNeeded()
+
+        // Find the bottom-most visible subview
+        var maxBottom: CGFloat = 0
+        for subview in scrollContent.subviews where !subview.isHidden && subview.alpha > 0 {
+            let bottom = subview.frame.maxY
+            if bottom > maxBottom {
+                maxBottom = bottom
+            }
+        }
+
+        // Add padding at the bottom
+        let targetHeight = max(maxBottom + 40, 600)
+
+        for c in scrollContent.constraints where c.firstAttribute == .height && c.firstItem === scrollContent {
+            c.constant = targetHeight
+        }
+        scrollContent.superview?.setNeedsLayout()
+    }
+
+    /// Shows/hides a polished empty-state CTA when no items are nearby.
     @MainActor
     func showNoNearbyItemsBanner(_ show: Bool) {
         let bannerTag = 9876
+        let brandTeal = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0)
 
         if !show {
             view.viewWithTag(bannerTag)?.removeFromSuperview()
@@ -77,64 +108,75 @@ extension HomeViewController {
         let banner = UIView()
         banner.tag = bannerTag
         banner.translatesAutoresizingMaskIntoConstraints = false
-        banner.backgroundColor = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 0.12)
-        banner.layer.cornerRadius = 14
-        banner.layer.borderWidth = 1
-        banner.layer.borderColor = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 0.3).cgColor
+        banner.backgroundColor = .white
+        banner.layer.cornerRadius = 20
+        banner.layer.shadowColor = UIColor.black.cgColor
+        banner.layer.shadowOpacity = 0.08
+        banner.layer.shadowRadius = 16
+        banner.layer.shadowOffset = CGSize(width: 0, height: 4)
 
-        let icon = UIImageView(image: UIImage(systemName: "mappin.and.ellipse"))
-        icon.tintColor = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1.0)
+        // Large centered icon
+        let icon = UIImageView(image: UIImage(systemName: "shippingbox.and.arrow.backward"))
+        icon.tintColor = brandTeal
         icon.contentMode = .scaleAspectFit
         icon.translatesAutoresizingMaskIntoConstraints = false
 
         let titleLabel = UILabel()
-        titleLabel.text = "No items nearby yet!"
-        titleLabel.font = .systemFont(ofSize: 16, weight: .semibold)
+        titleLabel.text = "Be the first to list!"
+        titleLabel.font = .systemFont(ofSize: 22, weight: .bold)
         titleLabel.textColor = .label
+        titleLabel.textAlignment = .center
 
         let subtitleLabel = UILabel()
-        subtitleLabel.text = "Be the first to list your items in this area and start earning."
-        subtitleLabel.font = .systemFont(ofSize: 13, weight: .regular)
+        subtitleLabel.text = "No items are available in your area yet.\nList your items and start earning from people nearby."
+        subtitleLabel.font = .systemFont(ofSize: 15, weight: .regular)
         subtitleLabel.textColor = .secondaryLabel
-        subtitleLabel.numberOfLines = 2
+        subtitleLabel.numberOfLines = 0
+        subtitleLabel.textAlignment = .center
 
-        let textStack = UIStackView(arrangedSubviews: [titleLabel, subtitleLabel])
-        textStack.axis = .vertical
-        textStack.spacing = 4
-        textStack.translatesAutoresizingMaskIntoConstraints = false
+        let ctaButton = UIButton(type: .system)
+        ctaButton.setTitle("  List Your First Item", for: .normal)
+        ctaButton.setImage(UIImage(systemName: "plus.circle.fill"), for: .normal)
+        ctaButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
+        ctaButton.tintColor = .white
+        ctaButton.backgroundColor = brandTeal
+        ctaButton.layer.cornerRadius = 14
+        ctaButton.translatesAutoresizingMaskIntoConstraints = false
+        ctaButton.addTarget(self, action: #selector(additemHomeTapped(_:)), for: .touchUpInside)
 
-        banner.addSubview(icon)
-        banner.addSubview(textStack)
+        let contentStack = UIStackView(arrangedSubviews: [icon, titleLabel, subtitleLabel, ctaButton])
+        contentStack.axis = .vertical
+        contentStack.spacing = 14
+        contentStack.alignment = .center
+        contentStack.translatesAutoresizingMaskIntoConstraints = false
+
+        banner.addSubview(contentStack)
 
         NSLayoutConstraint.activate([
-            icon.leadingAnchor.constraint(equalTo: banner.leadingAnchor, constant: 16),
-            icon.centerYAnchor.constraint(equalTo: banner.centerYAnchor),
-            icon.widthAnchor.constraint(equalToConstant: 32),
-            icon.heightAnchor.constraint(equalToConstant: 32),
-            textStack.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 12),
-            textStack.trailingAnchor.constraint(equalTo: banner.trailingAnchor, constant: -16),
-            textStack.topAnchor.constraint(equalTo: banner.topAnchor, constant: 14),
-            textStack.bottomAnchor.constraint(equalTo: banner.bottomAnchor, constant: -14)
+            icon.widthAnchor.constraint(equalToConstant: 56),
+            icon.heightAnchor.constraint(equalToConstant: 56),
+            ctaButton.widthAnchor.constraint(equalTo: contentStack.widthAnchor, constant: -32),
+            ctaButton.heightAnchor.constraint(equalToConstant: 50),
+            contentStack.topAnchor.constraint(equalTo: banner.topAnchor, constant: 32),
+            contentStack.leadingAnchor.constraint(equalTo: banner.leadingAnchor, constant: 24),
+            contentStack.trailingAnchor.constraint(equalTo: banner.trailingAnchor, constant: -24),
+            contentStack.bottomAnchor.constraint(equalTo: banner.bottomAnchor, constant: -28),
         ])
 
-        // Insert the banner into the featured items stack view
-        if let stackView = item1CardView?.superview as? UIStackView {
-            stackView.insertArrangedSubview(banner, at: 0)
-        } else if let featuredCard = item1CardView?.superview ?? item1CardView {
-            let container: UIView = featuredCard.superview ?? self.view
-            container.addSubview(banner)
+        // Place the banner inside the scroll content view, below the listing section
+        if let scrollContent = trendingUiView?.superview {
+            scrollContent.addSubview(banner)
             NSLayoutConstraint.activate([
-                banner.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
-                banner.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
-                banner.bottomAnchor.constraint(equalTo: featuredCard.topAnchor, constant: -12)
+                banner.leadingAnchor.constraint(equalTo: scrollContent.leadingAnchor, constant: 20),
+                banner.trailingAnchor.constraint(equalTo: scrollContent.trailingAnchor, constant: -20),
+                banner.topAnchor.constraint(equalTo: (trendingUiView ?? listingUIView ?? scrollContent).bottomAnchor, constant: 24),
             ])
         } else {
-            // Fallback: place near the top of the scroll content
             view.addSubview(banner)
             NSLayoutConstraint.activate([
-                banner.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 16),
-                banner.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16),
-                banner.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 200)
+                banner.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 20),
+                banner.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -20),
+                banner.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: 60),
             ])
         }
 
@@ -148,6 +190,20 @@ extension HomeViewController {
     }
 
     func applyFeatured(items: [Item], currentUserId: String?) {
+        // Find and hide/show the "New Arrivals" label and featured card stack
+        let newArrivalsLabel = item1CardView?.superview?.superview?.subviews
+            .compactMap({ $0 as? UILabel })
+            .first(where: { $0.text == "New Arrivals" })
+        let cardStack = item1CardView?.superview as? UIStackView
+
+        if items.isEmpty {
+            newArrivalsLabel?.isHidden = true
+            cardStack?.isHidden = true
+        } else {
+            newArrivalsLabel?.isHidden = false
+            cardStack?.isHidden = false
+        }
+
         let slots: [(UIImageView?, UILabel?, UILabel?, UILabel?, UILabel?, UILabel?, UIView?, UIButton?)] = [
             (item1Image, item1Name, item1Rate, item1Rating, item1Distance, item1owner, item1CardView, rentButton1),
             (item2Image, item2Name, item2Rate, item2Rating, item2Distance, item2owner, item2CardView, rentButton2),
