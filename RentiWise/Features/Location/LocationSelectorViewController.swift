@@ -116,6 +116,7 @@ final class LocationSelectorViewController: UIViewController {
                     )
                     // Keep Home button title in sync via local store
                     SavedAddressesStore.shared.setDefaultSelectedAddress(name)
+                    NotificationCenter.default.post(name: .locationDidChange, object: nil)
                     await MainActor.run {
                         self.onSelectedAddress?(name)
                     }
@@ -310,6 +311,7 @@ extension LocationSelectorViewController: UITableViewDelegate {
                 SavedAddressesStore.shared.setDefaultSelectedAddress(
                     persistedSelection.isEmpty ? display : persistedSelection
                 )
+                NotificationCenter.default.post(name: .locationDidChange, object: nil)
                 self.onSelectedAddress?(display)
             }
         }

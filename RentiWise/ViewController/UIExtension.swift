@@ -7,6 +7,13 @@
 
 import UIKit
 
+// MARK: - App-wide Notification Names
+extension Notification.Name {
+    /// Posted whenever the active viewer location changes (GPS, manual entry, saved address, or map picker).
+    /// All screens that filter items by distance should observe this and reload.
+    static let locationDidChange = Notification.Name("RW_LocationDidChange")
+}
+
 // MARK: - UIView styling helpers (programmatic)
 extension UIView {
 

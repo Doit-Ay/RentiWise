@@ -47,12 +47,17 @@ final class ManualAddressViewController: UIViewController {
 
     // Actions
     private let prefillLocationButton = UIButton(type: .system)
+    private let pickOnMapButton = UIButton(type: .system)
 
     // Service
     private let service: AddressServicing = AddressService()
 
     // Geocoder
     private let geocoder = CLGeocoder()
+
+    /// Coordinates picked directly from the map picker (overrides form-level geocoding at save time)
+    private var pickedLatitude: Double?
+    private var pickedLongitude: Double?
 
     // App brand tint (used for borders)
     private let brandTeal = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0)
@@ -290,6 +295,26 @@ final class ManualAddressViewController: UIViewController {
                                        returnKey: .done,
                                        autocap: .words)
 
+        // --- Pick on Map button (compact, tinted outline style) ---
+        pickOnMapButton.translatesAutoresizingMaskIntoConstraints = false
+        var mapBtnConfig = UIButton.Configuration.tinted()
+        let mapIcon = UIImage(systemName: "mappin.and.ellipse",
+                              withConfiguration: UIImage.SymbolConfiguration(pointSize: 13, weight: .semibold))
+        mapBtnConfig.image = mapIcon
+        mapBtnConfig.imagePlacement = .leading
+        mapBtnConfig.imagePadding = 6
+        mapBtnConfig.baseBackgroundColor = brandTeal
+        mapBtnConfig.baseForegroundColor = brandTeal
+        mapBtnConfig.cornerStyle = .medium
+        mapBtnConfig.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 14, bottom: 8, trailing: 14)
+        var mapTitleAttr = AttributeContainer()
+        mapTitleAttr.font = .systemFont(ofSize: 13, weight: .semibold)
+        mapBtnConfig.attributedTitle = AttributedString("Pick on Map", attributes: mapTitleAttr)
+        pickOnMapButton.configuration = mapBtnConfig
+        pickOnMapButton.addTarget(self, action: #selector(pickOnMapTapped), for: .touchUpInside)
+        pickOnMapButton.heightAnchor.constraint(equalToConstant: 36).isActive = true
+        addressSection.addArrangedSubview(pickOnMapButton)
+
         // Rows
         let line1Row = labeledRow(label: "Address line 1", field: line1Field)
         let line2Row = labeledRow(label: "Address line 2 (optional)", field: line2Field)
@@ -513,6 +538,54 @@ final class ManualAddressViewController: UIViewController {
         }
     }
 
+    @objc private func pickOnMapTapped() {
+        let mapPicker = MapLocationPickerViewController()
+
+        // Pre-center on existing valid coords if available
+        if let lat = pickedLatitude, let lon = pickedLongitude, lat != 0, lon != 0 {
+            mapPicker.initialCoordinate = CLLocationCoordinate2D(latitude: lat, longitude: lon)
+        }
+
+        mapPicker.onLocationPicked = { [weak self] lat, lon, placemark in
+            guard let self else { return }
+            self.pickedLatitude = lat
+            self.pickedLongitude = lon
+
+            // Autofill fields from the reverse-geocoded placemark
+            if let pm = placemark {
+                let houseName = [pm.subThoroughfare, pm.thoroughfare]
+                    .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+                    .joined(separator: " ")
+                if !houseName.isEmpty { self.line1Field.text = houseName }
+
+                let area = [pm.subLocality, pm.name]
+                    .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+                    .first
+                if let area { self.line2Field.text = area }
+
+                if let city = pm.locality { self.cityField.text = city }
+                if let state = pm.administrativeArea { self.stateField.text = state }
+                if let postal = pm.postalCode { self.postalField.text = postal }
+                if let country = pm.country { self.countryField.text = country }
+            }
+
+            self.updateSaveEnabled()
+
+            // Brief confirmation flash on the map button
+            UIView.animate(withDuration: 0.2, animations: {
+                self.pickOnMapButton.configuration?.baseBackgroundColor = .systemGreen
+            }) { _ in
+                UIView.animate(withDuration: 0.5, delay: 0.8) {
+                    self.pickOnMapButton.configuration?.baseBackgroundColor = self.brandTeal
+                }
+            }
+        }
+
+        navigationController?.pushViewController(mapPicker, animated: true)
+    }
+
     // Build full and fallback address strings for geocoding
     private func fullAddressString() -> String {
         let parts = [
@@ -606,9 +679,21 @@ final class ManualAddressViewController: UIViewController {
             let country = countryField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             let isDefault = defaultSwitch.isOn
 
-            // 2) Resolve coordinates with robust fallbacks
-            let (lat, lon) = await resolveCoordinatesForSave()
-            debugLog("[Address] Final coords to save: lat=\(String(describing: lat)) lon=\(String(describing: lon))")
+            // 2) Coordinate resolution:
+            //    a) Map picker coords take highest priority (most precise — exact drop-pin)
+            //    b) Fall back to form-level geocoding as before
+            let lat: Double?
+            let lon: Double?
+            if let pLat = pickedLatitude, let pLon = pickedLongitude, pLat != 0, pLon != 0 {
+                lat = pLat
+                lon = pLon
+                debugLog("[Address] Using map-picker coords: lat=\(pLat) lon=\(pLon)")
+            } else {
+                let resolved = await resolveCoordinatesForSave()
+                lat = resolved.0
+                lon = resolved.1
+                debugLog("[Address] Final coords to save: lat=\(String(describing: lat)) lon=\(String(describing: lon))")
+            }
 
             do {
                 let userId = try await service.currentUserId()

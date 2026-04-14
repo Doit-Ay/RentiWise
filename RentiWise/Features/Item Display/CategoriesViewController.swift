@@ -111,9 +111,18 @@ final class CategoriesViewController: UIViewController {
             name: Notification.Name("itemsShouldRefresh"),
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleLocationDidChange),
+            name: .locationDidChange,
+            object: nil
+        )
     }
 
     @objc private func handleItemsShouldRefresh() {
+        Task { await loadItems() }
+    }
+    @objc private func handleLocationDidChange() {
         Task { await loadItems() }
     }
     private func formattedPricePerDay(_ value: Double) -> String {

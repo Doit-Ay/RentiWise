@@ -881,6 +881,7 @@ extension HomeViewController {
                         latitude: loc.coordinate.latitude,
                         longitude: loc.coordinate.longitude
                     )
+                    NotificationCenter.default.post(name: .locationDidChange, object: nil)
                     await MainActor.run {
                         self.updateLocationButtonDisplay(name)
                     }
@@ -943,10 +944,12 @@ extension HomeViewController {
         }
 
         vc.onSelectedAddress = { [weak self] _ in
-            DistanceService.shared.clearAllDistanceCaches()
+            // Caches already cleared / viewer coordinate already set by the
+            // location-selector path that triggered this callback.
             CategoryItemCell.clearDistanceCache()
             self?.refreshLocationButtonTitle()
             Task { await self?.loadFeaturedItems(forceRefresh: true) }
+            NotificationCenter.default.post(name: .locationDidChange, object: nil)
         }
 
         vc.onEnterManualAddress = { [weak self] completion in
@@ -956,10 +959,16 @@ extension HomeViewController {
                 let display = [saved.label, saved.city, saved.state].compactMap { $0 }.first ?? saved.city
                 let fullString = self.makeFullAddressString(from: saved)
                 SavedAddressesStore.shared.setDefaultSelectedAddress(fullString)
-                DistanceService.shared.clearAllDistanceCaches()
+                // Use the exact geocoded coordinates so DistanceService doesn't fall back to GPS
+                if let lat = saved.latitude, let lon = saved.longitude, lat != 0, lon != 0 {
+                    DistanceService.shared.setViewerCoordinate(latitude: lat, longitude: lon)
+                } else {
+                    DistanceService.shared.clearAllDistanceCaches()
+                }
                 CategoryItemCell.clearDistanceCache()
                 self.refreshLocationButtonTitle()
                 Task { await self.loadFeaturedItems(forceRefresh: true) }
+                NotificationCenter.default.post(name: .locationDidChange, object: nil)
                 completion(display)
             }
             if let nav = self.navigationController {
@@ -980,10 +989,16 @@ extension HomeViewController {
                 let display = [addr.label, addr.city, addr.state].compactMap { $0 }.first ?? addr.city
                 let fullString = self.makeFullAddressString(from: addr)
                 SavedAddressesStore.shared.setDefaultSelectedAddress(fullString)
-                DistanceService.shared.clearAllDistanceCaches()
+                // Use exact DB coordinates instead of clearing and falling back to GPS
+                if let lat = addr.latitude, let lon = addr.longitude, lat != 0, lon != 0 {
+                    DistanceService.shared.setViewerCoordinate(latitude: lat, longitude: lon)
+                } else {
+                    DistanceService.shared.clearAllDistanceCaches()
+                }
                 CategoryItemCell.clearDistanceCache()
                 self.refreshLocationButtonTitle()
                 Task { await self.loadFeaturedItems(forceRefresh: true) }
+                NotificationCenter.default.post(name: .locationDidChange, object: nil)
             }
             if let nav = self.navigationController {
                 nav.setNavigationBarHidden(false, animated: true)

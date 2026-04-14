@@ -90,13 +90,24 @@ final class DistanceService {
     }
 
     /// Clears ALL distance caches — viewer address, in-memory directions/geocode, and owner cache.
-    /// Call this whenever the user's location changes so every distance is recomputed.
+    /// Clears route / owner / geocode caches so distances are recomputed,
+    /// but **preserves** the viewer's explicit address so a manually-entered
+    /// location is not overwritten by a fallback GPS lookup.
     func clearAllDistanceCaches() {
+        directionsCache.removeAllObjects()
+        geocodeCache.removeAllObjects()
+        ownerCoordCache.removeAllObjects()
+        print("[DistanceService] Route/owner caches cleared (viewer address preserved)")
+    }
+
+    /// Full reset including the viewer's address. Call on **logout** or when
+    /// a complete location reset is required.
+    func resetAllCachesIncludingViewerAddress() {
         clearViewerAddressCache()
         directionsCache.removeAllObjects()
         geocodeCache.removeAllObjects()
         ownerCoordCache.removeAllObjects()
-        print("[DistanceService] All caches cleared")
+        print("[DistanceService] All caches fully reset including viewer address")
     }
 
     /// Directly set the viewer's coordinate, bypassing DB/GPS lookups.
@@ -356,7 +367,18 @@ final class DistanceService {
         // Check if user explicitly set coordinates via location picker.
         let isExplicit = UserDefaults.standard.bool(forKey: viewerAddressKey(viewerAddressExplicitKeyBase, userId: userId))
 
-        // 1) HIGHEST PRIORITY: Try device GPS (real-time location)
+        // 1) HIGHEST PRIORITY: Try DB addresses table (precise coords from save-time geocoding)
+        //    DB always has the most accurate coordinates because they were geocoded at
+        //    address-entry time (or picked on map). This avoids re-geocoding lossy text strings.
+        if !isExplicit, userId != "anonymous" {
+            if let resolved = await fetchViewerAddressCoordinate(userId: userId) {
+                print("[DistanceService] Viewer resolved from DB: \(resolved.location.coordinate.latitude), \(resolved.location.coordinate.longitude)")
+                saveViewerAddress(resolved)
+                return resolved
+            }
+        }
+
+        // 2) Try device GPS (real-time location)
         if !isExplicit {
             if let coordinates = await AppLocationManager.shared.currentCoordinates() {
                 let location = CLLocation(latitude: coordinates.latitude, longitude: coordinates.longitude)
@@ -374,16 +396,7 @@ final class DistanceService {
             }
         }
 
-        // 2) Try DB addresses table (user's saved default address)
-        if !isExplicit {
-            if userId != "anonymous", let resolved = await fetchViewerAddressCoordinate(userId: userId) {
-                print("[DistanceService] Viewer resolved from DB: \(resolved.location.coordinate.latitude), \(resolved.location.coordinate.longitude)")
-                saveViewerAddress(resolved)
-                return resolved
-            }
-        }
-
-        // 3) Try SavedAddressesStore (local UserDefaults — user's explicit selection)
+        // 3) Try SavedAddressesStore (local UserDefaults — geocodes a text string as last resort)
         let savedAddress = SavedAddressesStore.shared.getDefaultSelectedAddress()?.trimmingCharacters(in: .whitespacesAndNewlines)
         if let savedAddress, !savedAddress.isEmpty, savedAddress != "Current Location" {
             if let location = await geocodeAddressString(savedAddress) {
