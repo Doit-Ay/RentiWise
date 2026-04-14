@@ -45,146 +45,22 @@ extension HomeViewController {
         trendingCollectionView = cv
     }
 
-    func updateTrendingItems(from items: [Item]) {
+    func updateTrendingItems(from items: [Item], currentUserId: String?) {
         let requestGeneration = UUID()
         trendingSortGeneration = requestGeneration
-
-        Task { [weak self] in
-            guard let self else { return }
-            let me = await SupabaseManager.shared.currentUserId()
-            
-            // Filter out items owned by the current user so they don't dominate their own trending list
-            let filteredItems = items.filter { item in
-                guard let me = me else { return true }
-                return item.owner_id.lowercased() != me.lowercased()
-            }
-
-            // Items already arrive sorted by distance from filterItemsWithinRadius(),
-            // so we just need to take the top 6. Apply preference tiebreaker for equal-distance items.
-            let sorted = filteredItems.sorted(by: self.isPreferredTrendingItem(_:over:))
-            let trending = Array(sorted.prefix(6))
-            
-            await MainActor.run {
-                guard self.trendingSortGeneration == requestGeneration else { return }
-                self.trendingItems = trending
-                self.trendingCollectionView?.reloadData()
-                self.updateTrendingEmptyState()
-            }
-        }
-    }
-
-    func resolveTrendingOwnerName(for ownerId: String, completion: @escaping (String) -> Void) {
-        if let cached = ownerNameCache[ownerId] {
-            completion(cached)
-            return
+        
+        let filteredItems = items.filter { item in
+            guard let currentUserId else { return true }
+            return item.owner_id.caseInsensitiveCompare(currentUserId) != .orderedSame
         }
 
-        Task {
-            if let name = try? await fetchName(from: "user_profiles", ownerId: ownerId), !name.isEmpty {
-                let display = capitalizingFirstLetter(name)
-                ownerNameCache[ownerId] = display
-                completion(display)
-                return
-            }
-            let display = "Owner"
-            ownerNameCache[ownerId] = display
-            completion(display)
-        }
-    }
+        // `filterItemsWithinRadius` already returns items sorted by distance ascending.
+        // Preserve that exact order so Trending near you stays purely location-first.
+        let trending = Array(filteredItems.prefix(6))
 
-    private func isPreferredTrendingItem(_ lhs: Item, over rhs: Item) -> Bool {
-        let lhsRating = lhs.average_rating ?? 0
-        let rhsRating = rhs.average_rating ?? 0
-        if lhsRating != rhsRating {
-            return lhsRating > rhsRating
-        }
-
-        let lhsReviews = lhs.review_count ?? 0
-        let rhsReviews = rhs.review_count ?? 0
-        if lhsReviews != rhsReviews {
-            return lhsReviews > rhsReviews
-        }
-
-        if lhs.hasActiveBoost != rhs.hasActiveBoost {
-            return lhs.hasActiveBoost && !rhs.hasActiveBoost
-        }
-
-        // Reversing sort to oldest first so newest items stay specifically in New Arrivals
-        return (lhs.created_at ?? .distantPast) < (rhs.created_at ?? .distantPast)
-    }
-
-    // MARK: - Trending Empty State
-
-    /// The tag for the empty state overlay inside trendingUiView.
-    private static let trendingEmptyTag = 7788
-
-    /// Shows or hides the trending empty state based on trendingItems.count.
-    func updateTrendingEmptyState() {
-        guard let host = trendingUiView else { return }
-
-        // Find the "Trending near you" label (the label before trendingUiView in the scroll content)
-        let trendingLabel = host.superview?.subviews.compactMap({ $0 as? UILabel }).first(where: { $0.text == "Trending near you" })
-
-        if trendingItems.isEmpty {
-            // Keep the heading visible, show empty state placeholder inside the container
-            trendingLabel?.isHidden = false
-            updateTrendingHeight(40)
-            trendingCollectionView?.isHidden = true
-
-            if host.viewWithTag(Self.trendingEmptyTag) == nil {
-                let empty = buildTrendingEmptyView()
-                empty.tag = Self.trendingEmptyTag
-                empty.translatesAutoresizingMaskIntoConstraints = false
-                host.addSubview(empty)
-                NSLayoutConstraint.activate([
-                    empty.leadingAnchor.constraint(equalTo: host.leadingAnchor, constant: 20),
-                    empty.trailingAnchor.constraint(equalTo: host.trailingAnchor, constant: -20),
-                    empty.topAnchor.constraint(equalTo: host.topAnchor, constant: 0),
-                    empty.bottomAnchor.constraint(lessThanOrEqualTo: host.bottomAnchor, constant: 0),
-                ])
-            }
-        } else {
-            trendingLabel?.isHidden = false
-            updateTrendingHeight(300)
-            trendingCollectionView?.isHidden = false
-            host.viewWithTag(Self.trendingEmptyTag)?.removeFromSuperview()
-        }
-
-        // Recalculate scroll content height after trending state changes
-        recalculateScrollContentHeight()
-    }
-
-    private func updateTrendingHeight(_ height: CGFloat) {
-        guard let host = trendingUiView else { return }
-        for c in host.constraints where c.firstAttribute == .height {
-            c.constant = height
-        }
-        host.superview?.setNeedsLayout()
-        host.superview?.layoutIfNeeded()
-    }
-
-    private func buildTrendingEmptyView() -> UIView {
-        let container = UIView()
-        container.backgroundColor = .clear
-
-        // Placeholder text
-        let placeholderLabel = UILabel()
-        placeholderLabel.text = "No items listed near you, be the first one!"
-        placeholderLabel.font = .systemFont(ofSize: 15, weight: .medium)
-        placeholderLabel.textColor = .secondaryLabel
-        placeholderLabel.textAlignment = .center
-        placeholderLabel.numberOfLines = 0
-        placeholderLabel.translatesAutoresizingMaskIntoConstraints = false
-
-        container.addSubview(placeholderLabel)
-        NSLayoutConstraint.activate([
-            placeholderLabel.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            placeholderLabel.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            placeholderLabel.topAnchor.constraint(equalTo: container.topAnchor),
-            placeholderLabel.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-        ])
-
-        return container
+        guard trendingSortGeneration == requestGeneration else { return }
+        trendingItems = trending
+        trendingCollectionView?.reloadData()
     }
 }
 
@@ -327,10 +203,13 @@ final class TrendingItemCell: UICollectionViewCell {
 
         // Rent button — matches featured item card rent buttons (white bg, teal text, soft shadow)
         let brandTeal = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0)
-        rentButton.setTitle("Rent", for: .normal)
-        rentButton.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
-        rentButton.setTitleColor(brandTeal, for: .normal)
-        rentButton.contentEdgeInsets = UIEdgeInsets(top: 8, left: 16, bottom: 8, right: 16)
+        var configuration = UIButton.Configuration.plain()
+        var titleAttributes = AttributeContainer()
+        titleAttributes.font = .systemFont(ofSize: 15, weight: .semibold)
+        configuration.attributedTitle = AttributedString("Rent", attributes: titleAttributes)
+        configuration.baseForegroundColor = brandTeal
+        configuration.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16)
+        rentButton.configuration = configuration
         rentButton.backgroundColor = .white
         rentButton.layer.cornerRadius = 16
         rentButton.layer.masksToBounds = false

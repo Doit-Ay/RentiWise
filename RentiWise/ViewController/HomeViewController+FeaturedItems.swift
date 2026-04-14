@@ -8,7 +8,7 @@
 import UIKit
 import Supabase
 
-// MARK: - Featured items loading
+// MARK: - Home feed loading
 extension HomeViewController {
 
     func loadFeaturedItems(forceRefresh: Bool = false) async {
@@ -19,15 +19,12 @@ extension HomeViewController {
 
         let me = await SupabaseManager.shared.currentUserId()
 
-        // LOGGED OUT: Skip fetching — show placeholder instead
+        // LOGGED OUT: Skip fetching and show the compact feed banner instead.
         if me == nil {
             await MainActor.run {
                 self.applyFeatured(items: [], currentUserId: nil)
-                self.trendingItems = []
-                self.trendingCollectionView?.reloadData()
-                self.updateTrendingEmptyState()
-                self.showNoNearbyItemsBanner(false)
-                self.recalculateScrollContentHeight()
+                self.updateTrendingItems(from: [], currentUserId: nil)
+                self.updateHomeFeedPresentation(currentUserId: nil)
             }
             return
         }
@@ -46,30 +43,44 @@ extension HomeViewController {
             } catch {
                 await MainActor.run {
                     self.applyFeatured(items: [], currentUserId: me)
+                    self.updateTrendingItems(from: [], currentUserId: me)
+                    self.updateHomeFeedPresentation(currentUserId: me)
                 }
                 return
             }
         }
 
-        // Filter items within 30km radius and sort by distance (nearest first)
-        let nearbyItems = await DistanceService.shared.filterItemsWithinRadius(allItems)
-
-        let featured = Array(nearbyItems.prefix(4))
+        let visibleNonOwnItems = makeHomeFeedItems(from: allItems, currentUserId: me)
+        let nearbyItems = await DistanceService.shared.filterItemsWithinRadius(visibleNonOwnItems)
+        let newArrivals = makeNewArrivalsItems(from: visibleNonOwnItems)
 
         await MainActor.run {
-            self.applyFeatured(items: featured, currentUserId: me)
-            self.updateTrendingItems(from: nearbyItems)
-
-            // Show or hide the "Be the first to list" banner
-            if nearbyItems.isEmpty {
-                self.showNoNearbyItemsBanner(true)
-            } else {
-                self.showNoNearbyItemsBanner(false)
-            }
-
-            // Recalculate the scroll content height to avoid excess whitespace
-            self.recalculateScrollContentHeight()
+            self.applyFeatured(items: newArrivals, currentUserId: me)
+            self.updateTrendingItems(from: nearbyItems, currentUserId: me)
+            self.updateHomeFeedPresentation(currentUserId: me)
         }
+    }
+
+    private func makeHomeFeedItems(from items: [Item], currentUserId: String?) -> [Item] {
+        items.filter { item in
+            guard let currentUserId else { return true }
+            return item.owner_id.caseInsensitiveCompare(currentUserId) != .orderedSame
+        }
+    }
+
+    private func makeNewArrivalsItems(from items: [Item]) -> [Item] {
+        Array(
+            items
+                .sorted { lhs, rhs in
+                    let lhsDate = lhs.created_at ?? .distantPast
+                    let rhsDate = rhs.created_at ?? .distantPast
+                    if lhsDate != rhsDate {
+                        return lhsDate > rhsDate
+                    }
+                    return lhs.id > rhs.id
+                }
+                .prefix(4)
+        )
     }
 
     /// Dynamically adjusts the homeBG (scroll content) height constraint
@@ -77,208 +88,83 @@ extension HomeViewController {
     /// Also repositions the "You ❤️ Rentiwise" tagline to sit right below the last content.
     @MainActor
     func recalculateScrollContentHeight() {
-        guard let scrollContent = homeBG else { return }
-
-        // Force layout so subview frames are up-to-date
-        scrollContent.layoutIfNeeded()
-
-        // Find the bottom-most visible subview, excluding the bottom tagline
-        var maxBottom: CGFloat = 0
-        for subview in scrollContent.subviews where !subview.isHidden && subview.alpha > 0 {
-            // Skip the "You ❤️ Rentiwise" tagline — we'll reposition it afterwards
-            if subview === Homepagelastline { continue }
-            let bottom = subview.frame.maxY
-            if bottom > maxBottom {
-                maxBottom = bottom
-            }
-        }
-
-        // Reposition the tagline label right below the last content item
-        if let tagline = Homepagelastline {
-            let taglinePadding: CGFloat = 20
-            tagline.frame = CGRect(
-                x: tagline.frame.origin.x,
-                y: maxBottom + taglinePadding,
-                width: tagline.frame.width,
-                height: tagline.frame.height
-            )
-            // Update maxBottom to include the repositioned tagline
-            maxBottom = tagline.frame.maxY
-        }
-
-        // Add padding at the bottom
-        let targetHeight = max(maxBottom + 40, 600)
-
-        for c in scrollContent.constraints where c.firstAttribute == .height && c.firstItem === scrollContent {
-            c.constant = targetHeight
-        }
-        scrollContent.superview?.setNeedsLayout()
+        view.setNeedsLayout()
+        view.layoutIfNeeded()
     }
 
-    /// Shows/hides a polished empty-state CTA when no items are nearby.
-    @MainActor
-    func showNoNearbyItemsBanner(_ show: Bool) {
-        let bannerTag = 9876
-        let brandTeal = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0)
+    private static let loggedInHomeFeedBannerTag = 8901
+    private static let loggedOutHomeFeedBannerTag = 8902
 
-        if !show {
-            view.viewWithTag(bannerTag)?.removeFromSuperview()
+    func updateHomeFeedPresentation(currentUserId: String?) {
+        let hasTrendingItems = !trendingItems.isEmpty
+        let hasNewArrivals = !featuredItems.isEmpty
+
+        trendingTitleLabel?.isHidden = !hasTrendingItems
+        trendingUiView?.isHidden = !hasTrendingItems
+        trendingCollectionView?.isHidden = !hasTrendingItems
+
+        newArrivalsTitleLabel?.isHidden = !hasNewArrivals
+        featuredCardsStackView?.isHidden = !hasNewArrivals
+
+        let shouldShowFeedBanner = !hasTrendingItems && !hasNewArrivals
+        shouldPreferHomeFeedEmptyBanner = shouldShowFeedBanner
+        applyListingEmptyStateVisibility()
+        setHomeFeedEmptyBannerVisible(shouldShowFeedBanner, isLoggedOut: currentUserId == nil)
+        recalculateScrollContentHeight()
+    }
+
+    private func setHomeFeedEmptyBannerVisible(_ isVisible: Bool, isLoggedOut: Bool) {
+        let expectedTag = isLoggedOut ? Self.loggedOutHomeFeedBannerTag : Self.loggedInHomeFeedBannerTag
+
+        if !isVisible {
+            removeHomeFeedEmptyBanner()
             return
         }
 
-        // Don't add duplicate
-        if view.viewWithTag(bannerTag) != nil { return }
-
-        let banner = UIView()
-        banner.tag = bannerTag
-        banner.translatesAutoresizingMaskIntoConstraints = false
-        banner.backgroundColor = .white
-        banner.layer.cornerRadius = 20
-        banner.layer.shadowColor = UIColor.black.cgColor
-        banner.layer.shadowOpacity = 0.08
-        banner.layer.shadowRadius = 16
-        banner.layer.shadowOffset = CGSize(width: 0, height: 4)
-
-        // Large centered icon
-        let icon = UIImageView(image: UIImage(systemName: "shippingbox.and.arrow.backward"))
-        icon.tintColor = brandTeal
-        icon.contentMode = .scaleAspectFit
-        icon.translatesAutoresizingMaskIntoConstraints = false
-
-        let titleLabel = UILabel()
-        titleLabel.text = "Be the first to list!"
-        titleLabel.font = .systemFont(ofSize: 22, weight: .bold)
-        titleLabel.textColor = .label
-        titleLabel.textAlignment = .center
-
-        let subtitleLabel = UILabel()
-        subtitleLabel.text = "No items are available in your area yet.\nList your items and start earning from people nearby."
-        subtitleLabel.font = .systemFont(ofSize: 15, weight: .regular)
-        subtitleLabel.textColor = .secondaryLabel
-        subtitleLabel.numberOfLines = 0
-        subtitleLabel.textAlignment = .center
-
-        let ctaButton = UIButton(type: .system)
-        ctaButton.setTitle("  List Your First Item", for: .normal)
-        ctaButton.setImage(UIImage(systemName: "plus.circle.fill"), for: .normal)
-        ctaButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
-        ctaButton.tintColor = .white
-        ctaButton.backgroundColor = brandTeal
-        ctaButton.layer.cornerRadius = 14
-        ctaButton.translatesAutoresizingMaskIntoConstraints = false
-        ctaButton.addTarget(self, action: #selector(additemHomeTapped(_:)), for: .touchUpInside)
-
-        let contentStack = UIStackView(arrangedSubviews: [icon, titleLabel, subtitleLabel, ctaButton])
-        contentStack.axis = .vertical
-        contentStack.spacing = 14
-        contentStack.alignment = .center
-        contentStack.translatesAutoresizingMaskIntoConstraints = false
-
-        banner.addSubview(contentStack)
-
-        NSLayoutConstraint.activate([
-            icon.widthAnchor.constraint(equalToConstant: 56),
-            icon.heightAnchor.constraint(equalToConstant: 56),
-            ctaButton.widthAnchor.constraint(equalTo: contentStack.widthAnchor, constant: -32),
-            ctaButton.heightAnchor.constraint(equalToConstant: 50),
-            contentStack.topAnchor.constraint(equalTo: banner.topAnchor, constant: 32),
-            contentStack.leadingAnchor.constraint(equalTo: banner.leadingAnchor, constant: 24),
-            contentStack.trailingAnchor.constraint(equalTo: banner.trailingAnchor, constant: -24),
-            contentStack.bottomAnchor.constraint(equalTo: banner.bottomAnchor, constant: -28),
-        ])
-
-        // Place the banner inside the scroll content view, below the listing section
-        if let scrollContent = trendingUiView?.superview {
-            scrollContent.addSubview(banner)
-            NSLayoutConstraint.activate([
-                banner.leadingAnchor.constraint(equalTo: scrollContent.leadingAnchor, constant: 20),
-                banner.trailingAnchor.constraint(equalTo: scrollContent.trailingAnchor, constant: -20),
-                banner.topAnchor.constraint(equalTo: (trendingUiView ?? listingUIView ?? scrollContent).bottomAnchor, constant: 24),
-            ])
-        } else {
-            view.addSubview(banner)
-            NSLayoutConstraint.activate([
-                banner.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 20),
-                banner.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -20),
-                banner.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: 60),
-            ])
-        }
-
-        // Subtle entrance animation
-        banner.alpha = 0
-        banner.transform = CGAffineTransform(translationX: 0, y: 10)
-        UIView.animate(withDuration: 0.35, delay: 0.1, options: .curveEaseOut) {
-            banner.alpha = 1
-            banner.transform = .identity
-        }
-    }
-
-    /// Tag for the "sign up" placeholder under New Arrivals
-    private static let newArrivalsPlaceholderTag = 8899
-
-    func applyFeatured(items: [Item], currentUserId: String?) {
-        // Find and hide/show the "New Arrivals" label and featured card stack
-        let newArrivalsLabel = item1CardView?.superview?.superview?.subviews
-            .compactMap({ $0 as? UILabel })
-            .first(where: { $0.text == "New Arrivals" })
-        let cardStack = item1CardView?.superview as? UIStackView
-        let scrollContent = item1CardView?.superview?.superview
-
-        // Remove any existing placeholder
-        scrollContent?.viewWithTag(Self.newArrivalsPlaceholderTag)?.removeFromSuperview()
-
-        // LOGGED OUT: hide items, show sign-up placeholder
-        let isLoggedOut = (currentUserId == nil)
-        if isLoggedOut {
-            newArrivalsLabel?.isHidden = false
-            cardStack?.isHidden = true
-
-            // Add placeholder text below the "New Arrivals" label
-            if let scrollContent, let arrivalsLabel = newArrivalsLabel {
-                let placeholder = UILabel()
-                placeholder.tag = Self.newArrivalsPlaceholderTag
-                placeholder.text = "No items in New Arrivals.\nSign up to explore rentals near you!"
-                placeholder.font = .systemFont(ofSize: 15, weight: .medium)
-                placeholder.textColor = .secondaryLabel
-                placeholder.textAlignment = .center
-                placeholder.numberOfLines = 0
-                placeholder.translatesAutoresizingMaskIntoConstraints = false
-
-                scrollContent.addSubview(placeholder)
-                NSLayoutConstraint.activate([
-                    placeholder.topAnchor.constraint(equalTo: arrivalsLabel.bottomAnchor, constant: 16),
-                    placeholder.leadingAnchor.constraint(equalTo: scrollContent.leadingAnchor, constant: 20),
-                    placeholder.trailingAnchor.constraint(equalTo: scrollContent.trailingAnchor, constant: -20),
-                ])
-            }
-
-            // Clear all slots
-            let slots: [(UIImageView?, UILabel?, UILabel?, UILabel?, UILabel?, UILabel?, UIView?, UIButton?)] = [
-                (item1Image, item1Name, item1Rate, item1Rating, item1Distance, item1owner, item1CardView, rentButton1),
-                (item2Image, item2Name, item2Rate, item2Rating, item2Distance, item2owner, item2CardView, rentButton2),
-                (item3Image, item3Name, item3Rate, item3Rating, item3Distance, item3owner, item3CardView, rentButton3),
-                (item4Image, item4Name, item4Rate, item4Rating, item4Distance, item4owner, item4CardView, rentButton4)
-            ]
-            for slot in slots { clearFeaturedSlot(slot) }
-            self.featuredItems = []
+        if homeFeedEmptyBannerView?.tag == expectedTag {
             return
         }
 
-        // LOGGED IN: normal behavior
-        if items.isEmpty {
-            newArrivalsLabel?.isHidden = true
-            cardStack?.isHidden = true
-        } else {
-            newArrivalsLabel?.isHidden = false
-            cardStack?.isHidden = false
-        }
+        removeHomeFeedEmptyBanner()
 
-        let slots: [(UIImageView?, UILabel?, UILabel?, UILabel?, UILabel?, UILabel?, UIView?, UIButton?)] = [
+        let banner = buildHomeFeedEmptyBannerUI(isLoggedOut: isLoggedOut)
+        banner.tag = expectedTag
+
+        if let insertIndex = contentStackView.arrangedSubviews.firstIndex(of: Homepagelastline) {
+            contentStackView.insertArrangedSubview(banner, at: insertIndex)
+        } else {
+            contentStackView.addArrangedSubview(banner)
+        }
+        contentStackView.setCustomSpacing(24, after: banner)
+        homeFeedEmptyBannerView = banner
+    }
+
+    private func removeHomeFeedEmptyBanner() {
+        guard let banner = homeFeedEmptyBannerView else { return }
+        contentStackView.removeArrangedSubview(banner)
+        banner.removeFromSuperview()
+        homeFeedEmptyBannerView = nil
+    }
+
+    private func featuredItemSlots() -> [(UIImageView?, UILabel?, UILabel?, UILabel?, UILabel?, UILabel?, UIView?, UIButton?)] {
+        [
             (item1Image, item1Name, item1Rate, item1Rating, item1Distance, item1owner, item1CardView, rentButton1),
             (item2Image, item2Name, item2Rate, item2Rating, item2Distance, item2owner, item2CardView, rentButton2),
             (item3Image, item3Name, item3Rate, item3Rating, item3Distance, item3owner, item3CardView, rentButton3),
             (item4Image, item4Name, item4Rate, item4Rating, item4Distance, item4owner, item4CardView, rentButton4)
         ]
+    }
+
+    func applyFeatured(items: [Item], currentUserId: String?) {
+        if items.isEmpty {
+            featuredCardsStackView?.isHidden = true
+            for slot in featuredItemSlots() { clearFeaturedSlot(slot) }
+            self.featuredItems = []
+            return
+        }
+        featuredCardsStackView?.isHidden = false
+
+        let slots = featuredItemSlots()
 
         for (i, slot) in slots.enumerated() {
             if i < items.count {
@@ -448,12 +334,16 @@ extension HomeViewController {
     func resolveOwnerName(for ownerId: String, slotIndex: Int) {
         Task {
             if let name = try? await fetchName(from: "user_profiles", ownerId: ownerId), !name.isEmpty {
-                await applyOwnerName(capitalizingFirstLetter(name), toSlotAt: slotIndex)
+                await MainActor.run {
+                    self.applyOwnerName(self.capitalizingFirstLetter(name), toSlotAt: slotIndex)
+                }
                 return
             }
 
             // Final fallback: "Owner"
-            await applyOwnerName("Owner", toSlotAt: slotIndex)
+            await MainActor.run {
+                self.applyOwnerName("Owner", toSlotAt: slotIndex)
+            }
         }
     }
 

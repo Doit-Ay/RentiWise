@@ -2,89 +2,14 @@
 //  HomeViewController+Appearance.swift
 //  RentiWise
 //
-//  Extracted from HomeViewController.swift — Image rotation, glass effects, and header styling.
+//  Extracted from HomeViewController.swift — Glass effects, badge state, and header styling.
 //
 
 import UIKit
 import Supabase
 
-// MARK: - Home header image rotation + slide animation
+// MARK: - Glass effects
 extension HomeViewController {
-
-    func startHomeImageRotation() {
-        stopHomeImageRotation()
-        guard !rotatingImageNames.isEmpty else { return }
-        imageRotationTimer = Timer.scheduledTimer(withTimeInterval: rotationInterval, repeats: true) { [weak self] _ in
-            guard let self = self else { return }
-            self.currentHomeImageIndex = (self.currentHomeImageIndex + 1) % self.rotatingImageNames.count
-            self.updateHomeImage(animated: true)
-        }
-    }
-
-    func stopHomeImageRotation() {
-        imageRotationTimer?.invalidate()
-        imageRotationTimer = nil
-    }
-
-    func updateHomeImage(animated: Bool) {
-        guard let imageView = homeimage, !rotatingImageNames.isEmpty else {
-            return
-        }
-
-        guard imageView.bounds.width > 0, imageView.bounds.height > 0 else {
-            return
-        }
-
-        let name = rotatingImageNames[currentHomeImageIndex]
-        let nextImage = UIImage(named: name)
-
-        imageView.contentMode = .scaleAspectFit
-        imageView.clipsToBounds = true
-
-        guard animated else {
-            imageView.image = nextImage
-            return
-        }
-
-        slideInFromRight(newImage: nextImage, in: imageView, duration: 0.35)
-    }
-
-    func slideInFromRight(newImage: UIImage?, in imageView: UIImageView, duration: TimeInterval) {
-        imageView.layoutIfNeeded()
-        let baseFrame = imageView.bounds
-
-        let outgoing = UIImageView(image: imageView.image)
-        outgoing.frame = baseFrame
-        outgoing.contentMode = .scaleAspectFit
-        outgoing.clipsToBounds = true
-
-        let incoming = UIImageView(image: newImage)
-        incoming.frame = baseFrame
-        incoming.contentMode = .scaleAspectFit
-        incoming.clipsToBounds = true
-        incoming.transform = CGAffineTransform(translationX: baseFrame.width, y: 0)
-
-        imageView.addSubview(outgoing)
-        imageView.addSubview(incoming)
-
-        let previousImage = imageView.image
-        imageView.image = nil
-
-        UIView.animate(withDuration: duration, delay: 0, options: [.curveEaseInOut], animations: {
-            outgoing.transform = CGAffineTransform(translationX: -baseFrame.width, y: 0)
-            incoming.transform = .identity
-        }, completion: { _ in
-            imageView.image = newImage
-            outgoing.removeFromSuperview()
-            incoming.removeFromSuperview()
-
-            if imageView.image == nil {
-                imageView.image = previousImage
-            }
-        })
-    }
-
-    // MARK: - Glass effects
 
     func applyGlassToFeaturedCardsIfNeeded() {
         let cards: [UIView?] = [item1CardView, item2CardView, item3CardView, item4CardView]
@@ -115,9 +40,13 @@ extension HomeViewController {
             let tintColorOverride: UIColor = .white
             let titleColor: UIColor = .label
 
-            v.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
-            v.setTitleColor(titleColor, for: .normal)
-            v.contentEdgeInsets = UIEdgeInsets(top: 8, left: 14, bottom: 8, right: 14)
+            var configuration = v.configuration ?? UIButton.Configuration.plain()
+            var titleAttributes = AttributeContainer()
+            titleAttributes.font = .systemFont(ofSize: 15, weight: .semibold)
+            configuration.attributedTitle = AttributedString(v.currentTitle ?? "Rent", attributes: titleAttributes)
+            configuration.baseForegroundColor = titleColor
+            configuration.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 14, bottom: 8, trailing: 14)
+            v.configuration = configuration
 
             v.applyGlassEffect(
                 cornerRadius: 16,
@@ -132,67 +61,17 @@ extension HomeViewController {
     }
 
     func applyGlassToHeaderRoundButtons() {
-        let containerSide: CGFloat = 44
-
         let brandTeal = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0)
 
-        func ensureContainer(for button: UIButton, existing: inout UIView?) {
-            if let container = existing {
-                container.backgroundColor = brandTeal
-                container.layer.cornerRadius = containerSide / 2
-                container.layer.masksToBounds = false
-                container.layer.shadowOpacity = 0.12
-                container.layer.shadowRadius = 5
-                container.layer.shadowOffset = CGSize(width: 0, height: 3)
-                return
-            }
-
-            let wrapper = UIView()
-            wrapper.translatesAutoresizingMaskIntoConstraints = false
-
-            if let superview = button.superview {
-                superview.addSubview(wrapper)
-                NSLayoutConstraint.activate([
-                    wrapper.widthAnchor.constraint(equalToConstant: containerSide),
-                    wrapper.heightAnchor.constraint(equalToConstant: containerSide),
-                    wrapper.centerXAnchor.constraint(equalTo: button.centerXAnchor),
-                    wrapper.centerYAnchor.constraint(equalTo: button.centerYAnchor)
-                ])
-            } else {
-                view.addSubview(wrapper)
-                NSLayoutConstraint.activate([
-                    wrapper.widthAnchor.constraint(equalToConstant: containerSide),
-                    wrapper.heightAnchor.constraint(equalToConstant: containerSide),
-                    wrapper.centerXAnchor.constraint(equalTo: button.centerXAnchor),
-                    wrapper.centerYAnchor.constraint(equalTo: button.centerYAnchor)
-                ])
-            }
-
-            wrapper.backgroundColor = brandTeal
-            wrapper.layer.cornerRadius = containerSide / 2
-            wrapper.layer.masksToBounds = false
-            wrapper.layer.shadowOpacity = 0.12
-            wrapper.layer.shadowRadius = 5
-            wrapper.layer.shadowOffset = CGSize(width: 0, height: 3)
-
-            button.translatesAutoresizingMaskIntoConstraints = false
-            wrapper.addSubview(button)
-            NSLayoutConstraint.activate([
-                button.centerXAnchor.constraint(equalTo: wrapper.centerXAnchor),
-                button.centerYAnchor.constraint(equalTo: wrapper.centerYAnchor)
-            ])
-
-            button.backgroundColor = .clear
-            button.contentEdgeInsets = .zero
-
-            existing = wrapper
-        }
-
         if let bell = notificationBell {
-            ensureContainer(for: bell, existing: &notificationContainer)
-        }
-        if let add = additemHome {
-            ensureContainer(for: add, existing: &addItemContainer)
+            bell.backgroundColor = brandTeal
+            bell.layer.cornerRadius = 22
+            bell.layer.masksToBounds = false
+            bell.layer.shadowColor = UIColor.black.cgColor
+            bell.layer.shadowOpacity = 0.12
+            bell.layer.shadowRadius = 5
+            bell.layer.shadowOffset = CGSize(width: 0, height: 3)
+            bell.tintColor = .white
         }
     }
 }
@@ -235,8 +114,9 @@ extension HomeViewController {
 
         let heartString = NSAttributedString(attachment: heartAttachment)
 
-        if let rangeOfYou = (attr.string as NSString).range(of: "You ").toRange() {
-            let insertIndex = rangeOfYou.upperBound
+        let rangeOfYou = (attr.string as NSString).range(of: "You ")
+        if rangeOfYou.location != NSNotFound {
+            let insertIndex = rangeOfYou.location + rangeOfYou.length
             attr.replaceCharacters(in: NSRange(location: insertIndex, length: 0), with: heartString)
         } else {
             attr.insert(heartString, at: 4)
@@ -370,25 +250,25 @@ extension HomeViewController {
 // MARK: - Featured Rent button actions
 extension HomeViewController {
 
-    @IBAction func rentButton1Tapped(_ sender: UIButton) {
+    @objc func rentButton1Tapped(_ sender: UIButton) {
         guard featuredItems.indices.contains(0) else { return }
         markFeaturedRentTap(index: 0)
         openRequestView(for: featuredItems[0])
     }
 
-    @IBAction func rentButton2Tapped(_ sender: UIButton) {
+    @objc func rentButton2Tapped(_ sender: UIButton) {
         guard featuredItems.indices.contains(1) else { return }
         markFeaturedRentTap(index: 1)
         openRequestView(for: featuredItems[1])
     }
 
-    @IBAction func rentButton3Tapped(_ sender: UIButton) {
+    @objc func rentButton3Tapped(_ sender: UIButton) {
         guard featuredItems.indices.contains(2) else { return }
         markFeaturedRentTap(index: 2)
         openRequestView(for: featuredItems[2])
     }
 
-    @IBAction func rentButton4Tapped(_ sender: UIButton) {
+    @objc func rentButton4Tapped(_ sender: UIButton) {
         guard featuredItems.indices.contains(3) else { return }
         markFeaturedRentTap(index: 3)
         openRequestView(for: featuredItems[3])

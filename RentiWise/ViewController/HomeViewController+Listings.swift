@@ -66,9 +66,6 @@ extension HomeViewController {
             emptyListingBannerView?.removeFromSuperview()
             emptyListingBannerView = nil
             listingUIView?.isHidden = false
-            additemHome?.isHidden = true
-            startearninglabel?.isHidden = true
-            startearningdownlabel?.isHidden = true
 
             emptyListingBannerView = buildEmptyListingBannerUI()
             if let banner = emptyListingBannerView, let host = listingUIView {
@@ -82,16 +79,14 @@ extension HomeViewController {
                 ])
             }
 
-            adjustListingViewHeightIfFixed(target: 208)
+            adjustListingViewHeightIfFixed(target: 182)
             refreshEmptyListingBannerLayoutIfNeeded()
+            applyListingEmptyStateVisibility()
 
         case .manage:
             emptyListingBannerView?.removeFromSuperview()
             emptyListingBannerView = nil
             listingUIView?.isHidden = false
-            additemHome?.isHidden = true
-            startearninglabel?.isHidden = true
-            startearningdownlabel?.isHidden = true
 
             if manageContainerView != nil {
                 manageContainerView?.removeFromSuperview()
@@ -110,16 +105,34 @@ extension HomeViewController {
 
             let targetHeight: CGFloat = 144
             adjustListingViewHeightIfFixed(target: targetHeight)
+            applyListingEmptyStateVisibility()
+        }
+    }
+
+    func applyListingEmptyStateVisibility() {
+        let hasManageCard = (manageContainerView != nil)
+        let hasEmptyBanner = (emptyListingBannerView != nil)
+
+        if shouldPreferHomeFeedEmptyBanner {
+            listingUIView?.isHidden = !hasManageCard
+            return
+        }
+
+        if hasManageCard || hasEmptyBanner {
+            listingUIView?.isHidden = false
         }
     }
 
     func buildEmptyListingBannerUI() -> UIView {
+        let accentColor = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1.0)
+
         let card = UIView()
+        card.translatesAutoresizingMaskIntoConstraints = false
         card.backgroundColor = .clear
-        card.layer.cornerRadius = 18
+        card.layer.cornerRadius = 16
 
         card.applyGlassEffect(
-            cornerRadius: 18,
+            cornerRadius: 16,
             style: .systemThickMaterial,
             addsVibrancy: false,
             showsShadow: true,
@@ -129,35 +142,35 @@ extension HomeViewController {
         )
 
         let badge = UILabel()
-        badge.text = "No listings yet"
-        badge.font = .systemFont(ofSize: 12, weight: .semibold)
-        badge.textColor = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1.0)
-        badge.backgroundColor = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 0.12)
-        badge.layer.cornerRadius = 10
+        badge.text = "  No listings yet  "
+        badge.font = .systemFont(ofSize: 11, weight: .semibold)
+        badge.textColor = accentColor
+        badge.backgroundColor = accentColor.withAlphaComponent(0.12)
+        badge.layer.cornerRadius = 9
         badge.layer.masksToBounds = true
         badge.textAlignment = .center
         badge.translatesAutoresizingMaskIntoConstraints = false
 
         let iconContainer = UIView()
         iconContainer.translatesAutoresizingMaskIntoConstraints = false
-        iconContainer.backgroundColor = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 0.12)
-        iconContainer.layer.cornerRadius = 22
+        iconContainer.backgroundColor = accentColor.withAlphaComponent(0.12)
+        iconContainer.layer.cornerRadius = 20
 
         let icon = UIImageView(image: UIImage(systemName: "shippingbox"))
         icon.translatesAutoresizingMaskIntoConstraints = false
         icon.contentMode = .scaleAspectFit
-        icon.tintColor = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1.0)
+        icon.tintColor = accentColor
         iconContainer.addSubview(icon)
 
         let title = UILabel()
         title.text = "List your first item"
-        title.font = .systemFont(ofSize: 20, weight: .semibold)
+        title.font = .systemFont(ofSize: 18, weight: .semibold)
         title.textColor = .label
         title.numberOfLines = 0
 
         let subtitle = UILabel()
         subtitle.text = "Create a complete listing with photos, pricing, and pickup details to start receiving rental requests."
-        subtitle.font = .systemFont(ofSize: 14, weight: .regular)
+        subtitle.font = .systemFont(ofSize: 13, weight: .regular)
         subtitle.textColor = .secondaryLabel
         subtitle.numberOfLines = 0
 
@@ -165,12 +178,12 @@ extension HomeViewController {
         ctaButton.translatesAutoresizingMaskIntoConstraints = false
         var config = UIButton.Configuration.filled()
         config.title = "Add Item"
-        config.baseBackgroundColor = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1.0)
+        config.baseBackgroundColor = accentColor
         config.baseForegroundColor = .white
         config.cornerStyle = .large
-        config.contentInsets = NSDirectionalEdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16)
+        config.contentInsets = NSDirectionalEdgeInsets(top: 9, leading: 16, bottom: 9, trailing: 16)
         var titleAttributes = AttributeContainer()
-        titleAttributes.font = .systemFont(ofSize: 15, weight: .semibold)
+        titleAttributes.font = .systemFont(ofSize: 14, weight: .semibold)
         config.attributedTitle = AttributedString("Add Item", attributes: titleAttributes)
         ctaButton.configuration = config
         ctaButton.setContentHuggingPriority(.required, for: .vertical)
@@ -180,7 +193,7 @@ extension HomeViewController {
         let textStack = UIStackView(arrangedSubviews: [badge, title, subtitle, ctaButton])
         textStack.axis = .vertical
         textStack.alignment = .leading
-        textStack.spacing = 8
+        textStack.spacing = 6
         textStack.translatesAutoresizingMaskIntoConstraints = false
         textStack.setCustomSpacing(12, after: subtitle)
 
@@ -188,23 +201,136 @@ extension HomeViewController {
         card.addSubview(textStack)
 
         NSLayoutConstraint.activate([
-            iconContainer.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 18),
-            iconContainer.topAnchor.constraint(equalTo: card.topAnchor, constant: 18),
-            iconContainer.widthAnchor.constraint(equalToConstant: 44),
-            iconContainer.heightAnchor.constraint(equalToConstant: 44),
+            iconContainer.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 16),
+            iconContainer.topAnchor.constraint(equalTo: card.topAnchor, constant: 16),
+            iconContainer.widthAnchor.constraint(equalToConstant: 40),
+            iconContainer.heightAnchor.constraint(equalToConstant: 40),
 
             icon.centerXAnchor.constraint(equalTo: iconContainer.centerXAnchor),
             icon.centerYAnchor.constraint(equalTo: iconContainer.centerYAnchor),
-            icon.widthAnchor.constraint(equalToConstant: 22),
-            icon.heightAnchor.constraint(equalToConstant: 22),
+            icon.widthAnchor.constraint(equalToConstant: 20),
+            icon.heightAnchor.constraint(equalToConstant: 20),
 
-            textStack.leadingAnchor.constraint(equalTo: iconContainer.trailingAnchor, constant: 14),
-            textStack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -18),
-            textStack.topAnchor.constraint(equalTo: card.topAnchor, constant: 18),
-            textStack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -18),
+            textStack.leadingAnchor.constraint(equalTo: iconContainer.trailingAnchor, constant: 12),
+            textStack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -16),
+            textStack.topAnchor.constraint(equalTo: card.topAnchor, constant: 16),
+            textStack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -16),
 
-            badge.heightAnchor.constraint(equalToConstant: 20),
-            ctaButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 42)
+            badge.heightAnchor.constraint(equalToConstant: 18),
+            ctaButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 40)
+        ])
+
+        return card
+    }
+
+    func buildHomeFeedEmptyBannerUI(isLoggedOut: Bool) -> UIView {
+        let accentColor = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1.0)
+
+        let card = UIView()
+        card.translatesAutoresizingMaskIntoConstraints = false
+        card.backgroundColor = .clear
+        card.layer.cornerRadius = 16
+
+        card.applyGlassEffect(
+            cornerRadius: 16,
+            style: .systemThickMaterial,
+            addsVibrancy: false,
+            showsShadow: true,
+            borderAlpha: 0.0,
+            tintColorOverride: .white,
+            tintAlpha: 0.14
+        )
+
+        let badge = UILabel()
+        badge.translatesAutoresizingMaskIntoConstraints = false
+        badge.text = isLoggedOut ? "  Explore nearby  " : "  Local feed  "
+        badge.font = .systemFont(ofSize: 11, weight: .semibold)
+        badge.textColor = accentColor
+        badge.backgroundColor = accentColor.withAlphaComponent(0.12)
+        badge.layer.cornerRadius = 9
+        badge.layer.masksToBounds = true
+        badge.textAlignment = .center
+
+        let iconContainer = UIView()
+        iconContainer.translatesAutoresizingMaskIntoConstraints = false
+        iconContainer.backgroundColor = accentColor.withAlphaComponent(0.12)
+        iconContainer.layer.cornerRadius = 20
+
+        let icon = UIImageView(image: UIImage(systemName: "mappin.circle.fill"))
+        icon.translatesAutoresizingMaskIntoConstraints = false
+        icon.contentMode = .scaleAspectFit
+        icon.tintColor = accentColor
+        iconContainer.addSubview(icon)
+
+        let title = UILabel()
+        title.translatesAutoresizingMaskIntoConstraints = false
+        title.text = isLoggedOut ? "Unlock rentals around you" : "Nothing is live around you yet"
+        title.font = .systemFont(ofSize: 18, weight: .semibold)
+        title.textColor = .label
+        title.numberOfLines = 0
+
+        let subtitle = UILabel()
+        subtitle.translatesAutoresizingMaskIntoConstraints = false
+        subtitle.text = isLoggedOut
+            ? "Create an account to explore local rentals and be first to list in your area."
+            : "When listings go live near your saved location, they will appear here. You can also add the first item in your area."
+        subtitle.font = .systemFont(ofSize: 13, weight: .regular)
+        subtitle.textColor = .secondaryLabel
+        subtitle.numberOfLines = 0
+
+        let ctaButton = UIButton(type: .system)
+        ctaButton.translatesAutoresizingMaskIntoConstraints = false
+        var config = UIButton.Configuration.filled()
+        let buttonTitle = isLoggedOut ? "Get Started" : "Add Item"
+        config.title = buttonTitle
+        config.baseBackgroundColor = accentColor
+        config.baseForegroundColor = .white
+        config.cornerStyle = .large
+        config.contentInsets = NSDirectionalEdgeInsets(top: 9, leading: 16, bottom: 9, trailing: 16)
+        var titleAttributes = AttributeContainer()
+        titleAttributes.font = .systemFont(ofSize: 14, weight: .semibold)
+        config.attributedTitle = AttributedString(buttonTitle, attributes: titleAttributes)
+        ctaButton.configuration = config
+        ctaButton.setContentHuggingPriority(.required, for: .vertical)
+        ctaButton.setContentCompressionResistancePriority(.required, for: .vertical)
+        ctaButton.addTarget(self, action: #selector(additemHomeTapped(_:)), for: .touchUpInside)
+
+        let textStack = UIStackView(arrangedSubviews: [badge, title, subtitle])
+        textStack.axis = .vertical
+        textStack.alignment = .leading
+        textStack.spacing = 6
+        textStack.translatesAutoresizingMaskIntoConstraints = false
+
+        let headerStack = UIStackView(arrangedSubviews: [iconContainer, textStack])
+        headerStack.axis = .horizontal
+        headerStack.alignment = .top
+        headerStack.spacing = 12
+        headerStack.translatesAutoresizingMaskIntoConstraints = false
+
+        let contentStack = UIStackView(arrangedSubviews: [headerStack, ctaButton])
+        contentStack.axis = .vertical
+        contentStack.alignment = .leading
+        contentStack.spacing = 12
+        contentStack.translatesAutoresizingMaskIntoConstraints = false
+
+        card.addSubview(contentStack)
+
+        NSLayoutConstraint.activate([
+            iconContainer.widthAnchor.constraint(equalToConstant: 40),
+            iconContainer.heightAnchor.constraint(equalToConstant: 40),
+
+            icon.centerXAnchor.constraint(equalTo: iconContainer.centerXAnchor),
+            icon.centerYAnchor.constraint(equalTo: iconContainer.centerYAnchor),
+            icon.widthAnchor.constraint(equalToConstant: 20),
+            icon.heightAnchor.constraint(equalToConstant: 20),
+
+            contentStack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 16),
+            contentStack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -16),
+            contentStack.topAnchor.constraint(equalTo: card.topAnchor, constant: 16),
+            contentStack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -16),
+
+            badge.heightAnchor.constraint(equalToConstant: 18),
+            ctaButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 40)
         ])
 
         return card
@@ -226,7 +352,7 @@ extension HomeViewController {
             verticalFittingPriority: .fittingSizeLevel
         ).height
 
-        adjustListingViewHeightIfFixed(target: max(208, ceil(measuredHeight)))
+        adjustListingViewHeightIfFixed(target: max(182, ceil(measuredHeight)))
     }
 
     func adjustListingViewHeightIfFixed(target: CGFloat) {
@@ -371,12 +497,11 @@ extension HomeViewController {
     }
 
     // MARK: - Manage actions
-    @objc func manageListItemTapped() { additemHomeTapped(additemHome ?? UIButton(type: .system)) }
-    @objc func manageRequestsTapped() { requestsButtonTapped(additemHome ?? UIButton(type: .system)) }
+    @objc func manageListItemTapped() { additemHomeTapped(UIButton(type: .system)) }
+    @objc func manageRequestsTapped() { requestsButtonTapped(UIButton(type: .system)) }
     @objc func manageManageTapped() {
-        let sb = UIStoryboard(name: "AppStarting", bundle: nil)
-        guard let dashboard = sb.instantiateViewController(withIdentifier: "DashboardListing") as? DashboardViewController else {
-            assertionFailure("Storyboard ID 'DashboardListing' is not a DashboardViewController.")
+        guard let dashboard = AppRootBuilder.makeDashboardListingViewController() else {
+            assertionFailure("Could not instantiate DashboardViewController from AppStarting storyboard.")
             return
         }
         dashboard.title = "My Listings"

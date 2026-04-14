@@ -3,196 +3,123 @@
 //  RentiWise
 //
 //  Created by admin99 on 03/11/25.
+//
 
 import UIKit
 import Supabase
 import CoreLocation
 
-class HomeViewController: UIViewController, UICollectionViewDelegate, UICollectionViewDataSource, UITabBarDelegate, UICollectionViewDelegateFlowLayout, UIGestureRecognizerDelegate {
+final class HomeViewController: UIViewController, UICollectionViewDelegate, UICollectionViewDataSource, UICollectionViewDelegateFlowLayout, UIGestureRecognizerDelegate {
 
-    @IBOutlet weak var greetingTop: UILabel!
-    @IBOutlet weak var collectionView: UICollectionView!
+    private typealias FeaturedCardComponents = (
+        card: UIView,
+        imageView: UIImageView,
+        nameLabel: UILabel,
+        rateLabel: UILabel,
+        ratingLabel: UILabel,
+        distanceLabel: UILabel,
+        ownerLabel: UILabel,
+        rentButton: UIButton
+    )
 
-    @IBOutlet weak var Homepagelastline: UILabel!
-    @IBOutlet var productclicked: UIView!
-    // Single image outlet only
-    @IBOutlet weak var homeimage: UIImageView!
-
-    @IBAction func seeAllTrending(_ sender: UIButton) {
-    }
-    @IBOutlet weak var trendingUiView: UIView!
-    @IBOutlet weak var locationTapped: UIButton!
-    
-    @IBOutlet weak var searchBar: UISearchBar!
-    
-    @IBOutlet weak var homeBG: UIView!
-    
-    // Keep a reference so we can resize and avoid duplicates
-    // private var homeGradientLayer: CAGradientLayer?
-
-    @IBAction func notificationBellTapped(_ sender: UIButton) {
-        let nibName = "NotificationViewController"
-        let vc: NotificationViewController
-        if Bundle.main.path(forResource: nibName, ofType: "nib") != nil ||
-            Bundle.main.path(forResource: nibName, ofType: "xib") != nil {
-            vc = NotificationViewController(nibName: nibName, bundle: nil)
-        } else {
-            vc = NotificationViewController()
-        }
-        vc.title = "Notifications"
-        vc.hidesBottomBarWhenPushed = true
-
-        if let nav = self.navigationController {
-            nav.setNavigationBarHidden(false, animated: true)
-            nav.pushViewController(vc, animated: true)
-        } else {
-            let nav = UINavigationController(rootViewController: vc)
-            nav.modalPresentationStyle = .fullScreen
-            present(nav, animated: true)
-        }
-    }
-    @IBOutlet weak var notificationBell: UIButton!
-    @IBOutlet weak var listingUIView: UIView!
-    @IBOutlet weak var additemHome: UIButton!
-    @IBOutlet weak var startearninglabel: UILabel!
-    @IBOutlet weak var startearningdownlabel: UILabel!
-    
-    // Home screen “Request” button → push RequestsListViewController (no Dashboard)
-    @IBAction func requestsButtonTapped(_ sender: UIButton) {
-        Task { [weak self] in
-            guard let self else { return }
-            do {
-                // Require login for Requests
-                let session = try await SupabaseManager.shared.client.auth.session
-                _ = session.user // throws if not logged in
-
-                let vc = RequestsListViewController()
-                vc.title = "Requests"
-                vc.hidesBottomBarWhenPushed = true
-
-                if let nav = self.navigationController {
-                    nav.setNavigationBarHidden(false, animated: true)
-                    nav.pushViewController(vc, animated: true)
-                } else {
-                    let nav = UINavigationController(rootViewController: vc)
-                    nav.modalPresentationStyle = .fullScreen
-                    self.present(nav, animated: true)
-                }
-            } catch {
-                let signInVC = SignViewController()
-                signInVC.routeContext = .default
-                signInVC.title = "Sign in"
-                signInVC.hidesBottomBarWhenPushed = true
-
-                if let nav = self.navigationController {
-                    nav.setNavigationBarHidden(false, animated: true)
-                    nav.pushViewController(signInVC, animated: true)
-                } else {
-                    let nav = UINavigationController(rootViewController: signInVC)
-                    nav.modalPresentationStyle = .fullScreen
-                    self.present(nav, animated: true)
-                }
-            }
-        }
-    }
-    
-    @IBAction func additemHomeTapped(_ sender: UIButton) {
-        Task { [weak self] in
-            guard let self else { return }
-            if await self.ensureAuthenticated(orOpen: .signUp) {
-                // Logged in -> start Add Item flow
-                let vc = AddItemFirstViewController(nibName: "AddItemFirstViewController", bundle: nil)
-                vc.title = "Add item"
-                vc.hidesBottomBarWhenPushed = true
-
-                if let nav = self.navigationController {
-                    nav.setNavigationBarHidden(false, animated: false)
-                    nav.pushViewController(vc, animated: true)
-                } else {
-                    vc.modalPresentationStyle = .fullScreen
-                    self.present(vc, animated: true)
-                }
-            }
-        }
-    }
     struct CategoryItem {
         let title: String
         let systemImageName: String
     }
 
+    private let scrollView = UIScrollView()
+    var homeBG: UIView!
+    var contentStackView: UIStackView!
+
+    var greetingTop: UILabel!
+    var locationTapped: UIButton!
+    var searchBar: UISearchBar!
+    var collectionView: UICollectionView!
+    var notificationBell: UIButton!
+    var listingUIView: UIView!
+    var trendingTitleLabel: UILabel!
+    var trendingUiView: UIView!
+    var newArrivalsTitleLabel: UILabel!
+    var featuredCardsStackView: UIStackView!
+    var Homepagelastline: UILabel!
+
+    var item1Image: UIImageView!
+    var item1Name: UILabel!
+    var item1Rate: UILabel!
+    var item1Rating: UILabel!
+    var item1Distance: UILabel!
+    var item1CardView: UIView!
+    var rentButton1: UIButton!
+    var item1owner: UILabel!
+
+    var item2Image: UIImageView!
+    var item2Name: UILabel!
+    var item2Rate: UILabel!
+    var item2Rating: UILabel!
+    var item2Distance: UILabel!
+    var item2CardView: UIView!
+    var rentButton2: UIButton!
+    var item2owner: UILabel!
+
+    var item3Image: UIImageView!
+    var item3Name: UILabel!
+    var item3Rate: UILabel!
+    var item3Rating: UILabel!
+    var item3Distance: UILabel!
+    var item3CardView: UIView!
+    var rentButton3: UIButton!
+    var item3owner: UILabel!
+
+    var item4Image: UIImageView!
+    var item4Name: UILabel!
+    var item4Rate: UILabel!
+    var item4Rating: UILabel!
+    var item4Distance: UILabel!
+    var item4CardView: UIView!
+    var rentButton4: UIButton!
+    var item4owner: UILabel!
+
     var categoriesList: [CategoryItem] = [
         .init(title: "Electronics", systemImageName: "drone"),
-        .init(title: "Tools",       systemImageName: "hammer"),
-        .init(title: "Events",      systemImageName: "hifispeaker"),
-        .init(title: "Fitness",     systemImageName: "dumbbell"),
-        .init(title: "Hobbies",     systemImageName: "guitars"),
-        .init(title: "Outdoor",     systemImageName: "tent"),
+        .init(title: "Tools", systemImageName: "hammer"),
+        .init(title: "Events", systemImageName: "hifispeaker"),
+        .init(title: "Fitness", systemImageName: "dumbbell"),
+        .init(title: "Hobbies", systemImageName: "guitars"),
+        .init(title: "Outdoor", systemImageName: "tent"),
     ]
 
-
-    // Desired tint color (#70A7B4)
-    private let categoryIconTintColor = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0)
-
-    // Currency formatter for rates
     let currencyFormatter: NumberFormatter = {
-        let f = NumberFormatter()
-        f.numberStyle = .currency
-        f.minimumFractionDigits = 2
-        f.maximumFractionDigits = 2
-        return f
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.minimumFractionDigits = 2
+        formatter.maximumFractionDigits = 2
+        return formatter
     }()
 
-    // MARK: - Home header image rotation
-    let rotatingImageNames = ["Home1image", "Home2image", "Home3image"]
-    var imageRotationTimer: Timer?
-    var currentHomeImageIndex = 0
-    let rotationInterval: TimeInterval = 5.0
-
-    // We'll trigger the first image after layout to ensure bounds are valid
-    var didSetInitialHomeImageAfterLayout = false
-
-    // Hold onto loaded featured items so we can open details on tap
     var featuredItems: [Item] = []
 
-    // Containers for round glass buttons in the header
-    var notificationContainer: UIView?
+    var isListingDataLoaded = false
+    var manageContainerView: UIView?
+    var emptyListingBannerView: UIView?
+    var homeFeedEmptyBannerView: UIView?
+    var shouldPreferHomeFeedEmptyBanner = false
 
-    var addItemContainer: UIView?
-
-    // MARK: - Manage Listings state
-    var isListingDataLoaded = false // track if listing data has been fetched
-    var manageContainerView: UIView? // inserted inside listingUIView when user has items
-    var emptyListingBannerView: UIView? // inserted inside listingUIView when user has no items
-
-    // MARK: - Cold start tracking
-    /// True on first viewWillAppear; flipped to false after first load completes.
-    /// Used to decide whether to use PreloadManager cache or force-refresh.
     private var isFirstLoad = true
 
-    // MARK: - Trending collection
     var trendingCollectionView: UICollectionView?
     var trendingItems: [Item] = []
     var trendingSortGeneration: UUID?
-
-    // Owner name cache for trending items
     var ownerNameCache: [String: String] = [:]
 
-    // Guard against accidental Product Detail pushes right after tapping Rent.
     private var lastFeaturedRentTap: (index: Int, timestamp: TimeInterval)?
     private var lastTrendingRentTap: (itemId: String, timestamp: TimeInterval)?
     private let rentTapSuppressionWindow: TimeInterval = 0.6
 
-    // MARK: - Search helper
     var homeSearch: HomeSearchController?
     private let safetyService = CommunitySafetyService.shared
-
-    // MARK: - Services
     let itemsService = ItemsService()
-    
-    // MARK: - Navigation delegate for tab bar hiding
     let tabBarDelegate = TabBarNavigationDelegate()
-    
-    // MARK: - Notification badge
+
     var unreadNotificationCount: Int = 0
     var notificationBadge: UIView?
 
@@ -207,82 +134,41 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
             navigationItem.backBarButtonItem = UIBarButtonItem(title: "", style: .plain, target: nil, action: nil)
         }
 
-        // Basic setup
+        setupUI()
+
         collectionView.delegate = self
         collectionView.dataSource = self
         collectionView.alwaysBounceVertical = false
         collectionView.alwaysBounceHorizontal = true
         collectionView.setCollectionViewLayout(generateHorizontalFourUpLayout(), animated: false)
-        // Make the surrounding area transparent so only tiles are visible
         collectionView.backgroundColor = .clear
 
-        // Style the search bar using the shared native style
-        searchBar?.applyRentiWiseStyle()
-
-        // Ensure the location button truncates within its space
+        searchBar.applyRentiWiseStyle()
         configureLocationButtonAppearance()
 
-        setupProductTap()
         setupFeaturedItemTaps()
+        listingUIView.isHidden = true
+        featuredCardsStackView.isHidden = true
+        newArrivalsTitleLabel.isHidden = true
+        trendingTitleLabel.isHidden = true
+        trendingUiView.isHidden = true
 
-        // Hide featured cards initially to prevent storyboard placeholder text
-        // (e.g. "Item Name", "Rate", "Rating") from being visible before data loads.
-        for card in [item1CardView, item2CardView, item3CardView, item4CardView] {
-            card?.isHidden = true
-        }
-        // Also hide the "New Arrivals" section label until items are available
-        if let scrollContent = item1CardView?.superview?.superview {
-            for subview in scrollContent.subviews {
-                if let label = subview as? UILabel, label.text == "New Arrivals" {
-                    label.isHidden = true
-                    break
-                }
-            }
-        }
-
-        // Trending scroller inside trendingUiView
         setupTrendingCollection()
-
-        // Data loading is handled in viewWillAppear — no duplicate Task here.
-
-        // Ensure aspect fit and clipping on the single image view
-        homeimage?.contentMode = .scaleAspectFit
-        homeimage?.clipsToBounds = true
-
-        // Set a fallback initial image immediately (in case timer/animation is delayed)
-        if homeimage?.image == nil, let first = rotatingImageNames.first {
-            homeimage?.image = UIImage(named: first)
-        }
-        
-        // Refresh location button title ("SRMIST" if none saved) and ensure a real default is persisted
         refreshLocationButtonTitle()
 
-        // Initialize search helper (rounded search bar, keyboard behavior, inline results)
-        if let sb = searchBar {
-            let hs = HomeSearchController(searchBar: sb, in: view)
-            hs.onSelectItem = { [weak self] item in
-                self?.openItem(item)
-            }
-            self.homeSearch = hs
+        let homeSearch = HomeSearchController(searchBar: searchBar, in: view)
+        homeSearch.onSelectItem = { [weak self] item in
+            self?.openItem(item)
         }
+        self.homeSearch = homeSearch
 
-        // Add a background tap to dismiss keyboard when tapping anywhere outside the search bar/results
-        let tap = UITapGestureRecognizer(target: self, action: #selector(dismissKeyboardTap))
-        tap.cancelsTouchesInView = false
-        view.addGestureRecognizer(tap)
+        let tapGesture = UITapGestureRecognizer(target: self, action: #selector(dismissKeyboardTap))
+        tapGesture.cancelsTouchesInView = false
+        view.addGestureRecognizer(tapGesture)
 
-        // Set the bottom tagline "You ❤️ Rentiwise" with brand-colored heart
         setBottomTagline()
-        
-        // Set navigation delegate to auto-hide tab bar on push
         navigationController?.delegate = tabBarDelegate
-        
-        // Ensure tab bar item shows title
         navigationController?.tabBarItem.title = "Explore"
-        
-        // Listing section alpha is no longer zeroed out here — the animated
-        // splash covers the UI until PreloadManager data is ready, so there's
-        // no empty-card flicker to hide.
 
         NotificationCenter.default.addObserver(
             self,
@@ -304,6 +190,46 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
         )
     }
 
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        homeSearch?.layoutForSearchBarBelow()
+        applyGlassToFeaturedCardsIfNeeded()
+        applyGlassToRentButtonsIfNeeded()
+        applyGlassToHeaderRoundButtons()
+        refreshEmptyListingBannerLayoutIfNeeded()
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        navigationController?.setNavigationBarHidden(true, animated: true)
+        tabBarController?.tabBar.isHidden = false
+        updateGreeting()
+        refreshLocationButtonTitle()
+
+        let isColdStart = isFirstLoad
+        isFirstLoad = false
+
+        Task {
+            if isColdStart, !PreloadManager.shared.isComplete {
+                await PreloadManager.shared.waitForCompletion(timeout: 4.0)
+            }
+
+            async let listings: () = checkAndUpdateListingSection(forceRefresh: !isColdStart)
+            async let badge: () = updateNotificationBadge()
+            async let featured: () = loadFeaturedItems(forceRefresh: true)
+            _ = await (listings, badge, featured)
+        }
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    override func viewSafeAreaInsetsDidChange() {
+        super.viewSafeAreaInsetsDidChange()
+        collectionView.setCollectionViewLayout(generateHorizontalFourUpLayout(), animated: false)
+    }
+
     @objc private func handleItemsShouldRefresh() {
         Task {
             await checkAndUpdateListingSection(forceRefresh: true)
@@ -312,73 +238,9 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
     }
 
     @objc private func dismissKeyboardTap() {
-        // Resign first responder from the search bar / any field
         view.endEditing(true)
-        // Optional: if you want to also hide inline results when dismissing:
-        // homeSearch?.clearResults()
-        // Keep results table aligned after any layout changes
         homeSearch?.layoutForSearchBarBelow()
     }
-
-    override func viewDidLayoutSubviews() {
-        super.viewDidLayoutSubviews()
-
-        // Remove manual layoutSearchBarRounded calls to preserve native height and radii
-
-        // After we know bounds, set initial image once (no animation)
-        if !didSetInitialHomeImageAfterLayout {
-            didSetInitialHomeImageAfterLayout = true
-            updateHomeImage(animated: false)
-        }
-
-        // Keep the inline results table pinned under the search bar
-        homeSearch?.layoutForSearchBarBelow()
-
-        // Gradient temporarily disabled
-        // setupHomeBackgroundGradient()
-
-        // Apply glass to featured cards (once; helper reuses existing blur view by tag)
-        applyGlassToFeaturedCardsIfNeeded()
-        // Apply glass to Rent buttons
-        applyGlassToRentButtonsIfNeeded()
-        // Apply round glass containers to notification and add-item buttons
-        applyGlassToHeaderRoundButtons()
-        refreshEmptyListingBannerLayoutIfNeeded()
-    }
-
-
-
-    override func viewWillAppear(_ animated: Bool) {
-        super.viewWillAppear(animated)
-        navigationController?.setNavigationBarHidden(true, animated: true)
-        // Always show tab bar when Home screen appears
-        tabBarController?.tabBar.isHidden = false
-        startHomeImageRotation()
-        // Update greeting based on time of day
-        updateGreeting()
-
-        // On cold start, use PreloadManager's cache (already fetched).
-        // On subsequent appears (tab switches, back-nav), force a network refresh.
-        let isColdStart = isFirstLoad
-        isFirstLoad = false
-
-        refreshLocationButtonTitle()
-        
-        Task {
-            // On cold start, wait for PreloadManager so items + location are ready
-            if isColdStart, !PreloadManager.shared.isComplete {
-                await PreloadManager.shared.waitForCompletion(timeout: 4.0)
-            }
-            
-            async let listings: () = checkAndUpdateListingSection(forceRefresh: !isColdStart)
-            async let badge: () = updateNotificationBadge()
-            // Always force refresh to ensure data actually loads
-            async let featured: () = loadFeaturedItems(forceRefresh: true)
-            _ = await (listings, badge, featured)
-        }
-    }
-
-
 
     @objc private func handleBlockedUsersChanged() {
         Task { await loadFeaturedItems(forceRefresh: true) }
@@ -388,96 +250,497 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
         Task { await updateNotificationBadge() }
     }
 
-    override func viewWillDisappear(_ animated: Bool) {
-        super.viewWillDisappear(animated)
-        stopHomeImageRotation()
-    }
+    @objc func notificationBellTapped(_ sender: UIButton) {
+        let nibName = "NotificationViewController"
+        let viewController: NotificationViewController
+        if Bundle.main.path(forResource: nibName, ofType: "nib") != nil ||
+            Bundle.main.path(forResource: nibName, ofType: "xib") != nil {
+            viewController = NotificationViewController(nibName: nibName, bundle: nil)
+        } else {
+            viewController = NotificationViewController()
+        }
+        viewController.title = "Notifications"
+        viewController.hidesBottomBarWhenPushed = true
 
-    deinit {
-        stopHomeImageRotation()
-        NotificationCenter.default.removeObserver(self)
-    }
-
-    override func viewSafeAreaInsetsDidChange() {
-        super.viewSafeAreaInsetsDidChange()
-        collectionView.setCollectionViewLayout(generateHorizontalFourUpLayout(), animated: false)
-    }
-
-    // MARK: - Search bar styling removed (using extension)
-
-    // MARK: - Location button text behavior (truncate within given space)
-    private func configureLocationButtonAppearance() {
-        guard let btn = locationTapped else { return }
-        // Keep single line and truncate at tail with ellipsis
-        btn.titleLabel?.numberOfLines = 1
-        btn.titleLabel?.lineBreakMode = .byTruncatingTail
-        btn.titleLabel?.adjustsFontSizeToFitWidth = false
-        // Keep text left-aligned within its bounds
-        btn.contentHorizontalAlignment = .leading
-        // Optional: small horizontal padding
-        btn.contentEdgeInsets = UIEdgeInsets(top: 0, left: 4, bottom: 0, right: 4)
-        // Prefer truncation over expanding horizontally
-        btn.setContentCompressionResistancePriority(.required, for: .horizontal)
-        // If the button has an image, ensure room between image and text
-        if btn.image(for: .normal) != nil {
-            btn.semanticContentAttribute = .forceLeftToRight
-            btn.imageEdgeInsets = UIEdgeInsets(top: 0, left: 0, bottom: 0, right: 6)
+        if let navigationController {
+            navigationController.setNavigationBarHidden(false, animated: true)
+            navigationController.pushViewController(viewController, animated: true)
+        } else {
+            let navigationController = UINavigationController(rootViewController: viewController)
+            navigationController.modalPresentationStyle = .fullScreen
+            present(navigationController, animated: true)
         }
     }
 
-    // MARK: - Product tap setup
-    private func setupProductTap() {
-        guard let productView = productclicked else { return }
-        productView.isUserInteractionEnabled = true
-        let tap = UITapGestureRecognizer(target: self, action: #selector(didTapProductView))
-        productView.addGestureRecognizer(tap)
-        productView.isAccessibilityElement = true
-        productView.accessibilityLabel = "Product details"
-        productView.accessibilityTraits = .button
+    @objc func requestsButtonTapped(_ sender: UIButton) {
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let session = try await SupabaseManager.shared.client.auth.session
+                _ = session.user
+
+                let viewController = RequestsListViewController()
+                viewController.title = "Requests"
+                viewController.hidesBottomBarWhenPushed = true
+
+                if let navigationController = self.navigationController {
+                    navigationController.setNavigationBarHidden(false, animated: true)
+                    navigationController.pushViewController(viewController, animated: true)
+                } else {
+                    let navigationController = UINavigationController(rootViewController: viewController)
+                    navigationController.modalPresentationStyle = .fullScreen
+                    self.present(navigationController, animated: true)
+                }
+            } catch {
+                let signInViewController = SignViewController()
+                signInViewController.routeContext = .default
+                signInViewController.title = "Sign in"
+                signInViewController.hidesBottomBarWhenPushed = true
+
+                if let navigationController = self.navigationController {
+                    navigationController.setNavigationBarHidden(false, animated: true)
+                    navigationController.pushViewController(signInViewController, animated: true)
+                } else {
+                    let navigationController = UINavigationController(rootViewController: signInViewController)
+                    navigationController.modalPresentationStyle = .fullScreen
+                    self.present(navigationController, animated: true)
+                }
+            }
+        }
+    }
+
+    @objc func additemHomeTapped(_ sender: UIButton) {
+        Task { [weak self] in
+            guard let self else { return }
+            if await self.ensureAuthenticated(orOpen: .signUp) {
+                let viewController = AddItemFirstViewController(nibName: "AddItemFirstViewController", bundle: nil)
+                viewController.title = "Add item"
+                viewController.hidesBottomBarWhenPushed = true
+
+                if let navigationController = self.navigationController {
+                    navigationController.setNavigationBarHidden(false, animated: false)
+                    navigationController.pushViewController(viewController, animated: true)
+                } else {
+                    viewController.modalPresentationStyle = .fullScreen
+                    self.present(viewController, animated: true)
+                }
+            }
+        }
+    }
+
+    private func setupUI() {
+        view.backgroundColor = .systemGroupedBackground
+
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.alwaysBounceVertical = true
+        scrollView.showsVerticalScrollIndicator = false
+        scrollView.keyboardDismissMode = .interactive
+
+        homeBG = UIView()
+        homeBG.translatesAutoresizingMaskIntoConstraints = false
+        homeBG.backgroundColor = .clear
+        homeBG.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 20, leading: 16, bottom: 32, trailing: 16)
+
+        contentStackView = UIStackView()
+        contentStackView.translatesAutoresizingMaskIntoConstraints = false
+        contentStackView.axis = .vertical
+        contentStackView.alignment = .fill
+        contentStackView.spacing = 20
+
+        view.addSubview(scrollView)
+        scrollView.addSubview(homeBG)
+        homeBG.addSubview(contentStackView)
+
+        NSLayoutConstraint.activate([
+            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+
+            homeBG.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
+            homeBG.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
+            homeBG.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
+            homeBG.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
+            homeBG.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor),
+
+            contentStackView.topAnchor.constraint(equalTo: homeBG.layoutMarginsGuide.topAnchor),
+            contentStackView.leadingAnchor.constraint(equalTo: homeBG.layoutMarginsGuide.leadingAnchor),
+            contentStackView.trailingAnchor.constraint(equalTo: homeBG.layoutMarginsGuide.trailingAnchor),
+            contentStackView.bottomAnchor.constraint(equalTo: homeBG.layoutMarginsGuide.bottomAnchor)
+        ])
+
+        let headerView = buildHeaderView()
+        locationTapped = buildLocationButton()
+        searchBar = buildSearchBar()
+        collectionView = buildCategoriesCollectionView()
+        listingUIView = buildListingContainer()
+        trendingTitleLabel = makeSectionTitleLabel(text: "Trending near you")
+        trendingUiView = buildTrendingContainer()
+        newArrivalsTitleLabel = makeSectionTitleLabel(text: "New Arrivals")
+        featuredCardsStackView = buildFeaturedCardsStack()
+        Homepagelastline = buildTaglineLabel()
+
+        contentStackView.addArrangedSubview(headerView)
+        contentStackView.addArrangedSubview(locationTapped)
+        contentStackView.addArrangedSubview(searchBar)
+        contentStackView.addArrangedSubview(collectionView)
+        contentStackView.addArrangedSubview(listingUIView)
+        contentStackView.addArrangedSubview(trendingTitleLabel)
+        contentStackView.addArrangedSubview(trendingUiView)
+        contentStackView.addArrangedSubview(newArrivalsTitleLabel)
+        contentStackView.addArrangedSubview(featuredCardsStackView)
+        contentStackView.addArrangedSubview(Homepagelastline)
+
+        contentStackView.setCustomSpacing(10, after: headerView)
+        contentStackView.setCustomSpacing(10, after: locationTapped)
+        contentStackView.setCustomSpacing(16, after: searchBar)
+        contentStackView.setCustomSpacing(16, after: listingUIView)
+        contentStackView.setCustomSpacing(16, after: trendingTitleLabel)
+        contentStackView.setCustomSpacing(16, after: newArrivalsTitleLabel)
+        contentStackView.setCustomSpacing(24, after: featuredCardsStackView)
+
+        buildFeaturedCards()
+    }
+
+    private func buildHeaderView() -> UIView {
+        let container = UIView()
+        container.translatesAutoresizingMaskIntoConstraints = false
+
+        greetingTop = UILabel()
+        greetingTop.translatesAutoresizingMaskIntoConstraints = false
+        greetingTop.font = .systemFont(ofSize: 30, weight: .bold)
+        greetingTop.textColor = .label
+        greetingTop.numberOfLines = 1
+
+        notificationBell = UIButton(type: .system)
+        notificationBell.translatesAutoresizingMaskIntoConstraints = false
+        notificationBell.tintColor = .white
+        notificationBell.backgroundColor = .clear
+        notificationBell.setImage(
+            UIImage(
+                systemName: "bell",
+                withConfiguration: UIImage.SymbolConfiguration(pointSize: 24, weight: .regular)
+            ),
+            for: .normal
+        )
+        notificationBell.addTarget(self, action: #selector(notificationBellTapped(_:)), for: .touchUpInside)
+        notificationBell.accessibilityLabel = "Notifications"
+
+        container.addSubview(greetingTop)
+        container.addSubview(notificationBell)
+
+        NSLayoutConstraint.activate([
+            greetingTop.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            greetingTop.topAnchor.constraint(equalTo: container.topAnchor),
+            greetingTop.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+
+            notificationBell.leadingAnchor.constraint(greaterThanOrEqualTo: greetingTop.trailingAnchor, constant: 16),
+            notificationBell.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            notificationBell.centerYAnchor.constraint(equalTo: greetingTop.centerYAnchor),
+            notificationBell.widthAnchor.constraint(equalToConstant: 44),
+            notificationBell.heightAnchor.constraint(equalToConstant: 44)
+        ])
+
+        return container
+    }
+
+    private func buildLocationButton() -> UIButton {
+        let button = UIButton(type: .system)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.tintColor = UIColor(red: 112 / 255, green: 167 / 255, blue: 180 / 255, alpha: 1)
+        var configuration = UIButton.Configuration.plain()
+        configuration.image = UIImage(
+            systemName: "mappin.and.ellipse",
+            withConfiguration: UIImage.SymbolConfiguration(pointSize: 16, weight: .regular)
+        )
+        configuration.imagePadding = 7
+        configuration.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 4, bottom: 0, trailing: 4)
+        configuration.titleAlignment = .leading
+        button.configuration = configuration
+        button.contentHorizontalAlignment = .leading
+        button.addTarget(self, action: #selector(locationTappedAction(_:)), for: .touchUpInside)
+        return button
+    }
+
+    private func buildSearchBar() -> UISearchBar {
+        let searchBar = UISearchBar()
+        searchBar.translatesAutoresizingMaskIntoConstraints = false
+        searchBar.placeholder = "Search items"
+        NSLayoutConstraint.activate([
+            searchBar.heightAnchor.constraint(equalToConstant: 56)
+        ])
+        return searchBar
+    }
+
+    private func buildCategoriesCollectionView() -> UICollectionView {
+        let collectionView = UICollectionView(frame: .zero, collectionViewLayout: generateHorizontalFourUpLayout())
+        collectionView.translatesAutoresizingMaskIntoConstraints = false
+        collectionView.backgroundColor = .clear
+        collectionView.showsHorizontalScrollIndicator = false
+        collectionView.register(CategoryCollectionViewCell.self, forCellWithReuseIdentifier: CategoryCollectionViewCell.reuseIdentifier)
+        NSLayoutConstraint.activate([
+            collectionView.heightAnchor.constraint(equalToConstant: 120)
+        ])
+        return collectionView
+    }
+
+    private func buildListingContainer() -> UIView {
+        let container = UIView()
+        container.translatesAutoresizingMaskIntoConstraints = false
+        container.backgroundColor = .clear
+        NSLayoutConstraint.activate([
+            container.heightAnchor.constraint(equalToConstant: 182)
+        ])
+        return container
+    }
+
+    private func buildTrendingContainer() -> UIView {
+        let container = UIView()
+        container.translatesAutoresizingMaskIntoConstraints = false
+        container.backgroundColor = .systemGroupedBackground
+        NSLayoutConstraint.activate([
+            container.heightAnchor.constraint(equalToConstant: 300)
+        ])
+        return container
+    }
+
+    private func buildFeaturedCardsStack() -> UIStackView {
+        let stackView = UIStackView()
+        stackView.translatesAutoresizingMaskIntoConstraints = false
+        stackView.axis = .vertical
+        stackView.alignment = .fill
+        stackView.spacing = 16
+        return stackView
+    }
+
+    private func buildTaglineLabel() -> UILabel {
+        let label = UILabel()
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.font = .systemFont(ofSize: 17, weight: .bold)
+        label.textAlignment = .center
+        label.numberOfLines = 1
+        return label
+    }
+
+    private func makeSectionTitleLabel(text: String) -> UILabel {
+        let label = UILabel()
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.text = text
+        label.font = .systemFont(ofSize: 18, weight: .semibold)
+        label.textColor = .label
+        return label
+    }
+
+    private func buildFeaturedCards() {
+        let card1 = makeFeaturedCard()
+        item1CardView = card1.card
+        item1Image = card1.imageView
+        item1Name = card1.nameLabel
+        item1Rate = card1.rateLabel
+        item1Rating = card1.ratingLabel
+        item1Distance = card1.distanceLabel
+        item1owner = card1.ownerLabel
+        rentButton1 = card1.rentButton
+
+        let card2 = makeFeaturedCard()
+        item2CardView = card2.card
+        item2Image = card2.imageView
+        item2Name = card2.nameLabel
+        item2Rate = card2.rateLabel
+        item2Rating = card2.ratingLabel
+        item2Distance = card2.distanceLabel
+        item2owner = card2.ownerLabel
+        rentButton2 = card2.rentButton
+
+        let card3 = makeFeaturedCard()
+        item3CardView = card3.card
+        item3Image = card3.imageView
+        item3Name = card3.nameLabel
+        item3Rate = card3.rateLabel
+        item3Rating = card3.ratingLabel
+        item3Distance = card3.distanceLabel
+        item3owner = card3.ownerLabel
+        rentButton3 = card3.rentButton
+
+        let card4 = makeFeaturedCard()
+        item4CardView = card4.card
+        item4Image = card4.imageView
+        item4Name = card4.nameLabel
+        item4Rate = card4.rateLabel
+        item4Rating = card4.ratingLabel
+        item4Distance = card4.distanceLabel
+        item4owner = card4.ownerLabel
+        rentButton4 = card4.rentButton
+
+        featuredCardsStackView.addArrangedSubview(card1.card)
+        featuredCardsStackView.addArrangedSubview(card2.card)
+        featuredCardsStackView.addArrangedSubview(card3.card)
+        featuredCardsStackView.addArrangedSubview(card4.card)
+    }
+
+    private func makeFeaturedCard() -> FeaturedCardComponents {
+        let card = UIView()
+        card.translatesAutoresizingMaskIntoConstraints = false
+        card.backgroundColor = .clear
+
+        let imageView = UIImageView()
+        imageView.translatesAutoresizingMaskIntoConstraints = false
+        imageView.contentMode = .scaleAspectFill
+        imageView.clipsToBounds = true
+        imageView.backgroundColor = .secondarySystemBackground
+
+        let nameLabel = UILabel()
+        nameLabel.translatesAutoresizingMaskIntoConstraints = false
+        nameLabel.font = .systemFont(ofSize: 15, weight: .semibold)
+        nameLabel.textColor = .label
+        nameLabel.numberOfLines = 2
+
+        let rateLabel = UILabel()
+        rateLabel.translatesAutoresizingMaskIntoConstraints = false
+        rateLabel.font = .systemFont(ofSize: 12, weight: .regular)
+        rateLabel.textColor = .secondaryLabel
+
+        let ratingLabel = UILabel()
+        ratingLabel.translatesAutoresizingMaskIntoConstraints = false
+        ratingLabel.font = .systemFont(ofSize: 13, weight: .medium)
+        ratingLabel.textColor = .label
+
+        let distanceIcon = UIImageView(
+            image: UIImage(
+                systemName: "mappin.and.ellipse",
+                withConfiguration: UIImage.SymbolConfiguration(pointSize: 14, weight: .regular)
+            )
+        )
+        distanceIcon.translatesAutoresizingMaskIntoConstraints = false
+        distanceIcon.tintColor = UIColor(red: 112 / 255, green: 167 / 255, blue: 180 / 255, alpha: 1)
+        distanceIcon.contentMode = .scaleAspectFit
+
+        let distanceLabel = UILabel()
+        distanceLabel.translatesAutoresizingMaskIntoConstraints = false
+        distanceLabel.font = .systemFont(ofSize: 13, weight: .regular)
+        distanceLabel.textColor = .secondaryLabel
+
+        let byLabel = UILabel()
+        byLabel.translatesAutoresizingMaskIntoConstraints = false
+        byLabel.text = "By:"
+        byLabel.font = .systemFont(ofSize: 14, weight: .regular)
+        byLabel.textColor = .secondaryLabel
+
+        let ownerLabel = UILabel()
+        ownerLabel.translatesAutoresizingMaskIntoConstraints = false
+        ownerLabel.font = .systemFont(ofSize: 14, weight: .regular)
+        ownerLabel.textColor = .label
+
+        let rentButton = UIButton(type: .system)
+        rentButton.translatesAutoresizingMaskIntoConstraints = false
+        var configuration = UIButton.Configuration.plain()
+        configuration.title = "Rent"
+        rentButton.configuration = configuration
+
+        card.addSubview(imageView)
+        card.addSubview(nameLabel)
+        card.addSubview(rateLabel)
+        card.addSubview(ratingLabel)
+        card.addSubview(distanceIcon)
+        card.addSubview(distanceLabel)
+        card.addSubview(byLabel)
+        card.addSubview(ownerLabel)
+        card.addSubview(rentButton)
+
+        NSLayoutConstraint.activate([
+            card.heightAnchor.constraint(equalToConstant: 140),
+
+            imageView.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 16),
+            imageView.topAnchor.constraint(equalTo: card.topAnchor, constant: 16),
+            imageView.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -16),
+            imageView.widthAnchor.constraint(equalToConstant: 130),
+
+            nameLabel.leadingAnchor.constraint(equalTo: imageView.trailingAnchor, constant: 16),
+            nameLabel.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -16),
+            nameLabel.topAnchor.constraint(equalTo: card.topAnchor, constant: 16),
+
+            rateLabel.leadingAnchor.constraint(equalTo: nameLabel.leadingAnchor),
+            rateLabel.topAnchor.constraint(equalTo: nameLabel.bottomAnchor, constant: 8),
+
+            ratingLabel.leadingAnchor.constraint(equalTo: nameLabel.leadingAnchor),
+            ratingLabel.topAnchor.constraint(equalTo: rateLabel.bottomAnchor, constant: 10),
+
+            distanceIcon.leadingAnchor.constraint(equalTo: ratingLabel.trailingAnchor, constant: 25),
+            distanceIcon.centerYAnchor.constraint(equalTo: ratingLabel.centerYAnchor),
+            distanceIcon.widthAnchor.constraint(equalToConstant: 14),
+            distanceIcon.heightAnchor.constraint(equalToConstant: 18),
+
+            distanceLabel.leadingAnchor.constraint(equalTo: distanceIcon.trailingAnchor, constant: 5),
+            distanceLabel.centerYAnchor.constraint(equalTo: distanceIcon.centerYAnchor),
+
+            byLabel.leadingAnchor.constraint(equalTo: nameLabel.leadingAnchor),
+            byLabel.topAnchor.constraint(equalTo: ratingLabel.bottomAnchor, constant: 14),
+
+            ownerLabel.leadingAnchor.constraint(equalTo: byLabel.trailingAnchor, constant: 5),
+            ownerLabel.centerYAnchor.constraint(equalTo: byLabel.centerYAnchor),
+            ownerLabel.trailingAnchor.constraint(lessThanOrEqualTo: rentButton.leadingAnchor, constant: -16),
+
+            rentButton.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -10),
+            rentButton.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -10),
+            rentButton.widthAnchor.constraint(equalToConstant: 70),
+            rentButton.heightAnchor.constraint(equalToConstant: 32)
+        ])
+
+        return (card, imageView, nameLabel, rateLabel, ratingLabel, distanceLabel, ownerLabel, rentButton)
+    }
+
+    private func configureLocationButtonAppearance() {
+        let button = locationTapped
+        button?.titleLabel?.numberOfLines = 1
+        button?.titleLabel?.lineBreakMode = .byTruncatingTail
+        button?.titleLabel?.adjustsFontSizeToFitWidth = false
+        button?.contentHorizontalAlignment = .leading
+        button?.setContentCompressionResistancePriority(.required, for: .horizontal)
+        if button?.currentImage != nil {
+            button?.semanticContentAttribute = .forceLeftToRight
+        }
     }
 
     private func setupFeaturedItemTaps() {
-        // Image taps
-        let tap1 = UITapGestureRecognizer(target: self, action: #selector(didTapFeatured1))
-        item1Image?.isUserInteractionEnabled = true
-        item1Image?.addGestureRecognizer(tap1)
+        let imageTap1 = UITapGestureRecognizer(target: self, action: #selector(didTapFeatured1))
+        item1Image.isUserInteractionEnabled = true
+        item1Image.addGestureRecognizer(imageTap1)
 
-        let tap2 = UITapGestureRecognizer(target: self, action: #selector(didTapFeatured2))
-        item2Image?.isUserInteractionEnabled = true
-        item2Image?.addGestureRecognizer(tap2)
+        let imageTap2 = UITapGestureRecognizer(target: self, action: #selector(didTapFeatured2))
+        item2Image.isUserInteractionEnabled = true
+        item2Image.addGestureRecognizer(imageTap2)
 
-        let tap3 = UITapGestureRecognizer(target: self, action: #selector(didTapFeatured3))
-        item3Image?.isUserInteractionEnabled = true
-        item3Image?.addGestureRecognizer(tap3)
+        let imageTap3 = UITapGestureRecognizer(target: self, action: #selector(didTapFeatured3))
+        item3Image.isUserInteractionEnabled = true
+        item3Image.addGestureRecognizer(imageTap3)
 
-        let tap4 = UITapGestureRecognizer(target: self, action: #selector(didTapFeatured4))
-        item4Image?.isUserInteractionEnabled = true
-        item4Image?.addGestureRecognizer(tap4)
+        let imageTap4 = UITapGestureRecognizer(target: self, action: #selector(didTapFeatured4))
+        item4Image.isUserInteractionEnabled = true
+        item4Image.addGestureRecognizer(imageTap4)
 
-        // Card taps (make entire card tappable, but NOT the Rent button area)
         let cardTap1 = UITapGestureRecognizer(target: self, action: #selector(didTapFeatured1))
         cardTap1.cancelsTouchesInView = false
         cardTap1.delegate = self
-        item1CardView?.isUserInteractionEnabled = true
-        item1CardView?.addGestureRecognizer(cardTap1)
+        item1CardView.isUserInteractionEnabled = true
+        item1CardView.addGestureRecognizer(cardTap1)
 
         let cardTap2 = UITapGestureRecognizer(target: self, action: #selector(didTapFeatured2))
         cardTap2.cancelsTouchesInView = false
         cardTap2.delegate = self
-        item2CardView?.isUserInteractionEnabled = true
-        item2CardView?.addGestureRecognizer(cardTap2)
+        item2CardView.isUserInteractionEnabled = true
+        item2CardView.addGestureRecognizer(cardTap2)
 
         let cardTap3 = UITapGestureRecognizer(target: self, action: #selector(didTapFeatured3))
         cardTap3.cancelsTouchesInView = false
         cardTap3.delegate = self
-        item3CardView?.isUserInteractionEnabled = true
-        item3CardView?.addGestureRecognizer(cardTap3)
+        item3CardView.isUserInteractionEnabled = true
+        item3CardView.addGestureRecognizer(cardTap3)
 
         let cardTap4 = UITapGestureRecognizer(target: self, action: #selector(didTapFeatured4))
         cardTap4.cancelsTouchesInView = false
         cardTap4.delegate = self
-        item4CardView?.isUserInteractionEnabled = true
-        item4CardView?.addGestureRecognizer(cardTap4)
+        item4CardView.isUserInteractionEnabled = true
+        item4CardView.addGestureRecognizer(cardTap4)
     }
 
     @objc private func didTapFeatured1() { openFeatured(at: 0) }
@@ -485,20 +748,15 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
     @objc private func didTapFeatured3() { openFeatured(at: 2) }
     @objc private func didTapFeatured4() { openFeatured(at: 3) }
 
-    // MARK: - UIGestureRecognizerDelegate
-    // Prevent card tap gestures from firing when the Rent button is tapped
     func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
         guard let view = gestureRecognizer.view else { return true }
         let location = gestureRecognizer.location(in: view)
-        // Walk the hit-test tree; if the tapped view is a UIButton, let the button handle it
         if let hitView = view.hitTest(location, with: nil) {
-            // Check if the hit view is any UIButton (rent button or otherwise)
             if hitView is UIButton { return false }
-            // Also check if any ancestor of the hit view is a UIButton (for buttons with subviews)
             var ancestor = hitView.superview
-            while let v = ancestor, v !== view {
-                if v is UIButton { return false }
-                ancestor = v.superview
+            while let current = ancestor, current !== view {
+                if current is UIButton { return false }
+                ancestor = current.superview
             }
         }
         return true
@@ -519,50 +777,52 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
         guard !shouldSuppressFeaturedSelection(for: index) else { return }
         let item = featuredItems[index]
         guard ensureItemVisible(item) else { return }
-        // Instantiate ProductViewController
+
         let nibName = "ProductViewController"
-        let productVC: ProductViewController
-        if Bundle.main.path(forResource: nibName, ofType: "nib") != nil || Bundle.main.path(forResource: nibName, ofType: "xib") != nil {
-            productVC = ProductViewController(nibName: nibName, bundle: nil)
+        let productViewController: ProductViewController
+        if Bundle.main.path(forResource: nibName, ofType: "nib") != nil ||
+            Bundle.main.path(forResource: nibName, ofType: "xib") != nil {
+            productViewController = ProductViewController(nibName: nibName, bundle: nil)
         } else {
-            productVC = ProductViewController()
+            productViewController = ProductViewController()
         }
-        productVC.configure(with: item)
-        productVC.title = "Product Detail"
-        productVC.hidesBottomBarWhenPushed = true
-        if let nav = self.navigationController {
-            nav.setNavigationBarHidden(false, animated: true)
-            nav.pushViewController(productVC, animated: true)
+        productViewController.configure(with: item)
+        productViewController.title = "Product Detail"
+        productViewController.hidesBottomBarWhenPushed = true
+
+        if let navigationController {
+            navigationController.setNavigationBarHidden(false, animated: true)
+            navigationController.pushViewController(productViewController, animated: true)
         } else {
-            productVC.modalPresentationStyle = .fullScreen
-            present(productVC, animated: true)
+            productViewController.modalPresentationStyle = .fullScreen
+            present(productViewController, animated: true)
         }
     }
 
-    // Helper used by trending list to open an item detail
     private func openItem(_ item: Item) {
         guard ensureItemVisible(item) else { return }
-        let nibName = "ProductViewController"
-        let productVC: ProductViewController
-        if Bundle.main.path(forResource: nibName, ofType: "nib") != nil || Bundle.main.path(forResource: nibName, ofType: "xib") != nil {
-            productVC = ProductViewController(nibName: nibName, bundle: nil)
-        } else {
-            productVC = ProductViewController()
-        }
-        productVC.configure(with: item)
-        productVC.title = "Product Detail"
-        productVC.hidesBottomBarWhenPushed = true
 
-        if let nav = self.navigationController {
-            nav.setNavigationBarHidden(false, animated: true)
-            nav.pushViewController(productVC, animated: true)
+        let nibName = "ProductViewController"
+        let productViewController: ProductViewController
+        if Bundle.main.path(forResource: nibName, ofType: "nib") != nil ||
+            Bundle.main.path(forResource: nibName, ofType: "xib") != nil {
+            productViewController = ProductViewController(nibName: nibName, bundle: nil)
         } else {
-            productVC.modalPresentationStyle = .fullScreen
-            present(productVC, animated: true)
+            productViewController = ProductViewController()
+        }
+        productViewController.configure(with: item)
+        productViewController.title = "Product Detail"
+        productViewController.hidesBottomBarWhenPushed = true
+
+        if let navigationController {
+            navigationController.setNavigationBarHidden(false, animated: true)
+            navigationController.pushViewController(productViewController, animated: true)
+        } else {
+            productViewController.modalPresentationStyle = .fullScreen
+            present(productViewController, animated: true)
         }
     }
-    
-    // Helper to open RequestViewController directly from rent button
+
     func openRequestView(for item: Item) {
         guard ensureItemVisible(item) else { return }
         Task { [weak self] in
@@ -570,124 +830,83 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
             guard await self.ensureAuthenticated(orOpen: .signUp) else { return }
 
             let nibName = "RequestViewController"
-            let requestVC: RequestViewController
+            let requestViewController: RequestViewController
             if Bundle.main.path(forResource: nibName, ofType: "nib") != nil ||
                 Bundle.main.path(forResource: nibName, ofType: "xib") != nil {
-                requestVC = RequestViewController(nibName: nibName, bundle: nil)
+                requestViewController = RequestViewController(nibName: nibName, bundle: nil)
             } else {
-                requestVC = RequestViewController()
+                requestViewController = RequestViewController()
             }
-            requestVC.configure(with: item)
-            requestVC.title = "Request"
-            requestVC.hidesBottomBarWhenPushed = true
+            requestViewController.configure(with: item)
+            requestViewController.title = "Request"
+            requestViewController.hidesBottomBarWhenPushed = true
 
-            if let nav = self.navigationController {
-                nav.setNavigationBarHidden(false, animated: true)
-                nav.pushViewController(requestVC, animated: true)
+            if let navigationController = self.navigationController {
+                navigationController.setNavigationBarHidden(false, animated: true)
+                navigationController.pushViewController(requestViewController, animated: true)
             } else {
-                let nav = UINavigationController(rootViewController: requestVC)
-                nav.modalPresentationStyle = .fullScreen
-                self.present(nav, animated: true)
+                let navigationController = UINavigationController(rootViewController: requestViewController)
+                navigationController.modalPresentationStyle = .fullScreen
+                self.present(navigationController, animated: true)
             }
         }
     }
 
-    @objc private func didTapProductView() {
-        if let first = featuredItems.first, !ensureItemVisible(first) {
-            return
-        }
-        // Instantiate ProductViewController from XIB if available, else fallback to code
-        let nibName = "ProductViewController"
-        let productVC: ProductViewController
-
-        if Bundle.main.path(forResource: nibName, ofType: "nib") != nil || Bundle.main.path(forResource: nibName, ofType: "xib") != nil {
-            productVC = ProductViewController(nibName: nibName, bundle: nil)
-        } else {
-            productVC = ProductViewController()
-        }
-        if let first = featuredItems.first { productVC.configure(with: first) }
-        productVC.title = "Product Detail"
-        productVC.hidesBottomBarWhenPushed = true
-        if let nav = self.navigationController {
-            nav.setNavigationBarHidden(false, animated: true)
-            nav.pushViewController(productVC, animated: true)
-        } else {
-            productVC.modalPresentationStyle = .fullScreen
-            present(productVC, animated: true)
-        }
-    }
-
-    // MARK: - Compositional Layout: Horizontal row, 4 items visible per page
     private func generateHorizontalFourUpLayout() -> UICollectionViewLayout {
-        let layout = UICollectionViewCompositionalLayout { (_, _) -> NSCollectionLayoutSection? in
-
+        UICollectionViewCompositionalLayout { _, _ in
             let interItemSpacing: CGFloat = 10
             let contentInsets = NSDirectionalEdgeInsets(top: 10, leading: 10, bottom: 10, trailing: 10)
 
-            // Each item is 1/4 of the group's width and full group height
             let itemSize = NSCollectionLayoutSize(
                 widthDimension: .fractionalWidth(0.25),
                 heightDimension: .fractionalHeight(1.0)
             )
             let item = NSCollectionLayoutItem(layoutSize: itemSize)
-            item.contentInsets = NSDirectionalEdgeInsets(top: 0,
-                                                         leading: interItemSpacing / 2,
-                                                         bottom: 0,
-                                                         trailing: interItemSpacing / 2)
+            item.contentInsets = NSDirectionalEdgeInsets(
+                top: 0,
+                leading: interItemSpacing / 2,
+                bottom: 0,
+                trailing: interItemSpacing / 2
+            )
 
-            // Height for the row (tweak as needed)
-            let rowHeight: CGFloat = 100
-
-            // Group spans the full width so that 4 items are visible per "page"
             let groupSize = NSCollectionLayoutSize(
                 widthDimension: .fractionalWidth(1.0),
-                heightDimension: .absolute(rowHeight)
+                heightDimension: .absolute(100)
             )
             let group = NSCollectionLayoutGroup.horizontal(layoutSize: groupSize, subitems: [item])
 
             let section = NSCollectionLayoutSection(group: group)
             section.contentInsets = contentInsets
-
-            // Snap page-by-page so each page shows exactly 4 items
             section.orthogonalScrollingBehavior = .groupPaging
-
             return section
         }
-        return layout
     }
 
-    // MARK: - Simple push helper
     private func pushCategories(title: String) {
-        // Instantiate CategoriesViewController from storyboard "AppStarting"
-        let sb = UIStoryboard(name: "AppStarting", bundle: nil)
-        let vc = sb.instantiateViewController(withIdentifier: "Categories")
-
-        // Ensure we got the right type and pass the selected category
-        if let categoriesVC = vc as? CategoriesViewController {
-            categoriesVC.category = title
-            categoriesVC.title = title
-            categoriesVC.hidesBottomBarWhenPushed = true
-            navigationController?.setNavigationBarHidden(false, animated: true)
-            navigationController?.pushViewController(categoriesVC, animated: true)
-        } else {
-            assertionFailure("Storyboard ID 'Categories' is not a CategoriesViewController.")
+        guard let categoriesViewController = AppRootBuilder.makeCategoriesViewController() else {
+            assertionFailure("Could not instantiate CategoriesViewController from AppStarting storyboard.")
+            return
         }
+
+        categoriesViewController.category = title
+        categoriesViewController.title = title
+        categoriesViewController.hidesBottomBarWhenPushed = true
+        navigationController?.setNavigationBarHidden(false, animated: true)
+        navigationController?.pushViewController(categoriesViewController, animated: true)
     }
 
-    // Helper: map category title to background asset name
     private func categoryBackgroundAsset(for title: String) -> String? {
         switch title {
         case "Electronics": return "ElectronicsBG"
-        case "Tools":       return "ToolsBG"
-        case "Events":      return "EventsBG"
-        case "Fitness":     return "FitnessBG"
-        case "Hobbies":     return "HobbiesBG"
-        case "Outdoor":     return "OutdoorBG"
-        default:            return nil
+        case "Tools": return "ToolsBG"
+        case "Events": return "EventsBG"
+        case "Fitness": return "FitnessBG"
+        case "Hobbies": return "HobbiesBG"
+        case "Outdoor": return "OutdoorBG"
+        default: return nil
         }
     }
 
-    // MARK: - UICollectionViewDataSource (single implementation branching by collection)
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
         if collectionView === trendingCollectionView {
             return trendingItems.count
@@ -697,29 +916,34 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
 
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         if collectionView === trendingCollectionView {
-            guard let cell = collectionView.dequeueReusableCell(withReuseIdentifier: TrendingItemCell.reuseID, for: indexPath) as? TrendingItemCell else {
+            guard let cell = collectionView.dequeueReusableCell(
+                withReuseIdentifier: TrendingItemCell.reuseID,
+                for: indexPath
+            ) as? TrendingItemCell else {
                 assertionFailure("Could not dequeue TrendingItemCell")
                 return UICollectionViewCell()
             }
+
             let item = trendingItems[indexPath.item]
             cell.configure(with: item, currencyFormatter: currencyFormatter)
             cell.onRentTapped = { [weak self] in
                 self?.markTrendingRentTap(itemId: item.id)
                 self?.openRequestView(for: item)
             }
-            // Owner name removed from trending UI; no resolution or setting here.
             return cell
         }
 
-        guard let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "Category", for: indexPath) as? CategoryCollectionViewCell else {
-            assertionFailure("Could not dequeue CategoryCollectionViewCell with identifier 'Category'")
+        guard let cell = collectionView.dequeueReusableCell(
+            withReuseIdentifier: CategoryCollectionViewCell.reuseIdentifier,
+            for: indexPath
+        ) as? CategoryCollectionViewCell else {
+            assertionFailure("Could not dequeue CategoryCollectionViewCell")
             return UICollectionViewCell()
         }
 
         let item = categoriesList[indexPath.item]
         cell.categoryLabel.text = item.title
 
-        // Background image from assets (full-bleed)
         if let assetName = categoryBackgroundAsset(for: item.title) {
             cell.categoryBg.image = UIImage(named: assetName)
             cell.categoryBg.contentMode = .scaleAspectFill
@@ -728,35 +952,24 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
             cell.categoryBg.image = nil
         }
 
-        // Foreground icon (SF Symbol) and style
-        let config = UIImage.SymbolConfiguration(pointSize: 28, weight: .regular, scale: .medium)
-        cell.categoryImage.preferredSymbolConfiguration = config
+        let configuration = UIImage.SymbolConfiguration(pointSize: 28, weight: .regular, scale: .medium)
+        cell.categoryImage.preferredSymbolConfiguration = configuration
         cell.categoryImage.image = UIImage(systemName: item.systemImageName)
-        // Light icon tint for readability on photos
         cell.categoryImage.tintColor = UIColor(white: 1.0, alpha: 0.92)
 
-        // Label styling for readability
         cell.categoryLabel.textColor = .white
         cell.categoryLabel.font = .systemFont(ofSize: 14, weight: .semibold)
-        // Optional subtle text shadow to help over bright areas
         cell.categoryLabel.shadowColor = UIColor.black.withAlphaComponent(0.35)
         cell.categoryLabel.shadowOffset = CGSize(width: 0, height: 1)
 
-        // Rounded corners on the tile
-        cell.contentView.layer.cornerRadius = 12
-        cell.contentView.layer.masksToBounds = true
-
-        // Clear background so the asset shows cleanly
         cell.contentView.backgroundColor = .clear
         cell.backgroundColor = .clear
 
         return cell
     }
 
-    // MARK: - UICollectionViewDelegate (single implementation branching by collection)
-
     func collectionView(_ collectionView: UICollectionView, shouldSelectItemAt indexPath: IndexPath) -> Bool {
-        return true
+        true
     }
 
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
@@ -767,82 +980,36 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
             openItem(item)
             return
         }
+
         let item = categoriesList[indexPath.item]
         pushCategories(title: item.title)
     }
 
-    // MARK: - UICollectionViewDelegateFlowLayout (size only for trending; categories use compositional layout)
-    func collectionView(_ collectionView: UICollectionView,
-                        layout collectionViewLayout: UICollectionViewLayout,
-                        sizeForItemAt indexPath: IndexPath) -> CGSize {
+    func collectionView(
+        _ collectionView: UICollectionView,
+        layout collectionViewLayout: UICollectionViewLayout,
+        sizeForItemAt indexPath: IndexPath
+    ) -> CGSize {
         if collectionView === trendingCollectionView {
-            let height = collectionView.bounds.height
-            return CGSize(width: 280, height: height)
+            return CGSize(width: 280, height: collectionView.bounds.height)
         }
-        // Not used for categories; compositional layout controls it.
         return CGSize(width: 70, height: 70)
     }
 
-    // MARK: - UITabBarDelegate
-
-    // featured item 1
-    @IBOutlet weak var item1Image: UIImageView!
-    @IBOutlet weak var item1Name: UILabel!
-    @IBOutlet weak var item1Rate: UILabel!
-    @IBOutlet weak var item1Rating: UILabel!
-    @IBOutlet weak var item1Distance: UILabel!
-    @IBOutlet weak var item1CardView: UIView!
-    @IBOutlet weak var rentButton1: UIButton!
-    @IBOutlet weak var item1owner: UILabel!
-    
-    // featured item 2
-    @IBOutlet weak var item2Image: UIImageView!
-    @IBOutlet weak var item2Name: UILabel!
-    @IBOutlet weak var item2Rate: UILabel!
-    @IBOutlet weak var item2Rating: UILabel!
-    @IBOutlet weak var item2Distance: UILabel!
-    @IBOutlet weak var item2CardView: UIView!
-    @IBOutlet weak var rentButton2: UIButton!
-    @IBOutlet weak var item2owner: UILabel!
-    
-    // featured item 3
-    @IBOutlet weak var item3Image: UIImageView!
-    @IBOutlet weak var item3Name: UILabel!
-    @IBOutlet weak var item3Rate: UILabel!
-    @IBOutlet weak var item3Rating: UILabel!
-    @IBOutlet weak var item3Distance: UILabel!
-    @IBOutlet weak var item3CardView: UIView!
-    @IBOutlet weak var rentButton3: UIButton!
-    @IBOutlet weak var item3owner: UILabel!
-    
-    // featured item 4
-    @IBOutlet weak var item4Image: UIImageView!
-    @IBOutlet weak var item4Name: UILabel!
-    @IBOutlet weak var item4Rate: UILabel!
-    @IBOutlet weak var item4Rating: UILabel!
-    @IBOutlet weak var item4Distance: UILabel!
-    @IBOutlet weak var item4CardView: UIView!
-    @IBOutlet weak var rentButton4: UIButton!
-    @IBOutlet weak var item4owner: UILabel!
-    
-    // MARK: - Greeting helper
     private func updateGreeting() {
         let hour = Calendar.current.component(.hour, from: Date())
         let greeting: String
-        
+
         switch hour {
         case 0..<12:
-            // 12:00am - 11:59am
             greeting = "Good morning"
         case 12..<16:
-            // 12:00pm - 3:59pm
             greeting = "Good afternoon"
         default:
-            // 4:00pm - 11:59pm
             greeting = "Good evening"
         }
-        
-        greetingTop?.text = greeting
+
+        greetingTop.text = greeting
     }
 }
 
@@ -882,19 +1049,17 @@ private extension HomeViewController {
     }
 }
 
-// MARK: - Location handling (sheet + persistence)
 extension HomeViewController {
     func refreshLocationButtonTitle() {
-        // If no address is stored yet, try to resolve from GPS
         if SavedAddressesStore.shared.getDefaultSelectedAddress() == nil {
             Task {
                 do {
-                    let loc = try await AppLocationManager.shared.currentLocation()
-                    let name = try await AppLocationManager.shared.placename(for: loc)
+                    let location = try await AppLocationManager.shared.currentLocation()
+                    let name = try await AppLocationManager.shared.placename(for: location)
                     SavedAddressesStore.shared.setDefaultSelectedAddress(name)
                     DistanceService.shared.setViewerCoordinate(
-                        latitude: loc.coordinate.latitude,
-                        longitude: loc.coordinate.longitude
+                        latitude: location.coordinate.latitude,
+                        longitude: location.coordinate.longitude
                     )
                     NotificationCenter.default.post(name: .locationDidChange, object: nil)
                     await MainActor.run {
@@ -906,7 +1071,6 @@ extension HomeViewController {
                     }
                 }
             }
-            // Show placeholder while GPS resolves
             updateLocationButtonDisplay("Locating...")
             return
         }
@@ -926,57 +1090,50 @@ extension HomeViewController {
             return trimmed
         }()
 
-        locationTapped?.setTitle(displayText, for: .normal)
-        locationTapped?.setTitleColor(UIColor(red: 112/255, green: 167/255, blue: 180/255, alpha: 1.0), for: .normal)
-        locationTapped?.titleLabel?.font = .systemFont(ofSize: 14, weight: .semibold)
+        locationTapped.setTitle(displayText, for: .normal)
+        locationTapped.setTitleColor(UIColor(red: 112 / 255, green: 167 / 255, blue: 180 / 255, alpha: 1.0), for: .normal)
+        locationTapped.titleLabel?.font = .systemFont(ofSize: 14, weight: .semibold)
         configureLocationButtonAppearance()
     }
 
-    func makeFullAddressString(from addr: Address) -> String {
+    func makeFullAddressString(from address: Address) -> String {
         let parts = [
-            addr.address_line1,
-            addr.address_line2,
-            addr.city,
-            addr.state,
-            addr.postal_code,
-            addr.country
+            address.address_line1,
+            address.address_line2,
+            address.city,
+            address.state,
+            address.postal_code,
+            address.country
         ]
+
         return parts
             .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
             .joined(separator: ", ")
     }
 
-    @IBAction func locationTappedAction(_ sender: UIButton) {
-        assert(locationTapped == nil || sender === locationTapped, "locationTappedAction fired from a different control than locationTapped outlet.")
+    @objc func locationTappedAction(_ sender: UIButton) {
+        assert(sender === locationTapped, "locationTappedAction fired from a different control than the location button.")
 
-        let vc = LocationSelectorViewController()
+        let viewController = LocationSelectorViewController()
+        viewController.modalPresentationStyle = .pageSheet
 
-        if #available(iOS 15.0, *) {
-            vc.modalPresentationStyle = .pageSheet
-        } else {
-            vc.modalPresentationStyle = .pageSheet
-        }
-
-        vc.onSelectedAddress = { [weak self] _ in
-            // Caches already cleared / viewer coordinate already set by the
-            // location-selector path that triggered this callback.
+        viewController.onSelectedAddress = { [weak self] _ in
             CategoryItemCell.clearDistanceCache()
             self?.refreshLocationButtonTitle()
             Task { await self?.loadFeaturedItems(forceRefresh: true) }
             NotificationCenter.default.post(name: .locationDidChange, object: nil)
         }
 
-        vc.onEnterManualAddress = { [weak self] completion in
-            guard let self = self else { return }
+        viewController.onEnterManualAddress = { [weak self] completion in
+            guard let self else { return }
             let form = ManualAddressViewController()
             form.onSaved = { saved in
                 let display = [saved.label, saved.city, saved.state].compactMap { $0 }.first ?? saved.city
                 let fullString = self.makeFullAddressString(from: saved)
                 SavedAddressesStore.shared.setDefaultSelectedAddress(fullString)
-                // Use the exact geocoded coordinates so DistanceService doesn't fall back to GPS
-                if let lat = saved.latitude, let lon = saved.longitude, lat != 0, lon != 0 {
-                    DistanceService.shared.setViewerCoordinate(latitude: lat, longitude: lon)
+                if let latitude = saved.latitude, let longitude = saved.longitude, latitude != 0, longitude != 0 {
+                    DistanceService.shared.setViewerCoordinate(latitude: latitude, longitude: longitude)
                 } else {
                     DistanceService.shared.clearAllDistanceCaches()
                 }
@@ -986,27 +1143,26 @@ extension HomeViewController {
                 NotificationCenter.default.post(name: .locationDidChange, object: nil)
                 completion(display)
             }
-            if let nav = self.navigationController {
-                nav.setNavigationBarHidden(false, animated: true)
-                nav.pushViewController(form, animated: true)
+
+            if let navigationController = self.navigationController {
+                navigationController.setNavigationBarHidden(false, animated: true)
+                navigationController.pushViewController(form, animated: true)
             } else {
-                let nav = UINavigationController(rootViewController: form)
-                nav.modalPresentationStyle = .fullScreen
-                self.present(nav, animated: true)
+                let navigationController = UINavigationController(rootViewController: form)
+                navigationController.modalPresentationStyle = .fullScreen
+                self.present(navigationController, animated: true)
             }
         }
 
-        vc.onManageSavedAddresses = { [weak self] in
-            guard let self = self else { return }
+        viewController.onManageSavedAddresses = { [weak self] in
+            guard let self else { return }
             let list = ManageAddressesViewController()
-            list.onPicked = { [weak self] addr in
-                guard let self = self else { return }
-                let display = [addr.label, addr.city, addr.state].compactMap { $0 }.first ?? addr.city
-                let fullString = self.makeFullAddressString(from: addr)
+            list.onPicked = { [weak self] address in
+                guard let self else { return }
+                let fullString = self.makeFullAddressString(from: address)
                 SavedAddressesStore.shared.setDefaultSelectedAddress(fullString)
-                // Use exact DB coordinates instead of clearing and falling back to GPS
-                if let lat = addr.latitude, let lon = addr.longitude, lat != 0, lon != 0 {
-                    DistanceService.shared.setViewerCoordinate(latitude: lat, longitude: lon)
+                if let latitude = address.latitude, let longitude = address.longitude, latitude != 0, longitude != 0 {
+                    DistanceService.shared.setViewerCoordinate(latitude: latitude, longitude: longitude)
                 } else {
                     DistanceService.shared.clearAllDistanceCaches()
                 }
@@ -1015,17 +1171,18 @@ extension HomeViewController {
                 Task { await self.loadFeaturedItems(forceRefresh: true) }
                 NotificationCenter.default.post(name: .locationDidChange, object: nil)
             }
-            if let nav = self.navigationController {
-                nav.setNavigationBarHidden(false, animated: true)
-                nav.pushViewController(list, animated: true)
+
+            if let navigationController = self.navigationController {
+                navigationController.setNavigationBarHidden(false, animated: true)
+                navigationController.pushViewController(list, animated: true)
             } else {
-                let nav = UINavigationController(rootViewController: list)
-                nav.modalPresentationStyle = .fullScreen
-                self.present(nav, animated: true)
+                let navigationController = UINavigationController(rootViewController: list)
+                navigationController.modalPresentationStyle = .fullScreen
+                self.present(navigationController, animated: true)
             }
         }
 
-        if let sheet = vc.presentationController as? UISheetPresentationController {
+        if let sheet = viewController.presentationController as? UISheetPresentationController {
             sheet.detents = [.medium(), .large()]
             sheet.prefersGrabberVisible = true
             sheet.preferredCornerRadius = 16
@@ -1033,33 +1190,32 @@ extension HomeViewController {
 
         let generator = UIImpactFeedbackGenerator(style: .light)
         generator.prepare()
-
-        present(vc, animated: true) {
+        present(viewController, animated: true) {
             generator.impactOccurred()
         }
     }
 
     func presentSavedAddressesManager() {
-        let listVC = ManageAddressesViewController()
-        if let nav = self.navigationController {
-            nav.setNavigationBarHidden(false, animated: true)
-            nav.pushViewController(listVC, animated: true)
+        let listViewController = ManageAddressesViewController()
+        if let navigationController {
+            navigationController.setNavigationBarHidden(false, animated: true)
+            navigationController.pushViewController(listViewController, animated: true)
         } else {
-            let nav = UINavigationController(rootViewController: listVC)
-            nav.modalPresentationStyle = .fullScreen
-            present(nav, animated: true)
+            let navigationController = UINavigationController(rootViewController: listViewController)
+            navigationController.modalPresentationStyle = .fullScreen
+            present(navigationController, animated: true)
         }
     }
 
     func presentAddAddressPrompt() {
         let form = ManualAddressViewController()
-        if let nav = self.navigationController {
-            nav.setNavigationBarHidden(false, animated: true)
-            nav.pushViewController(form, animated: true)
+        if let navigationController {
+            navigationController.setNavigationBarHidden(false, animated: true)
+            navigationController.pushViewController(form, animated: true)
         } else {
-            let nav = UINavigationController(rootViewController: form)
-            nav.modalPresentationStyle = .fullScreen
-            present(nav, animated: true)
+            let navigationController = UINavigationController(rootViewController: form)
+            navigationController.modalPresentationStyle = .fullScreen
+            present(navigationController, animated: true)
         }
     }
 }

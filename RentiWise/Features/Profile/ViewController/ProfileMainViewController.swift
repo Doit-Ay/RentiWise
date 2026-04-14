@@ -18,11 +18,6 @@ class ProfileMainViewController: UIViewController {
     // Inject for tests if needed; default to real service
     private let profileService: ProfileServicing
 
-    private enum Constants {
-        static let appStartingStoryboard = "AppStarting"
-        static let navigationBarID = "NavigationBar"
-    }
-
     // Designated initializer for DI if you instantiate programmatically
     init(service: ProfileServicing = ProfileService()) {
         self.profileService = service
@@ -108,17 +103,15 @@ class ProfileMainViewController: UIViewController {
     }
 
     private func resetRootToHome() {
-        let storyboard = UIStoryboard(name: Constants.appStartingStoryboard, bundle: nil)
-        let rootVC = storyboard.instantiateViewController(withIdentifier: Constants.navigationBarID)
+        let rootViewController = AppRootBuilder.makeRootTabBarController()
 
         if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
            let window = scene.windows.first {
-            window.rootViewController = rootVC
+            window.rootViewController = rootViewController
             window.makeKeyAndVisible()
         } else {
-            // Fallback if we can’t access window: present modally
-            rootVC.modalPresentationStyle = .fullScreen
-            present(rootVC, animated: true)
+            rootViewController.modalPresentationStyle = .fullScreen
+            present(rootViewController, animated: true)
         }
     }
 }

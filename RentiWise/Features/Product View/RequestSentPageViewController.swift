@@ -71,13 +71,6 @@ class RequestSentPageViewController: UIViewController {
         return df
     }()
     
-    private enum Constants {
-        static let appStartingStoryboard = "AppStarting"
-        static let navigationBarID = "NavigationBar"
-        static let dashboardListingID = "DashboardListing"
-        static let homeStoryboardID = "Home" // if you have a storyboard ID for HomeViewController; not strictly required
-    }
-    
     func configure(with item: Item) {
         self.item = item
         if isViewLoaded { updateUI() }
@@ -283,11 +276,6 @@ class RequestSentPageViewController: UIViewController {
         perDayButton?.alpha = perDayButton?.isSelected == true ? 1.0 : 0.6
     }
     
-    private func instantiateDashboardListing() -> UIViewController {
-        let sb = UIStoryboard(name: Constants.appStartingStoryboard, bundle: nil)
-        return sb.instantiateViewController(withIdentifier: Constants.dashboardListingID)
-    }
-    
     // Connect this IBAction to your "Request" / "Close" button if you want to simply leave this screen.
     @IBAction func requestRentalclicked(_ sender: UIButton) {
         if let nav = navigationController {
@@ -362,13 +350,10 @@ private extension RequestSentPageViewController {
             }
         }
         
-        // 3) Otherwise, reset root to AppStarting → assume Home is the initial controller in your app entry
+        // 3) Otherwise, rebuild the app root and land on Home
         if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
            let window = windowScene.windows.first {
-            // If your app uses a Tab Bar with Home as the first tab, just ensure the tab bar is shown.
-            // Here we assume AppStarting sets things up to show Home by default.
-            let sb = UIStoryboard(name: Constants.appStartingStoryboard, bundle: nil)
-            let root = sb.instantiateInitialViewController() ?? sb.instantiateViewController(withIdentifier: Constants.navigationBarID)
+            let root = AppRootBuilder.makeRootTabBarController()
             window.rootViewController = root
             window.makeKeyAndVisible()
             return
