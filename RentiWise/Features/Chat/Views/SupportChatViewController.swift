@@ -150,7 +150,60 @@ final class SupportChatViewController: UIViewController {
         setupUI()
         setupQuickActions()
         setupKeyboardObservers()
+        setupCloseButton()
         loadInitialState()
+    }
+
+    // MARK: - Close Chat
+
+    private func setupCloseButton() {
+        let closeItem = UIBarButtonItem(
+            image: UIImage(systemName: "xmark.circle"),
+            style: .plain,
+            target: self,
+            action: #selector(closeChatTapped)
+        )
+        closeItem.tintColor = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0)
+        navigationItem.rightBarButtonItem = closeItem
+    }
+
+    @objc private func closeChatTapped() {
+        let ac = UIAlertController(title: "Close Issue", message: "What is the status of this issue?", preferredStyle: .actionSheet)
+
+        ac.addAction(UIAlertAction(title: "Issue Resolved", style: .default, handler: { [weak self] _ in
+            self?.closeTicketWithStatus("resolved")
+        }))
+        ac.addAction(UIAlertAction(title: "Pending", style: .default, handler: { [weak self] _ in
+            self?.closeTicketWithStatus("in_progress")
+        }))
+        ac.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+
+        if let pop = ac.popoverPresentationController {
+            pop.barButtonItem = navigationItem.rightBarButtonItem
+        }
+        present(ac, animated: true)
+    }
+
+    private func closeTicketWithStatus(_ status: String) {
+        guard let ticketId = currentTicket?.id else {
+            // No ticket was created yet — just pop back
+            navigationController?.popViewController(animated: true)
+            return
+        }
+
+        Task {
+            do {
+                try await chatService.closeTicket(ticketId: ticketId, status: status)
+            } catch {
+                debugLog("[SupportChat] Failed to close ticket: \(error.localizedDescription)")
+            }
+
+            await MainActor.run {
+                // Post notification so the ticket list refreshes
+                NotificationCenter.default.post(name: Notification.Name("supportTicketsClosed"), object: nil)
+                self.navigationController?.popViewController(animated: true)
+            }
+        }
     }
     
     // MARK: - Setup
@@ -316,8 +369,13 @@ final class SupportChatViewController: UIViewController {
     private func loadInitialState() {
         Task {
             currentUserId = await SupabaseManager.shared.currentUserId()
-            // Try to load existing open ticket and its history
-            await loadExistingTicketAndMessages()
+            if preloadedTicketId != nil {
+                // Loading a specific existing ticket
+                await loadExistingTicketAndMessages()
+            } else {
+                // New ticket — start with a clean slate
+                await addWelcomeMessage()
+            }
             await MainActor.run {
                 self.updateStatusCard()
             }
@@ -466,7 +524,7 @@ final class SupportChatViewController: UIViewController {
             id: "welcome",
             ticket_id: "",
             sender_id: "system",
-            text: "Hello! I'm the Rentiwise Assistant. Choose a topic below or type your question.",
+            text: "Hello! I'm the Rentiwise Assistant. Choose an issue below or type your question.",
             is_from_support: true,
             created_at: Date()
         )
@@ -476,7 +534,14 @@ final class SupportChatViewController: UIViewController {
     // MARK: - Actions
     
     @objc private func quickActionTapped(_ sender: UIButton) {
-        guard let topic = sender.title(for: .normal) else { return }
+        // UIButton.Configuration stores the title in attributedTitle, not the legacy titleLabel
+        let topic: String?
+        if let attrTitle = sender.configuration?.attributedTitle {
+            topic = String(attrTitle.characters)
+        } else {
+            topic = sender.title(for: .normal)
+        }
+        guard let topic, !topic.isEmpty else { return }
         sendQuery(topic)
     }
     
@@ -529,7 +594,7 @@ final class SupportChatViewController: UIViewController {
                             userInfo: [NSLocalizedDescriptionKey: "Unable to find the current support ticket."]
                         )
                     }
-                    _ = try await chatService.sendSupportMessage(ticketId: ticketId, text: text)
+                    _ = try await chatService.sendSupportMessage(ticketId: ticketId, text: text, isFromSupport: false)
                 }
                 
                 // Simulate bot response (in production, this would come from server)
@@ -564,7 +629,7 @@ final class SupportChatViewController: UIViewController {
         // Persist the bot auto-response to DB so it appears in chat history
         if let ticketId = currentTicket?.id {
             Task {
-                try? await chatService.sendSupportMessage(ticketId: ticketId, text: response)
+                try? await chatService.sendSupportMessage(ticketId: ticketId, text: response, isFromSupport: true)
             }
         }
     }
@@ -573,21 +638,21 @@ final class SupportChatViewController: UIViewController {
         let lowercased = query.lowercased()
         
         if lowercased.contains("refund") || lowercased.contains("money back") {
-            return "🔄 Refund Help\n\nRentiwise does not hold payments or issue refunds directly. Payments are arranged between the lender and borrower.\n\nIf you've already paid the lender, please:\n• Check the booking chat for the payment agreement\n• Request the refund directly from the lender\n• Share your booking ID with support if there is a dispute\n\nWe can review account activity and help document the issue, but we do not reverse or settle payments in-app."
+            return "🔄 Refund Help\n\nRentiwise does not hold payments or issue refunds directly. Payments are arranged between the lender and borrower.\n\nIf you've already paid the lender, please:\n• Check the booking chat for the payment agreement\n• Request the refund directly from the lender\n• Share the owner name and item details with support if there is a dispute\n\nWe can review account activity and help document the issue, but we do not reverse or settle payments in-app."
         } else if lowercased.contains("booking") || lowercased.contains("reservation") {
-            return "📅 Booking Assistance\n\nI can help you with:\n• Modifying booking dates\n• Checking item availability\n• Understanding pricing\n• Cancellation policies\n\nPlease tell me your booking ID or describe the specific issue you're facing."
+            return "📅 Booking Assistance\n\nI can help you with:\n• Modifying booking dates\n• Checking item availability\n• Understanding pricing\n• Cancellation policies\n\nPlease share the owner name or describe the specific issue you're facing."
         } else if lowercased.contains("damage") || lowercased.contains("broken") {
-            return "⚠️ Damage Report\n\nThank you for reporting this. To process your claim:\n\n1. Take clear photos of the damage\n2. Provide your booking ID\n3. Describe when/how it happened\n\nOur team will review within 24 hours and contact you. For items damaged during rental, insurance may cover the cost."
+            return "⚠️ Damage Report\n\nThank you for reporting this. To process your claim:\n\n1. Take clear photos of the damage\n2. Provide the owner name and item name\n3. Describe when/how it happened\n\nOur team will review within 24 hours and contact you. For items damaged during rental, insurance may cover the cost."
         } else if lowercased.contains("account") || lowercased.contains("profile") || lowercased.contains("password") {
             return "👤 Account Support\n\nI can help you with:\n• Password reset\n• Profile updates\n• Email/phone verification\n• Account security\n\nWhat specific account issue are you experiencing? I'll guide you through the solution."
         } else if lowercased.contains("payment") || lowercased.contains("card") || lowercased.contains("charge") || lowercased.contains("upi") {
-            return "💳 Payment Help\n\nRentiwise does not process card payments or store payment details.\n\nFor rentals:\n• Pay the lender directly via UPI after the request is accepted\n• Confirm the amount and UPI ID inside the booking screen\n• Use the booking chat if you need to confirm receipt or resolve an issue\n\nIf a UPI ID is missing or something looks suspicious, send your booking ID and we will help review it."
+            return "💳 Payment Help\n\nRentiwise does not process card payments or store payment details.\n\nFor rentals:\n• Pay the lender directly via UPI after the request is accepted\n• Confirm the amount and UPI ID inside the booking screen\n• Use the booking chat if you need to confirm receipt or resolve an issue\n\nIf a UPI ID is missing or something looks suspicious, share the owner name and we will help review it."
         } else if lowercased.contains("cancel") {
-            return "❌ Cancellation Help\n\nYou can cancel a request or rental from the booking screen.\n\nIf you've already paid the lender directly:\n• Coordinate any refund with the lender in chat\n• Keep screenshots of the agreement and payment confirmation\n• Contact support with your booking ID if the cancellation becomes a dispute\n\nRentiwise can help review account activity, but payment settlement still happens directly between users."
+            return "❌ Cancellation Help\n\nYou can cancel a request or rental from the booking screen.\n\nIf you've already paid the lender directly:\n• Coordinate any refund with the lender in chat\n• Keep screenshots of the agreement and payment confirmation\n• Contact support with the owner name if the cancellation becomes a dispute\n\nRentiwise can help review account activity, but payment settlement still happens directly between users."
         } else if lowercased.contains("hi") || lowercased.contains("hello") || lowercased.contains("hey") {
-            return "👋 Hello! Welcome to Rentiwise Support.\n\nHow can I help you today? Common topics:\n\n📦 Bookings & Rentals\n💰 Payments & Refunds\n⚙️ Account Issues\n📞 Report a Problem\n\nFeel free to ask anything or choose a topic above!"
+            return "👋 Hello! Welcome to Rentiwise Support.\n\nHow can I help you today? Common issues:\n\n📦 Bookings & Rentals\n💰 Payments & Refunds\n⚙️ Account Issues\n📞 Report a Problem\n\nFeel free to ask anything or choose an issue below!"
         } else {
-            return "✨ Thank you for contacting Rentiwise Support!\n\nA support representative will review your inquiry and respond within 2-4 hours. For faster assistance, please provide:\n\n• Your booking ID (if applicable)\n• Detailed description of the issue\n• Any relevant screenshots\n\nYou can also check our FAQ in the app settings while you wait."
+            return "✨ Thank you for contacting Rentiwise Support!\n\nA support representative will review your inquiry and respond within 2-4 hours. For faster assistance, please provide:\n\n• The owner name (if applicable)\n• Detailed description of the issue\n• Any relevant screenshots\n\nYou can also check our FAQ in the app settings while you wait."
         }
     }
     
@@ -666,6 +731,8 @@ final class SupportMessageCell: UITableViewCell {
     
     private var bubbleLeadingConstraint: NSLayoutConstraint!
     private var bubbleTrailingConstraint: NSLayoutConstraint!
+    private var timestampLeadingConstraint: NSLayoutConstraint!
+    private var timestampTrailingConstraint: NSLayoutConstraint!
     
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
@@ -688,6 +755,8 @@ final class SupportMessageCell: UITableViewCell {
         
         bubbleLeadingConstraint = bubbleView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16)
         bubbleTrailingConstraint = bubbleView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16)
+        timestampLeadingConstraint = timestampLabel.leadingAnchor.constraint(equalTo: bubbleView.leadingAnchor)
+        timestampTrailingConstraint = timestampLabel.trailingAnchor.constraint(equalTo: bubbleView.trailingAnchor)
         
         NSLayoutConstraint.activate([
             bubbleView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
@@ -703,23 +772,35 @@ final class SupportMessageCell: UITableViewCell {
         ])
     }
     
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        bubbleLeadingConstraint.isActive = false
+        bubbleTrailingConstraint.isActive = false
+        timestampLeadingConstraint.isActive = false
+        timestampTrailingConstraint.isActive = false
+    }
+    
     func configure(with message: SupportMessage) {
         messageLabel.text = message.text
         timestampLabel.text = message.formattedTime
         
         bubbleLeadingConstraint.isActive = false
         bubbleTrailingConstraint.isActive = false
+        timestampLeadingConstraint.isActive = false
+        timestampTrailingConstraint.isActive = false
         
         if message.is_from_support {
+            // Agent: left side
             bubbleLeadingConstraint.isActive = true
+            timestampLeadingConstraint.isActive = true
             bubbleView.backgroundColor = .white
             messageLabel.textColor = .label
-            timestampLabel.leadingAnchor.constraint(equalTo: bubbleView.leadingAnchor).isActive = true
         } else {
+            // User: right side
             bubbleTrailingConstraint.isActive = true
+            timestampTrailingConstraint.isActive = true
             bubbleView.backgroundColor = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0)
             messageLabel.textColor = .white
-            timestampLabel.trailingAnchor.constraint(equalTo: bubbleView.trailingAnchor).isActive = true
         }
     }
 }
