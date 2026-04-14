@@ -21,6 +21,34 @@ final class SignInService: SignInServicing {
         self.client = client
     }
 
+    private func userFacingMessage(for error: Error) -> String {
+        let rawDescription: String
+        if let authError = error as? AuthError {
+            rawDescription = authError.errorDescription ?? error.localizedDescription
+        } else if let httpError = error as? HTTPError {
+            rawDescription = httpError.errorDescription ?? error.localizedDescription
+        } else {
+            rawDescription = error.localizedDescription
+        }
+
+        let normalized = rawDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lowercased = normalized.lowercased()
+
+        if lowercased.contains("invalid login credentials") {
+            return "Invalid login credentials. Reset the password if needed, and make sure this email exists in Supabase Auth for the current project."
+        }
+
+        if lowercased.contains("email not confirmed") {
+            return "Email not confirmed. Open the verification email first, then try signing in again."
+        }
+
+        if lowercased.contains("network") || lowercased.contains("offline") {
+            return "Network error. Please check your internet connection and try again."
+        }
+
+        return normalized.isEmpty ? "Sign-in failed. Please try again." : normalized
+    }
+
     // Minimal sign-in: call SDK, bubble up its error message.
     func signIn(credentials: SignInCredentials) async throws -> Session {
         do {
@@ -29,15 +57,11 @@ final class SignInService: SignInServicing {
                 password: credentials.password
             )
         } catch {
-            // Show a simple, user-friendly message while keeping original description if available
-            let message: String
-            if let authError = error as? AuthError {
-                message = authError.errorDescription ?? "Sign-in failed. Please check your email and password."
-            } else if let httpError = error as? HTTPError {
-                message = httpError.errorDescription ?? "Network error. Please try again."
-            } else {
-                message = error.localizedDescription
-            }
+            let projectHost = SupabaseManager.shared.projectURL.host ?? "unknown-project"
+            let nsError = error as NSError
+            debugLog("[Auth.SignIn] Failed for email=\(credentials.email.lowercased()) project=\(projectHost) type=\(String(describing: type(of: error))) code=\(nsError.code) message=\(nsError.localizedDescription)")
+
+            let message = userFacingMessage(for: error)
             throw NSError(domain: "SignIn", code: -1, userInfo: [NSLocalizedDescriptionKey: message])
         }
     }

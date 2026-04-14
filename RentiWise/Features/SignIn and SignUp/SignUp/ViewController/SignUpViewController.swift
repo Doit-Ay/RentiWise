@@ -131,7 +131,8 @@ final class SignUpViewController: UIViewController, UITextViewDelegate, UITextFi
         configureFieldLabel(passwordLabel, text: "Password")
         configureTextField(passwordField, placeholder: "Password")
         passwordField.isSecureTextEntry = true
-        passwordField.textContentType = .oneTimeCode
+        passwordField.textContentType = .newPassword
+        passwordField.autocapitalizationType = .none
         passwordField.autocorrectionType = .no
         passwordField.spellCheckingType = .no
 
@@ -139,7 +140,8 @@ final class SignUpViewController: UIViewController, UITextViewDelegate, UITextFi
         configureFieldLabel(confirmPasswordLabel, text: "Confirm Password")
         configureTextField(confirmPasswordField, placeholder: "Confirm Password")
         confirmPasswordField.isSecureTextEntry = true
-        confirmPasswordField.textContentType = .oneTimeCode
+        confirmPasswordField.textContentType = .newPassword
+        confirmPasswordField.autocapitalizationType = .none
         confirmPasswordField.autocorrectionType = .no
         confirmPasswordField.spellCheckingType = .no
 

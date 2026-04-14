@@ -141,7 +141,8 @@ final class SignViewController: UIViewController, UITextViewDelegate, UITextFiel
         configureFieldLabel(passwordLabel, text: "Password")
         configureTextField(passwordField, placeholder: "Password")
         passwordField.isSecureTextEntry = true
-        passwordField.textContentType = .oneTimeCode
+        passwordField.textContentType = .password
+        passwordField.autocapitalizationType = .none
         passwordField.autocorrectionType = .no
         passwordField.spellCheckingType = .no
         passwordField.returnKeyType = .done
