@@ -401,14 +401,7 @@ final class ProfileViewController: UITableViewController {
     // MARK: - Auth helpers
     
     private func openSignUp() {
-        let nibName = "SignUpViewController"
-        let vc: SignUpViewController
-        if Bundle.main.path(forResource: nibName, ofType: "nib") != nil ||
-            Bundle.main.path(forResource: nibName, ofType: "xib") != nil {
-            vc = SignUpViewController(nibName: nibName, bundle: nil)
-        } else {
-            vc = SignUpViewController(service: SignUpService())
-        }
+        let vc = SignUpViewController()
         vc.title = "Sign Up"
         vc.hidesBottomBarWhenPushed = true
         

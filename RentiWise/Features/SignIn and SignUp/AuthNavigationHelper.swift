@@ -13,28 +13,14 @@ extension UIViewController {
 
         switch destination {
         case let .signIn(routeContext):
-            let nibName = "SignViewController"
-            let signInVC: SignViewController
-            if Bundle.main.path(forResource: nibName, ofType: "nib") != nil ||
-                Bundle.main.path(forResource: nibName, ofType: "xib") != nil {
-                signInVC = SignViewController(nibName: nibName, bundle: nil)
-            } else {
-                signInVC = SignViewController(service: SignInService())
-            }
+            let signInVC = SignViewController()
             signInVC.routeContext = routeContext
             signInVC.title = ""
             signInVC.hidesBottomBarWhenPushed = true
             viewController = signInVC
 
         case .signUp:
-            let nibName = "SignUpViewController"
-            let signUpVC: SignUpViewController
-            if Bundle.main.path(forResource: nibName, ofType: "nib") != nil ||
-                Bundle.main.path(forResource: nibName, ofType: "xib") != nil {
-                signUpVC = SignUpViewController(nibName: nibName, bundle: nil)
-            } else {
-                signUpVC = SignUpViewController(service: SignUpService())
-            }
+            let signUpVC = SignUpViewController()
             signUpVC.title = ""
             signUpVC.hidesBottomBarWhenPushed = true
             viewController = signUpVC

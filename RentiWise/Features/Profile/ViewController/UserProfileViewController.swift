@@ -359,14 +359,7 @@ final class UserProfileViewController: UIViewController, UITableViewDataSource, 
     }
 
     private func openSignIn() {
-        let nibName = "SignViewController"
-        let signInVC: SignViewController
-        if Bundle.main.path(forResource: nibName, ofType: "nib") != nil ||
-            Bundle.main.path(forResource: nibName, ofType: "xib") != nil {
-            signInVC = SignViewController(nibName: nibName, bundle: nil)
-        } else {
-            signInVC = SignViewController(service: SignInService())
-        }
+        let signInVC = SignViewController()
         signInVC.title = ""
         signInVC.hidesBottomBarWhenPushed = true
 

@@ -79,14 +79,7 @@ class HomeViewController: UIViewController, UICollectionViewDelegate, UICollecti
                     self.present(nav, animated: true)
                 }
             } catch {
-                let nibName = "SignViewController"
-                let signInVC: SignViewController
-                if Bundle.main.path(forResource: nibName, ofType: "nib") != nil ||
-                    Bundle.main.path(forResource: nibName, ofType: "xib") != nil {
-                    signInVC = SignViewController(nibName: nibName, bundle: nil)
-                } else {
-                    signInVC = SignViewController(service: SignInService())
-                }
+                let signInVC = SignViewController()
                 signInVC.routeContext = .default
                 signInVC.title = "Sign in"
                 signInVC.hidesBottomBarWhenPushed = true

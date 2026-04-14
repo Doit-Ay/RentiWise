@@ -11,71 +11,55 @@ import Supabase
 @MainActor
 final class SignUpViewController: UIViewController, UITextViewDelegate, UITextFieldDelegate {
 
-    @IBOutlet private weak var authFormStackView: UIStackView!
-    @IBOutlet private weak var signUpEmailText: UITextField!
-    @IBOutlet private weak var signUpPasswordText: UITextField!
-    @IBOutlet private weak var signUpConfirmPasswordText: UITextField!
-    @IBOutlet private weak var signUpFullNameText: UITextField!
-    @IBOutlet private weak var signUpNumberText: UITextField!
-    @IBOutlet private weak var signUpButton: UIButton!
-    @IBOutlet private weak var socialAuthStackView: UIStackView!
+    // MARK: - Brand color
+    private let brandTeal = UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0)
 
+    // MARK: - UI Elements
+    private let scrollView = UIScrollView()
+    private let contentView = UIView()
+
+    private let titleLabel = UILabel()
+    private let emailLabel = UILabel()
+    private let emailField = UITextField()
+    private let passwordLabel = UILabel()
+    private let passwordField = UITextField()
+    private let confirmPasswordLabel = UILabel()
+    private let confirmPasswordField = UITextField()
+    private let fullNameLabel = UILabel()
+    private let fullNameField = UITextField()
+    private let phoneLabel = UILabel()
+    private let phoneField = UITextField()
+    private let signUpButton = UIButton(type: .system)
+    private let legalNoticeTextView = UITextView()
+    private let switchLabel = UILabel()
+    private let switchButton = UIButton(type: .system)
+
+    // MARK: - State
     private let validation = AuthValidationService()
     private var signUpService: SignUpServicing
     private var isLoading: Bool = false
     private var hasAcceptedAccountLegalConsent = false
-    private let legalNoticeTextView = UITextView()
+    private var activeField: UITextField?
 
-    // Designated DI initializer
-    init(service: SignUpServicing) {
+    // MARK: - Initializers
+
+    init(service: SignUpServicing = SignUpService()) {
         self.signUpService = service
         super.init(nibName: nil, bundle: nil)
     }
 
-    // Proper override for XIB-based loading via nibName:bundle:
-    override init(nibName nibNameOrNil: String?, bundle nibBundleOrNil: Bundle?) {
-        self.signUpService = SignUpService()
-        super.init(nibName: nibNameOrNil, bundle: nibBundleOrNil)
-    }
-
-    // XIB/Storyboard initializer
     required init?(coder: NSCoder) {
         self.signUpService = SignUpService()
         super.init(coder: coder)
     }
 
+    // MARK: - Lifecycle
+
     override func viewDidLoad() {
         super.viewDidLoad()
         title = ""
-        signUpEmailText?.keyboardType = .emailAddress
-        signUpEmailText?.autocapitalizationType = .none
-        signUpPasswordText?.isSecureTextEntry = true
-        signUpPasswordText?.textContentType = .oneTimeCode
-        signUpPasswordText?.autocorrectionType = .no
-        signUpPasswordText?.spellCheckingType = .no
+        view.backgroundColor = .systemBackground
 
-        signUpConfirmPasswordText?.isSecureTextEntry = true
-        signUpConfirmPasswordText?.textContentType = .oneTimeCode
-        signUpConfirmPasswordText?.autocorrectionType = .no
-        signUpConfirmPasswordText?.spellCheckingType = .no
-
-        signUpFullNameText?.autocapitalizationType = .words
-        signUpFullNameText?.autocorrectionType = .no
-        signUpFullNameText?.delegate = self
-
-        // Phone field: numeric pad + "+91" prefix label
-        signUpNumberText?.keyboardType = .numberPad
-        signUpNumberText?.delegate = self
-        signUpNumberText?.placeholder = "10-digit mobile number"
-        let prefixLabel = UILabel()
-        prefixLabel.text = "  +91 "
-        prefixLabel.font = signUpNumberText?.font ?? .systemFont(ofSize: 16)
-        prefixLabel.textColor = .secondaryLabel
-        prefixLabel.sizeToFit()
-        signUpNumberText?.leftView = prefixLabel
-        signUpNumberText?.leftViewMode = .always
-
-        // Back to Profile button
         navigationItem.leftBarButtonItem = UIBarButtonItem(
             title: "Back",
             style: .plain,
@@ -83,51 +67,364 @@ final class SignUpViewController: UIViewController, UITextViewDelegate, UITextFi
             action: #selector(backToProfile)
         )
 
-        // Hide social auth (Google) — only manual sign-up is supported
-        socialAuthStackView?.isHidden = true
+        buildUI()
+        configureFields()
+        registerKeyboardObservers()
 
-        configureLegalNotice()
+        let tap = UITapGestureRecognizer(target: self, action: #selector(dismissKeyboard))
+        tap.cancelsTouchesInView = false
+        view.addGestureRecognizer(tap)
     }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    // MARK: - Build UI
+
+    private func buildUI() {
+        // Scroll view
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.alwaysBounceVertical = true
+        scrollView.keyboardDismissMode = .interactive
+        view.addSubview(scrollView)
+
+        contentView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.addSubview(contentView)
+
+        NSLayoutConstraint.activate([
+            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+
+            contentView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
+            contentView.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
+            contentView.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
+            contentView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
+            contentView.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor)
+        ])
+
+        // Title
+        titleLabel.text = "Sign Up"
+        titleLabel.font = .systemFont(ofSize: 40, weight: .bold)
+        titleLabel.textAlignment = .center
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(titleLabel)
+
+        // Form fields
+        let formStack = UIStackView()
+        formStack.axis = .vertical
+        formStack.spacing = 10
+        formStack.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(formStack)
+
+        // Email
+        configureFieldLabel(emailLabel, text: "Email Address")
+        configureTextField(emailField, placeholder: "Email")
+        emailField.keyboardType = .emailAddress
+        emailField.autocapitalizationType = .none
+        emailField.textContentType = .emailAddress
+
+        // Password
+        configureFieldLabel(passwordLabel, text: "Password")
+        configureTextField(passwordField, placeholder: "Password")
+        passwordField.isSecureTextEntry = true
+        passwordField.textContentType = .oneTimeCode
+        passwordField.autocorrectionType = .no
+        passwordField.spellCheckingType = .no
+
+        // Confirm Password
+        configureFieldLabel(confirmPasswordLabel, text: "Confirm Password")
+        configureTextField(confirmPasswordField, placeholder: "Confirm Password")
+        confirmPasswordField.isSecureTextEntry = true
+        confirmPasswordField.textContentType = .oneTimeCode
+        confirmPasswordField.autocorrectionType = .no
+        confirmPasswordField.spellCheckingType = .no
+
+        // Full Name
+        configureFieldLabel(fullNameLabel, text: "Full Name")
+        configureTextField(fullNameField, placeholder: "Full Name")
+        fullNameField.autocapitalizationType = .words
+        fullNameField.autocorrectionType = .no
+        fullNameField.textContentType = .name
+
+        // Phone Number
+        configureFieldLabel(phoneLabel, text: "Phone Number")
+        configureTextField(phoneField, placeholder: "10-digit mobile number")
+        phoneField.keyboardType = .numberPad
+        phoneField.textContentType = .telephoneNumber
+        let prefixLabel = UILabel()
+        prefixLabel.text = "  +91 "
+        prefixLabel.font = phoneField.font ?? .systemFont(ofSize: 16)
+        prefixLabel.textColor = .secondaryLabel
+        prefixLabel.sizeToFit()
+        phoneField.leftView = prefixLabel
+        phoneField.leftViewMode = .always
+
+        // Add to stack
+        for item in [emailLabel, emailField,
+                     passwordLabel, passwordField,
+                     confirmPasswordLabel, confirmPasswordField,
+                     fullNameLabel, fullNameField,
+                     phoneLabel, phoneField] {
+            formStack.addArrangedSubview(item)
+        }
+
+        // Legal notice
+        configureLegalNotice()
+        contentView.addSubview(legalNoticeTextView)
+
+        // Sign Up button
+        signUpButton.translatesAutoresizingMaskIntoConstraints = false
+        signUpButton.setTitle("Sign Up", for: .normal)
+        signUpButton.setTitleColor(.white, for: .normal)
+        signUpButton.titleLabel?.font = .systemFont(ofSize: 18, weight: .semibold)
+        signUpButton.backgroundColor = brandTeal
+        signUpButton.layer.cornerRadius = 12
+        signUpButton.addTarget(self, action: #selector(signUpTapped), for: .touchUpInside)
+        contentView.addSubview(signUpButton)
+
+        // Bottom switch row
+        let bottomStack = UIStackView()
+        bottomStack.axis = .horizontal
+        bottomStack.spacing = 4
+        bottomStack.alignment = .center
+        bottomStack.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(bottomStack)
+
+        switchLabel.text = "Already have an account?"
+        switchLabel.font = .systemFont(ofSize: 14)
+        switchLabel.textColor = .label
+        bottomStack.addArrangedSubview(switchLabel)
+
+        switchButton.setTitle("Sign In", for: .normal)
+        switchButton.setTitleColor(brandTeal, for: .normal)
+        switchButton.titleLabel?.font = .systemFont(ofSize: 13)
+        switchButton.addTarget(self, action: #selector(signinSwitch), for: .touchUpInside)
+        bottomStack.addArrangedSubview(switchButton)
+
+        // Layout
+        NSLayoutConstraint.activate([
+            titleLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 30),
+            titleLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+
+            formStack.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 30),
+            formStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
+            contentView.trailingAnchor.constraint(equalTo: formStack.trailingAnchor, constant: 20),
+
+            legalNoticeTextView.topAnchor.constraint(equalTo: formStack.bottomAnchor, constant: 12),
+            legalNoticeTextView.leadingAnchor.constraint(equalTo: formStack.leadingAnchor),
+            legalNoticeTextView.trailingAnchor.constraint(equalTo: formStack.trailingAnchor),
+
+            signUpButton.topAnchor.constraint(equalTo: legalNoticeTextView.bottomAnchor, constant: 8),
+            signUpButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+            contentView.trailingAnchor.constraint(equalTo: signUpButton.trailingAnchor, constant: 16),
+            signUpButton.heightAnchor.constraint(equalToConstant: 44),
+
+            bottomStack.topAnchor.constraint(equalTo: signUpButton.bottomAnchor, constant: 24),
+            bottomStack.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            bottomStack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -30)
+        ])
+    }
+
+    // MARK: - Field Helpers
+
+    private func configureFieldLabel(_ label: UILabel, text: String) {
+        label.text = text
+        label.font = .systemFont(ofSize: 17, weight: .medium)
+        label.textColor = .label
+    }
+
+    private func configureTextField(_ field: UITextField, placeholder: String) {
+        field.translatesAutoresizingMaskIntoConstraints = false
+        field.placeholder = placeholder
+        field.borderStyle = .roundedRect
+        field.font = .systemFont(ofSize: 14)
+        field.layer.cornerRadius = 12
+        field.layer.masksToBounds = true
+        field.layer.borderWidth = 1
+        field.layer.borderColor = brandTeal.cgColor
+        field.delegate = self
+        field.returnKeyType = .next
+        field.heightAnchor.constraint(equalToConstant: 50).isActive = true
+    }
+
+    private func configureFields() {
+        emailField.keyboardType = .emailAddress
+        emailField.autocapitalizationType = .none
+    }
+
+    // MARK: - Legal Notice
+
+    private func configureLegalNotice() {
+        legalNoticeTextView.translatesAutoresizingMaskIntoConstraints = false
+        legalNoticeTextView.backgroundColor = .clear
+        legalNoticeTextView.isEditable = false
+        legalNoticeTextView.isScrollEnabled = false
+        legalNoticeTextView.delegate = self
+        legalNoticeTextView.textAlignment = .center
+        legalNoticeTextView.adjustsFontForContentSizeCategory = true
+        legalNoticeTextView.textContainerInset = .zero
+        legalNoticeTextView.textContainer.lineFragmentPadding = 0
+        legalNoticeTextView.linkTextAttributes = [
+            .foregroundColor: brandTeal,
+            .underlineStyle: NSUnderlineStyle.single.rawValue
+        ]
+        legalNoticeTextView.attributedText = makeLegalNoticeText(prefix: "By signing up, you agree to our ")
+        legalNoticeTextView.accessibilityIdentifier = "sign_up_legal_notice"
+    }
+
+    private func makeLegalNoticeText(prefix: String) -> NSAttributedString {
+        let text = prefix + "Terms of Service and Privacy Policy."
+        let attributed = NSMutableAttributedString(
+            string: text,
+            attributes: [
+                .font: UIFont.systemFont(ofSize: 10.5, weight: .regular),
+                .foregroundColor: UIColor.secondaryLabel
+            ]
+        )
+        let nsText = text as NSString
+        attributed.addAttribute(.link, value: "rentiwise://legal/terms", range: nsText.range(of: "Terms of Service"))
+        attributed.addAttribute(.link, value: "rentiwise://legal/privacy", range: nsText.range(of: "Privacy Policy"))
+        return attributed
+    }
+
+    func textView(
+        _ textView: UITextView,
+        shouldInteractWith url: URL,
+        in characterRange: NSRange,
+        interaction: UITextItemInteraction
+    ) -> Bool {
+        switch url.absoluteString {
+        case "rentiwise://legal/terms":
+            openLegalDocument(.termsOfService)
+        case "rentiwise://legal/privacy":
+            openLegalDocument(.privacyPolicy)
+        default:
+            return true
+        }
+        return false
+    }
+
+    // MARK: - Keyboard Handling
+
+    @objc private func dismissKeyboard() {
+        view.endEditing(true)
+    }
+
+    private func registerKeyboardObservers() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(keyboardWillShow(_:)),
+            name: UIResponder.keyboardWillShowNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(keyboardWillHide(_:)),
+            name: UIResponder.keyboardWillHideNotification,
+            object: nil
+        )
+    }
+
+    @objc private func keyboardWillShow(_ notification: Notification) {
+        guard let userInfo = notification.userInfo,
+              let kbFrame = userInfo[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect,
+              let duration = userInfo[UIResponder.keyboardAnimationDurationUserInfoKey] as? TimeInterval
+        else { return }
+
+        let kbHeight = kbFrame.height
+        let insets = UIEdgeInsets(top: 0, left: 0, bottom: kbHeight, right: 0)
+
+        UIView.animate(withDuration: duration) {
+            self.scrollView.contentInset = insets
+            self.scrollView.scrollIndicatorInsets = insets
+        }
+
+        if let active = activeField {
+            let fieldRect = active.convert(active.bounds, to: scrollView)
+            scrollView.scrollRectToVisible(fieldRect.insetBy(dx: 0, dy: -60), animated: true)
+        }
+    }
+
+    @objc private func keyboardWillHide(_ notification: Notification) {
+        let duration = (notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? TimeInterval) ?? 0.25
+        UIView.animate(withDuration: duration) {
+            self.scrollView.contentInset = .zero
+            self.scrollView.scrollIndicatorInsets = .zero
+        }
+    }
+
+    // MARK: - UITextFieldDelegate
+
+    func textFieldDidBeginEditing(_ textField: UITextField) {
+        activeField = textField
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            guard let self else { return }
+            let fieldRect = textField.convert(textField.bounds, to: self.scrollView)
+            self.scrollView.scrollRectToVisible(fieldRect.insetBy(dx: 0, dy: -60), animated: true)
+        }
+    }
+
+    func textFieldDidEndEditing(_ textField: UITextField) {
+        activeField = nil
+    }
+
+    func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+        if textField === emailField {
+            passwordField.becomeFirstResponder()
+        } else if textField === passwordField {
+            confirmPasswordField.becomeFirstResponder()
+        } else if textField === confirmPasswordField {
+            fullNameField.becomeFirstResponder()
+        } else if textField === fullNameField {
+            phoneField.becomeFirstResponder()
+        } else {
+            textField.resignFirstResponder()
+        }
+        return false
+    }
+
+    func textField(_ textField: UITextField, shouldChangeCharactersIn range: NSRange, replacementString string: String) -> Bool {
+        // Phone field: allow only digits, max 10 chars
+        if textField === phoneField {
+            let allowedCharacters = CharacterSet.decimalDigits
+            if !string.isEmpty && string.rangeOfCharacter(from: allowedCharacters.inverted) != nil {
+                return false
+            }
+            let currentText = textField.text ?? ""
+            let newLength = currentText.count + string.count - range.length
+            return newLength <= 10
+        }
+        // Full name field: allow only letters and spaces
+        if textField === fullNameField {
+            let allowed = CharacterSet.letters.union(.whitespaces)
+            if !string.isEmpty && string.unicodeScalars.contains(where: { !allowed.contains($0) }) {
+                return false
+            }
+            let currentText = textField.text ?? ""
+            let newLength = currentText.count + string.count - range.length
+            return newLength <= 50
+        }
+        return true
+    }
+
+    // MARK: - Actions
 
     @objc private func backToProfile() {
         routeToProfileTab()
     }
 
-    @objc private func showLegalMenu() {
-        let alert = UIAlertController(title: "Legal", message: "Review our terms and privacy details before continuing.", preferredStyle: .actionSheet)
-        alert.addAction(UIAlertAction(title: "Terms of Service", style: .default) { [weak self] _ in
-            self?.openLegalDocument(.termsOfService)
-        })
-        alert.addAction(UIAlertAction(title: "Privacy Policy", style: .default) { [weak self] _ in
-            self?.openLegalDocument(.privacyPolicy)
-        })
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        if let popover = alert.popoverPresentationController {
-            popover.barButtonItem = navigationItem.rightBarButtonItem
-        }
-        present(alert, animated: true)
-    }
-
-    // Legacy IBAction kept so XIB connection doesn't crash; does nothing
-    @IBAction private func GoogleSignIn(_ sender: UIButton) {
-        // Google Sign-In removed — no-op
-    }
-
-    @IBAction private func signUpTapped(_ sender: UIButton) {
+    @objc private func signUpTapped() {
         Task { await signUp() }
     }
 
-    @IBAction private func signinSwitch(_ sender: UIButton) {
-        let nibName = "SignViewController"
-        let vc: SignViewController
-        if Bundle.main.path(forResource: nibName, ofType: "nib") != nil || Bundle.main.path(forResource: nibName, ofType: "xib") != nil {
-            vc = SignViewController(nibName: nibName, bundle: nil)
-        } else {
-            vc = SignViewController(service: SignInService())
-        }
+    @objc private func signinSwitch() {
+        let vc = SignViewController()
         vc.title = ""
         vc.hidesBottomBarWhenPushed = true
-
         if let nav = navigationController {
             nav.pushViewController(vc, animated: true)
         } else {
@@ -137,14 +434,16 @@ final class SignUpViewController: UIViewController, UITextViewDelegate, UITextFi
         }
     }
 
+    // MARK: - Sign Up Logic
+
     private func signUp() async {
         guard await ensureAccountLegalConsentIfNeeded(anchor: signUpButton) else { return }
 
-        let email = signUpEmailText.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let password = signUpPasswordText.text ?? ""
-        let confirmPassword = signUpConfirmPasswordText.text ?? ""
-        let fullName = signUpFullNameText.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let phoneRaw = signUpNumberText.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let email = emailField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let password = passwordField.text ?? ""
+        let confirmPassword = confirmPasswordField.text ?? ""
+        let fullName = fullNameField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let phoneRaw = phoneField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
 
         guard !email.isEmpty, !password.isEmpty, !confirmPassword.isEmpty, !fullName.isEmpty else {
             presentAlert(title: "Missing fields", message: "Please fill in all the required fields.")
@@ -178,12 +477,11 @@ final class SignUpViewController: UIViewController, UITextViewDelegate, UITextFi
             phone = ""
         }
 
-        signUpButton?.isEnabled = false
-        defer { signUpButton?.isEnabled = true }
+        signUpButton.isEnabled = false
+        defer { signUpButton.isEnabled = true }
 
         do {
             let credentials = SignUpCredentials(email: email, password: password)
-            // phone is already in E.164 format or empty
             let profile = SignUpUserProfile(fullName: fullName, phone: phone)
 
             let result = try await signUpService.signUp(credentials: credentials)
@@ -210,64 +508,6 @@ final class SignUpViewController: UIViewController, UITextViewDelegate, UITextFi
         } catch {
             presentAlert(title: "Sign Up Failed", message: error.localizedDescription)
         }
-    }
-
-    private func configureLegalNotice() {
-        legalNoticeTextView.translatesAutoresizingMaskIntoConstraints = false
-        legalNoticeTextView.backgroundColor = .clear
-        legalNoticeTextView.isEditable = false
-        legalNoticeTextView.isScrollEnabled = false
-        legalNoticeTextView.delegate = self
-        legalNoticeTextView.textAlignment = .center
-        legalNoticeTextView.adjustsFontForContentSizeCategory = true
-        legalNoticeTextView.textContainerInset = .zero
-        legalNoticeTextView.textContainer.lineFragmentPadding = 0
-        legalNoticeTextView.linkTextAttributes = [
-            .foregroundColor: UIColor(red: 0x70/255.0, green: 0xA7/255.0, blue: 0xB4/255.0, alpha: 1.0),
-            .underlineStyle: NSUnderlineStyle.single.rawValue
-        ]
-        legalNoticeTextView.attributedText = makeLegalNoticeText(prefix: "By signing up, you agree to our ")
-        legalNoticeTextView.accessibilityIdentifier = "sign_up_legal_notice"
-
-        view.addSubview(legalNoticeTextView)
-        NSLayoutConstraint.activate([
-            legalNoticeTextView.leadingAnchor.constraint(equalTo: authFormStackView.leadingAnchor),
-            legalNoticeTextView.trailingAnchor.constraint(equalTo: authFormStackView.trailingAnchor),
-            legalNoticeTextView.topAnchor.constraint(greaterThanOrEqualTo: authFormStackView.bottomAnchor, constant: 4),
-            legalNoticeTextView.bottomAnchor.constraint(equalTo: signUpButton.topAnchor, constant: -4)
-        ])
-    }
-
-    private func makeLegalNoticeText(prefix: String) -> NSAttributedString {
-        let text = prefix + "Terms of Service and Privacy Policy."
-        let attributed = NSMutableAttributedString(
-            string: text,
-            attributes: [
-                .font: UIFont.systemFont(ofSize: 10.5, weight: .regular),
-                .foregroundColor: UIColor.secondaryLabel
-            ]
-        )
-        let nsText = text as NSString
-        attributed.addAttribute(.link, value: "rentiwise://legal/terms", range: nsText.range(of: "Terms of Service"))
-        attributed.addAttribute(.link, value: "rentiwise://legal/privacy", range: nsText.range(of: "Privacy Policy"))
-        return attributed
-    }
-
-    func textView(
-        _ textView: UITextView,
-        shouldInteractWith url: URL,
-        in characterRange: NSRange,
-        interaction: UITextItemInteraction
-    ) -> Bool {
-        switch url.absoluteString {
-        case "rentiwise://legal/terms":
-            openLegalDocument(.termsOfService)
-        case "rentiwise://legal/privacy":
-            openLegalDocument(.privacyPolicy)
-        default:
-            return true
-        }
-        return false
     }
 
     private func ensureAccountLegalConsentIfNeeded(anchor: UIView?) async -> Bool {
@@ -357,31 +597,5 @@ final class SignUpViewController: UIViewController, UITextViewDelegate, UITextFi
         let a = UIAlertController(title: title, message: message, preferredStyle: .alert)
         a.addAction(UIAlertAction(title: "OK", style: .default))
         present(a, animated: true)
-    }
-
-    // MARK: - UITextFieldDelegate (input restrictions)
-
-    func textField(_ textField: UITextField, shouldChangeCharactersIn range: NSRange, replacementString string: String) -> Bool {
-        // Phone field: allow only digits, max 10 chars
-        if textField === signUpNumberText {
-            let allowedCharacters = CharacterSet.decimalDigits
-            if !string.isEmpty && string.rangeOfCharacter(from: allowedCharacters.inverted) != nil {
-                return false
-            }
-            let currentText = textField.text ?? ""
-            let newLength = currentText.count + string.count - range.length
-            return newLength <= 10
-        }
-        // Full name field: allow only letters and spaces
-        if textField === signUpFullNameText {
-            let allowed = CharacterSet.letters.union(.whitespaces)
-            if !string.isEmpty && string.unicodeScalars.contains(where: { !allowed.contains($0) }) {
-                return false
-            }
-            let currentText = textField.text ?? ""
-            let newLength = currentText.count + string.count - range.length
-            return newLength <= 50
-        }
-        return true
     }
 }
