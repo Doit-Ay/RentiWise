@@ -151,7 +151,7 @@ extension HomeViewController {
         homeFeedEmptyBannerView = banner
     }
 
-    private func removeHomeFeedEmptyBanner() {
+    func removeHomeFeedEmptyBanner() {
         guard let banner = homeFeedEmptyBannerView else { return }
         contentStackView.removeArrangedSubview(banner)
         banner.removeFromSuperview()

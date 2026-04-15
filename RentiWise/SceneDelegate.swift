@@ -10,6 +10,9 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     private weak var noInternetVC: NoInternetViewController?
     private var networkObserver: NSObjectProtocol?
 
+    /// URL that arrived during cold launch (before root VC is ready).
+    private var pendingDeepLinkURL: URL?
+
     func scene(_ scene: UIScene,
                willConnectTo session: UISceneSession,
                options connectionOptions: UIScene.ConnectionOptions) {
@@ -23,6 +26,11 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
         startNetworkMonitoring()
         NotificationRealtimeService.shared.start()
+
+        // Capture any deep-link URL from a cold launch
+        if let url = connectionOptions.urlContexts.first?.url {
+            pendingDeepLinkURL = url
+        }
 
         // Show animated splash overlay after a brief delay so the root VC is loaded
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
@@ -44,10 +52,16 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         splash.view.frame = window.bounds
         splash.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
 
-        splash.onComplete = { [weak splash] in
+        splash.onComplete = { [weak splash, weak self] in
             splash?.willMove(toParent: nil)
             splash?.view.removeFromSuperview()
             splash?.removeFromParent()
+
+            // Process any deep link that arrived during cold launch
+            if let url = self?.pendingDeepLinkURL {
+                self?.pendingDeepLinkURL = nil
+                self?.handleDeepLink(url)
+            }
         }
 
         // Add as child of root VC so it sits on top of everything
@@ -296,7 +310,16 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
                 }
 
                 await MainActor.run {
-                    let vc = ProductViewController(nibName: "ProductViewController", bundle: nil)
+                    // Pop to root first to avoid stacking deep-link VCs
+                    nav.popToRootViewController(animated: false)
+
+                    // Safe instantiation: try XIB first, fall back to code-only
+                    let vc: ProductViewController
+                    if Bundle.main.path(forResource: "ProductViewController", ofType: "nib") != nil {
+                        vc = ProductViewController(nibName: "ProductViewController", bundle: nil)
+                    } else {
+                        vc = ProductViewController()
+                    }
                     vc.configure(with: item)
                     vc.hidesBottomBarWhenPushed = true
                     nav.pushViewController(vc, animated: true)

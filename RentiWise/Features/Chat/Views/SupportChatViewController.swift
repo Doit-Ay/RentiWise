@@ -369,13 +369,10 @@ final class SupportChatViewController: UIViewController {
     private func loadInitialState() {
         Task {
             currentUserId = await SupabaseManager.shared.currentUserId()
-            if preloadedTicketId != nil {
-                // Loading a specific existing ticket
-                await loadExistingTicketAndMessages()
-            } else {
-                // New ticket — start with a clean slate
-                await addWelcomeMessage()
-            }
+            // Always try to load an existing ticket first (handles both
+            // preloadedTicketId and finding the most recent open ticket).
+            // Falls back to the welcome message when no ticket exists.
+            await loadExistingTicketAndMessages()
             await MainActor.run {
                 self.updateStatusCard()
             }

@@ -23,7 +23,26 @@ final class ChatServiceV2 {
    private init() {
        self.client = SupabaseManager.shared.client
        self.decoder = JSONDecoder()
-       self.decoder.dateDecodingStrategy = .iso8601
+       // Supabase returns timestamps with fractional seconds (e.g. .123456)
+       // which the built-in .iso8601 strategy does NOT handle.
+       // Use a custom strategy that tries fractional-second format first.
+       self.decoder.dateDecodingStrategy = .custom { decoder in
+           let container = try decoder.singleValueContainer()
+           let dateString = try container.decode(String.self)
+           // Try with fractional seconds first (Supabase default)
+           if let date = self.iso8601WithFS.date(from: dateString) {
+               return date
+           }
+           // Fallback: standard ISO8601 without fractional seconds
+           let iso = ISO8601DateFormatter()
+           if let date = iso.date(from: dateString) {
+               return date
+           }
+           throw DecodingError.dataCorruptedError(
+               in: container,
+               debugDescription: "Cannot decode date: \(dateString)"
+           )
+       }
    }
   
    // MARK: - Conversations

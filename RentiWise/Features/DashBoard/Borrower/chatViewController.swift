@@ -87,10 +87,25 @@ final class ChatThreadViewController: UIViewController {
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        // When the view is visible, mark as read if possible.
+        // When the view is visible, re-fetch messages and mark as read.
+        // This ensures chat history is always visible when returning to
+        // a conversation that was previously dismissed and re-opened.
         Task { [weak self] in
-            guard let self, let id = self.conversation?.id else { return }
-            try? await ChatServiceV2.shared.markMessagesAsRead(conversationId: id)
+            guard let self, let convoId = self.conversation?.id else { return }
+            do {
+                let fresh = try await ChatServiceV2.shared.fetchMessages(conversationId: convoId)
+                await MainActor.run {
+                    if fresh.count != self.messages.count || fresh.last?.id != self.messages.last?.id {
+                        debugLog("[Chat] viewDidAppear refreshed \(fresh.count) messages")
+                        self.messages = fresh
+                        self.tableView.reloadData()
+                        self.scrollToBottom(animated: false)
+                    }
+                }
+                try? await ChatServiceV2.shared.markMessagesAsRead(conversationId: convoId)
+            } catch {
+                debugLog("[Chat] viewDidAppear refresh failed: \(error)")
+            }
         }
     }
 
