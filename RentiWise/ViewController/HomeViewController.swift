@@ -1164,8 +1164,8 @@ final class HomeViewController: UIViewController, UICollectionViewDelegate, UICo
         var signUpConfig = UIButton.Configuration.filled()
         signUpConfig.baseBackgroundColor = accentColor
         signUpConfig.baseForegroundColor = .white
-        signUpConfig.cornerStyle = .large
-        signUpConfig.contentInsets = NSDirectionalEdgeInsets(top: 14, leading: 32, bottom: 14, trailing: 32)
+        signUpConfig.background.cornerRadius = 14
+        signUpConfig.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 32, bottom: 0, trailing: 32)
         var signUpAttrs = AttributeContainer()
         signUpAttrs.font = .systemFont(ofSize: 17, weight: .semibold)
         signUpConfig.attributedTitle = AttributedString("Create Account", attributes: signUpAttrs)
@@ -1219,6 +1219,7 @@ final class HomeViewController: UIViewController, UICollectionViewDelegate, UICo
             stack.centerYAnchor.constraint(equalTo: overlay.centerYAnchor, constant: -20),
             stack.leadingAnchor.constraint(greaterThanOrEqualTo: overlay.leadingAnchor, constant: 32),
             stack.trailingAnchor.constraint(lessThanOrEqualTo: overlay.trailingAnchor, constant: -32),
+            signUpButton.heightAnchor.constraint(equalToConstant: 44),
             signUpButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 220),
         ])
 

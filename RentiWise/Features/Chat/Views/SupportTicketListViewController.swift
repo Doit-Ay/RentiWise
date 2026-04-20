@@ -88,6 +88,7 @@ final class SupportTicketListViewController: UITableViewController {
     private func loadTickets() async {
         guard let userId = await SupabaseManager.shared.currentUserId() else {
             await MainActor.run {
+                self.navigationItem.rightBarButtonItem?.isEnabled = false
                 self.isLoading = false
                 self.errorMessage = "Please sign in to view support tickets."
                 self.tableView.reloadData()
@@ -129,6 +130,7 @@ final class SupportTicketListViewController: UITableViewController {
             }
 
             await MainActor.run {
+                self.navigationItem.rightBarButtonItem?.isEnabled = true
                 self.activeTickets = summaries.filter { $0.status == "open" || $0.status == "in_progress" }
                 self.pastTickets = summaries.filter { $0.status == "resolved" || $0.status == "closed" }
                 self.isLoading = false
@@ -137,6 +139,7 @@ final class SupportTicketListViewController: UITableViewController {
             }
         } catch {
             await MainActor.run {
+                self.navigationItem.rightBarButtonItem?.isEnabled = true
                 self.isLoading = false
                 self.errorMessage = error.localizedDescription
                 self.tableView.reloadData()

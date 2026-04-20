@@ -51,7 +51,8 @@ class RequestViewController: UIViewController {
     @IBOutlet weak var boookingcontainer: UIView?
     @IBOutlet weak var dateTitleLabel: UILabel!
     @IBOutlet weak var returnTimeTitleLabel: UILabel!
-    @IBOutlet weak var upiNoteLabel: UILabel!  // shows UPI note under total
+    @IBOutlet weak var upiNoteLabel: UILabel?  // shows UPI note under total
+    @IBOutlet weak var requestButton: UIButton?  // "Request" submit button
     
     // MARK: - Private Properties
     
@@ -115,9 +116,9 @@ class RequestViewController: UIViewController {
     }
 
     // Flags to remember if user selected each field at least once
-    private var hasSelectedDate = false
-    private var hasSelectedPickupTime = false
-    private var hasSelectedReturnTime = false
+    private var hasSelectedDate = true
+    private var hasSelectedPickupTime = true
+    private var hasSelectedReturnTime = true
     
     // MARK: - Lifecycle
     
@@ -161,6 +162,21 @@ class RequestViewController: UIViewController {
 
         updateRentalButtons()
         boookingcontainer?.isHidden = true
+
+        // Style the Request submit button: strip UIButton.Configuration to avoid
+        // tap/display issues and use traditional APIs matching the app's conventions.
+        if let btn = requestButton {
+            btn.configuration = nil
+            btn.setTitle("Request", for: .normal)
+            btn.setTitleColor(.white, for: .normal)
+            btn.titleLabel?.font = .systemFont(ofSize: 18, weight: .semibold)
+            btn.backgroundColor = UIColor(hex: "5DA9B6")
+            btn.layer.cornerRadius = 24
+            btn.layer.masksToBounds = true
+            btn.contentHorizontalAlignment = .center
+            // Add explicit programmatic action
+            btn.addTarget(self, action: #selector(didTapRequestButtonProgrammatic), for: .touchUpInside)
+        }
 
         // clear placeholders
         productTitleLabel?.text = nil
@@ -496,6 +512,18 @@ class RequestViewController: UIViewController {
         Task { await sendRequest() }
     }
     
+    @objc private func didTapRequestButtonProgrammatic() {
+        print("[RequestViewController] Manual touch event registered for the Request button")
+        // Visual feedback to confirm touch is registering
+        let originalColor = requestButton?.backgroundColor
+        requestButton?.backgroundColor = .systemGray
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            self.requestButton?.backgroundColor = originalColor
+        }
+        
+        Task { await sendRequest() }
+    }
+    
     @objc private func datePickerChanged(_ sender: UIDatePicker) {
         if sender === dateLabel {
             hasSelectedDate = true
@@ -591,26 +619,32 @@ class RequestViewController: UIViewController {
     private func sendRequest() async {
         guard !isSubmittingRequest else { return }
         guard let item = item else {
+            requestButton?.setTitle("Missing Item", for: .normal)
             presentMissingItemAlert()
             return
         }
         if CommunitySafetyService.shared.isBlocked(item.owner_id) {
+            requestButton?.setTitle("Owner Blocked", for: .normal)
             presentBlockedOwnerAlertIfNeeded()
             return
         }
         guard let currentUserId = await SupabaseManager.shared.currentUserId() else {
+            requestButton?.setTitle("Not Logged In", for: .normal)
             presentAlert(title: "Error", message: "You must be logged in to send a request.")
             return
         }
         guard item.owner_id.caseInsensitiveCompare(currentUserId) != .orderedSame else {
+            requestButton?.setTitle("Own Item", for: .normal)
             presentAlert(title: "Own Listing", message: "You can't send a rental request for your own listing.")
             return
         }
         guard rentalUnit != .none else {
+            requestButton?.setTitle("Select Unit", for: .normal)
             presentAlert(title: "Missing Details", message: "Please choose whether you're renting by the hour or by the day.")
             return
         }
         if let selectionMessage = bookingSelectionValidationMessage() {
+            requestButton?.setTitle("Invalid Details", for: .normal)
             presentAlert(title: "Missing Details", message: selectionMessage)
             return
         }
@@ -620,6 +654,7 @@ class RequestViewController: UIViewController {
         let startOfToday = Calendar.current.startOfDay(for: now)
         let selectedDate = Calendar.current.startOfDay(for: dateLabel.date)
         guard selectedDate >= startOfToday else {
+            requestButton?.setTitle("Invalid Date", for: .normal)
             presentAlert(title: "Invalid Date", message: "The pickup date cannot be in the past.")
             return
         }
@@ -628,6 +663,7 @@ class RequestViewController: UIViewController {
         if rentalUnit == .day {
             let returnDate = Calendar.current.startOfDay(for: returntimeLabel.date)
             guard returnDate >= selectedDate else {
+                requestButton?.setTitle("Invalid Date", for: .normal)
                 presentAlert(title: "Invalid Date", message: "The return date must be on or after the pickup date.")
                 return
             }
@@ -636,20 +672,24 @@ class RequestViewController: UIViewController {
         do {
             let profile = try await ProfileService().fetchCurrentUserProfile()
             if let blocker = borrowingBlockerMessage(for: profile, item: item) {
+                requestButton?.setTitle("Profile Incomplete", for: .normal)
                 presentBorrowingBlockedAlert(message: blocker)
                 return
             }
         } catch {
+            requestButton?.setTitle("Profile Error", for: .normal)
             presentBorrowingBlockedAlert(message: "Complete your profile before sending a request.")
             return
         }
 
         do {
             if try await hasExistingActiveRequest(itemId: item.id, borrowerId: currentUserId) {
+                requestButton?.setTitle("Already Exists", for: .normal)
                 presentAlert(title: "Request Already Sent", message: "You already have an active request for this item.")
                 return
             }
         } catch {
+            requestButton?.setTitle("Check Error", for: .normal)
             presentAlert(title: "Request Check Failed", message: "We couldn't confirm whether you already requested this item. Please try again.")
             return
         }

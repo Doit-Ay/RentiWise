@@ -44,6 +44,16 @@ class ChangePasswordViewController: UITableViewController {
         navigationItem.rightBarButtonItem?.tintColor = brandTeal
         
         setupTextFields()
+        
+        Task {
+            if await SupabaseManager.shared.currentUserId() == nil {
+                await MainActor.run {
+                    self.navigationItem.rightBarButtonItem?.isEnabled = false
+                    self.statusMessage = "Please sign in to update your password."
+                    self.tableView.reloadData()
+                }
+            }
+        }
     }
     
     override func viewWillAppear(_ animated: Bool) {

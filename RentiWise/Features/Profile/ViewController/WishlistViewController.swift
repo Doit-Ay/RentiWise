@@ -139,8 +139,7 @@ class WishlistViewController: UITableViewController {
     
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         if isLoading { return 4 }
-        if errorMessage != nil { return 1 }
-        if items.isEmpty && !isLoading { return 1 } // Empty state
+        if (items.isEmpty || errorMessage != nil) && !isLoading { return 1 } // Empty state
         return items.count
     }
     
@@ -155,24 +154,11 @@ class WishlistViewController: UITableViewController {
             return cell
         }
 
-        if let errorMessage {
-            let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
-            cell.textLabel?.text = errorMessage
-            cell.textLabel?.textColor = .systemRed
-            cell.textLabel?.font = .preferredFont(forTextStyle: .footnote)
-            cell.textLabel?.numberOfLines = 0
-            cell.selectionStyle = .none
-            // Remove inherited margins
-            cell.preservesSuperviewLayoutMargins = false
-            cell.layoutMargins = .zero
-            cell.directionalLayoutMargins = .zero
-            return cell
-        }
-        
-        if items.isEmpty && !isLoading {
+        if (items.isEmpty || errorMessage != nil) && !isLoading {
             let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
             cell.contentView.subviews.forEach { $0.removeFromSuperview() }
             cell.backgroundColor = .clear
+            cell.textLabel?.text = nil // Clear any default text
             // Remove inherited margins
             cell.preservesSuperviewLayoutMargins = false
             cell.layoutMargins = .zero
@@ -207,6 +193,16 @@ class WishlistViewController: UITableViewController {
             stack.addArrangedSubview(icon)
             stack.addArrangedSubview(titleLabel)
             stack.addArrangedSubview(subtitleLabel)
+            
+            if let errorMessage {
+                let errorLabel = UILabel()
+                errorLabel.text = errorMessage
+                errorLabel.textColor = .systemRed
+                errorLabel.font = .preferredFont(forTextStyle: .footnote)
+                errorLabel.numberOfLines = 0
+                errorLabel.textAlignment = .center
+                stack.addArrangedSubview(errorLabel)
+            }
             
             cell.contentView.addSubview(stack)
             NSLayoutConstraint.activate([
@@ -261,7 +257,7 @@ class WishlistViewController: UITableViewController {
     
     override func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
         if isLoading { return 110 }
-        if items.isEmpty && !isLoading && errorMessage == nil {
+        if (items.isEmpty || errorMessage != nil) && !isLoading {
             return 350
         }
         return UITableView.automaticDimension

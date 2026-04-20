@@ -50,13 +50,29 @@ extension HomeViewController {
         trendingSortGeneration = requestGeneration
         
         let filteredItems = items.filter { item in
-            guard let currentUserId else { return true }
-            return item.owner_id.caseInsensitiveCompare(currentUserId) != .orderedSame
+            // Ensure not own item
+            if let currentUserId, item.owner_id.caseInsensitiveCompare(currentUserId) == .orderedSame {
+                return false
+            }
+            // Ensure high rating (>= 4.0)
+            let rating = item.average_rating ?? 0.0
+            // Also ensure it actually has reviews
+            let reviewCount = item.review_count ?? 0
+            return rating >= 4.0 && reviewCount > 0
         }
 
-        // `filterItemsWithinRadius` already returns items sorted by distance ascending.
-        // Preserve that exact order so Trending near you stays purely location-first.
-        let trending = Array(filteredItems.prefix(6))
+        // Items come in already sorted by distance ascending from `filterItemsWithinRadius`.
+        // We sort by highest rating first.
+        let sortedItems = filteredItems.sorted { a, b in
+            let ratingA = a.average_rating ?? 0.0
+            let ratingB = b.average_rating ?? 0.0
+            if ratingA != ratingB {
+                return ratingA > ratingB
+            }
+            return false // preserves relative order (distance) when ratings are equal (Swift 5+ sorted is stable)
+        }
+
+        let trending = Array(sortedItems.prefix(6))
 
         guard trendingSortGeneration == requestGeneration else { return }
         trendingItems = trending

@@ -628,6 +628,7 @@ private class AccountHeaderCell: UITableViewCell {
         phoneLabel.textColor = .secondaryLabel
         messageLabel.font = .preferredFont(forTextStyle: .subheadline)
         messageLabel.textColor = .secondaryLabel
+        messageLabel.numberOfLines = 0
         
         NSLayoutConstraint.activate([
             iconView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
@@ -637,8 +638,8 @@ private class AccountHeaderCell: UITableViewCell {
             
             stack.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 12),
             stack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
-            stack.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 12),
-            stack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -12)
+            stack.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 16),
+            stack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -16)
         ])
     }
     

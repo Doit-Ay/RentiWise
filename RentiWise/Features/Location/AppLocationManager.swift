@@ -42,6 +42,9 @@ final class AppLocationManager: NSObject {
         }
         do {
             let loc = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<CLLocation, Error>) in
+                if let existing = self.locationContinuation {
+                    existing.resume(throwing: CancellationError())
+                }
                 self.locationContinuation = continuation
                 self.manager.requestLocation()
             }
@@ -86,6 +89,9 @@ extension AppLocationManager {
         switch status {
         case .notDetermined:
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                if let existing = self.authContinuation {
+                    existing.resume(throwing: CancellationError())
+                }
                 self.authContinuation = continuation
                 self.manager.requestWhenInUseAuthorization()
             }
@@ -103,6 +109,9 @@ extension AppLocationManager {
     func currentLocation() async throws -> CLLocation {
         try await ensureWhenInUseAuthorization()
         let loc = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<CLLocation, Error>) in
+            if let existing = self.locationContinuation {
+                existing.resume(throwing: CancellationError())
+            }
             self.locationContinuation = continuation
             self.manager.requestLocation()
         }
