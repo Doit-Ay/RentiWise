@@ -17,7 +17,7 @@ class AddItemPricingViewController: UIViewController, UITextFieldDelegate {
     @IBOutlet private weak var declaredValueHintLabel: UILabel!
 
     private let defaultDeclaredValueHint = "Used for trust checks and borrowing limits."
-    private let warningDeclaredValueHint = "⚠️ High-value items may need extra trust coordination with your borrower."
+    private let warningDeclaredValueHint = "High-value items may need extra trust coordination with your borrower."
 
     override func viewDidLoad() {
         super.viewDidLoad()

@@ -649,10 +649,10 @@ extension LenderView: UITableViewDataSource {
                 let requestType = pendingSubRequestTypes[req.id] ?? "request"
                 let badgeText: String
                 switch requestType {
-                case "return":    badgeText = "⚠️ Return Pending"
-                case "extension": badgeText = "⚠️ Extension Pending"
-                case "both":      badgeText = "⚠️ Return + Extension Pending"
-                default:          badgeText = "⚠️ Action Needed"
+                case "return":    badgeText = "Return Pending"
+                case "extension": badgeText = "Extension Pending"
+                case "both":      badgeText = "Return + Extension Pending"
+                default:          badgeText = "Action Needed"
                 }
                 cell.itemBorrowerRequest.text = badgeText
                 cell.itemBorrowerRequest.textColor = .systemOrange

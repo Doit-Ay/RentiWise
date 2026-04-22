@@ -271,7 +271,7 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
             )
 
             let content = UNMutableNotificationContent()
-            content.title = "Return Due Soon ⏰"
+            content.title = "Return Due Soon"
             content.body = "Your rental of \"\(itemTitle)\" ends in 1 hour. Please arrange to return it to the lender."
             content.sound = .default
             content.categoryIdentifier = "RETURN_REMINDER"

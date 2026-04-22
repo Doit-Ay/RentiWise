@@ -18,7 +18,7 @@ enum RemoteNotificationService {
         insert(
             userId: borrowerId,
             type: "request_accepted",
-            title: "Request Accepted ✅",
+            title: "Request Accepted",
             message: "Your rental request for \"\(itemTitle)\" has been accepted! You can now proceed to payment.",
             requestId: requestId
         )
@@ -40,7 +40,7 @@ enum RemoteNotificationService {
         insert(
             userId: ownerId,
             type: "payment_received",
-            title: "Payment Received 💰",
+            title: "Payment Received",
             message: "The borrower marked payment as sent for \"\(itemTitle)\". Confirm receipt to unlock pickup OTP verification.",
             requestId: requestId
         )
@@ -51,7 +51,7 @@ enum RemoteNotificationService {
         insert(
             userId: borrowerId,
             type: "payment_confirmed",
-            title: "Payment Confirmed ✅",
+            title: "Payment Confirmed",
             message: "The lender confirmed payment for \"\(itemTitle)\". Your pickup OTP is now ready.",
             requestId: requestId
         )
@@ -63,7 +63,7 @@ enum RemoteNotificationService {
         insert(
             userId: borrowerId,
             type: "pickup_confirmed",
-            title: "Pickup Confirmed ✅",
+            title: "Pickup Confirmed",
             message: "The pickup for \"\(itemTitle)\" has been confirmed by the owner. Your rental is now active!",
             requestId: requestId
         )
@@ -82,7 +82,7 @@ enum RemoteNotificationService {
         insert(
             userId: ownerId,
             type: "new_request",
-            title: "New Rental Request 📩",
+            title: "New Rental Request",
             message: "Someone wants to rent your \"\(itemTitle)\". Review and respond to the request.",
             requestId: requestId
         )

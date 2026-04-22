@@ -220,7 +220,7 @@ final class TrustScoreBreakdownViewController: UIViewController {
 
         let phonePoints = hasPhone ? 30 : 0
         componentsStack.addArrangedSubview(makeScoreRow(
-            icon: "📱", title: "Phone Verified",
+            sfSymbol: "phone.fill", title: "Phone Verified",
             earned: phonePoints, total: 30, isComplete: hasPhone
         ))
 
@@ -228,19 +228,19 @@ final class TrustScoreBreakdownViewController: UIViewController {
 
         let photoPoints = hasProfilePhoto ? 10 : 0
         componentsStack.addArrangedSubview(makeScoreRow(
-            icon: "📷", title: "Profile Photo",
+            sfSymbol: "camera.fill", title: "Profile Photo",
             earned: photoPoints, total: 10, isComplete: hasProfilePhoto
         ))
 
         let ratingPoints = min(35, Int(round(avgRating * 7)))
         componentsStack.addArrangedSubview(makeScoreRow(
-            icon: "⭐", title: "Avg Rating (\(String(format: "%.1f", avgRating)))",
+            sfSymbol: "star.fill", title: "Avg Rating (\(String(format: "%.1f", avgRating)))",
             earned: ratingPoints, total: 35, isComplete: avgRating >= 4.0
         ))
 
         let rentalPoints = min(20, completedRentals)
         componentsStack.addArrangedSubview(makeScoreRow(
-            icon: "🤝", title: "Completed Rentals (\(completedRentals))",
+            sfSymbol: "hand.thumbsup.fill", title: "Completed Rentals (\(completedRentals))",
             earned: rentalPoints, total: 20, isComplete: completedRentals >= 20
         ))
 
@@ -283,16 +283,18 @@ final class TrustScoreBreakdownViewController: UIViewController {
         return card
     }
 
-    private func makeScoreRow(icon: String, title: String, earned: Int, total: Int, isComplete: Bool) -> UIView {
+    private func makeScoreRow(sfSymbol: String, title: String, earned: Int, total: Int, isComplete: Bool) -> UIView {
         let stack = UIStackView()
         stack.axis = .horizontal
         stack.spacing = 10
         stack.alignment = .center
 
-        let iconLabel = UILabel()
-        iconLabel.text = icon
-        iconLabel.font = .systemFont(ofSize: 20)
-        iconLabel.widthAnchor.constraint(equalToConstant: 28).isActive = true
+        let iconView = UIImageView(image: UIImage(systemName: sfSymbol))
+        iconView.tintColor = isComplete ? .systemGreen : .secondaryLabel
+        iconView.contentMode = .scaleAspectFit
+        iconView.translatesAutoresizingMaskIntoConstraints = false
+        iconView.widthAnchor.constraint(equalToConstant: 24).isActive = true
+        iconView.heightAnchor.constraint(equalToConstant: 24).isActive = true
 
         let titleLabel = UILabel()
         titleLabel.text = title
@@ -306,16 +308,17 @@ final class TrustScoreBreakdownViewController: UIViewController {
         pointsLabel.textAlignment = .right
         pointsLabel.setContentHuggingPriority(.required, for: .horizontal)
 
-        let statusLabel = UILabel()
-        statusLabel.text = isComplete ? "✓" : "○"
-        statusLabel.font = .systemFont(ofSize: 16)
-        statusLabel.textColor = isComplete ? .systemGreen : .systemGray
-        statusLabel.widthAnchor.constraint(equalToConstant: 20).isActive = true
+        let statusView = UIImageView(image: UIImage(systemName: isComplete ? "checkmark.circle.fill" : "circle"))
+        statusView.tintColor = isComplete ? .systemGreen : .systemGray
+        statusView.contentMode = .scaleAspectFit
+        statusView.translatesAutoresizingMaskIntoConstraints = false
+        statusView.widthAnchor.constraint(equalToConstant: 20).isActive = true
+        statusView.heightAnchor.constraint(equalToConstant: 20).isActive = true
 
-        stack.addArrangedSubview(iconLabel)
+        stack.addArrangedSubview(iconView)
         stack.addArrangedSubview(titleLabel)
         stack.addArrangedSubview(pointsLabel)
-        stack.addArrangedSubview(statusLabel)
+        stack.addArrangedSubview(statusView)
 
         return stack
     }

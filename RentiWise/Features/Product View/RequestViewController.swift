@@ -61,6 +61,21 @@ class RequestViewController: UIViewController {
     private var hasPresentedBlockedOwnerAlert = false
     private var isSubmittingRequest = false
 
+    /// Dedicated date-only picker for "Pickup Date".
+    /// Created programmatically with en_GB locale so it shows "22 Apr 2026"
+    /// instead of the XIB picker which ignores locale changes.
+    private var pickupDatePicker: UIDatePicker!
+
+    /// Dedicated date-only picker for "Return Date" in Per Day mode.
+    /// Created programmatically so it is always in .date mode from birth,
+    /// avoiding the iOS compact-picker format-caching bug.
+    private var returnDatePicker: UIDatePicker!
+
+    /// Returns the date from whichever return picker is currently active.
+    private var activeReturnDate: Date {
+        rentalUnit == .day ? returnDatePicker.date : returntimeLabel.date
+    }
+
     public func configure(with item: Item) {
         self.item = item
         self.itemId = item.id
@@ -110,9 +125,10 @@ class RequestViewController: UIViewController {
     // Keep pickers' text color teal once user has made a selection; black only before selection
     private func updatePickerTextColors() {
         let black: UIColor = .label
-        dateLabel.setValue(hasSelectedDate ? selectedTeal : black, forKey: "textColor")
+        pickupDatePicker?.setValue(hasSelectedDate ? selectedTeal : black, forKey: "textColor")
         pickuptimeLabel.setValue(hasSelectedPickupTime ? selectedTeal : black, forKey: "textColor")
         returntimeLabel.setValue(hasSelectedReturnTime ? selectedTeal : black, forKey: "textColor")
+        returnDatePicker?.setValue(hasSelectedReturnTime ? selectedTeal : black, forKey: "textColor")
     }
 
     // Flags to remember if user selected each field at least once
@@ -147,18 +163,66 @@ class RequestViewController: UIViewController {
         }
         
         applyGlassToCards()
+
+        // en_GB locale: dates show "22 Apr 2026", times show 24-hour format
+        let localeGB = Locale(identifier: "en_GB")
+
+        // Ensure existing pickers use compact style
+        for picker in [pickuptimeLabel!, returntimeLabel!] {
+            picker.preferredDatePickerStyle = .compact
+            picker.locale = localeGB
+        }
+
+        // Hide the XIB dateLabel picker (it ignores locale changes)
+        // and replace it with a programmatic one
+        dateLabel.isHidden = true
+        pickupDatePicker = UIDatePicker()
+        pickupDatePicker.datePickerMode = .date
+        pickupDatePicker.preferredDatePickerStyle = .compact
+        pickupDatePicker.locale = localeGB
+        pickupDatePicker.minimumDate = Date()
+        pickupDatePicker.tintColor = UIColor(hex: "5DA9B6")
+        pickupDatePicker.translatesAutoresizingMaskIntoConstraints = false
+        pickupDatePicker.contentHorizontalAlignment = .trailing
+        dateLabel.superview?.addSubview(pickupDatePicker)
+        NSLayoutConstraint.activate([
+            pickupDatePicker.centerYAnchor.constraint(equalTo: dateLabel.centerYAnchor),
+            pickupDatePicker.trailingAnchor.constraint(equalTo: dateLabel.trailingAnchor),
+            pickupDatePicker.heightAnchor.constraint(equalToConstant: 34)
+        ])
+        pickupDatePicker.addTarget(self, action: #selector(pickupDateChanged(_:)), for: .valueChanged)
+
+        // Create a dedicated return-date picker (always .date mode from birth)
+        // so it renders "22 Apr 2026" instead of the short format iOS caches
+        // when switching a time picker to date mode.
+        returnDatePicker = UIDatePicker()
+        returnDatePicker.datePickerMode = .date
+        returnDatePicker.preferredDatePickerStyle = .compact
+        returnDatePicker.locale = localeGB
+        returnDatePicker.tintColor = UIColor(hex: "5DA9B6")
+        returnDatePicker.translatesAutoresizingMaskIntoConstraints = false
+        returnDatePicker.isHidden = true
+        returnDatePicker.contentHorizontalAlignment = .trailing
+        returntimeLabel.superview?.addSubview(returnDatePicker)
+        NSLayoutConstraint.activate([
+            returnDatePicker.centerYAnchor.constraint(equalTo: returntimeLabel.centerYAnchor),
+            returnDatePicker.trailingAnchor.constraint(equalTo: returntimeLabel.trailingAnchor),
+            returnDatePicker.heightAnchor.constraint(equalToConstant: 34)
+        ])
+        returnDatePicker.addTarget(self, action: #selector(datePickerChanged(_:)), for: .valueChanged)
+
         dateLabel.minimumDate = Date()
         dateLabel.datePickerMode = .date
         pickuptimeLabel.datePickerMode = .time
-        returntimeLabel.datePickerMode = .time
-        dateLabel.addTarget(self, action: #selector(datePickerChanged(_:)), for: .valueChanged)
+        returntimeLabel.datePickerMode = .time  // stays as time picker forever
         pickuptimeLabel.addTarget(self, action: #selector(datePickerChanged(_:)), for: .valueChanged)
         returntimeLabel.addTarget(self, action: #selector(datePickerChanged(_:)), for: .valueChanged)
         
-        // Initial text colors: black until user selects
-        dateLabel.setValue(UIColor.label, forKey: "textColor")
+        // Initial text colors
+        pickupDatePicker.setValue(UIColor.label, forKey: "textColor")
         pickuptimeLabel.setValue(UIColor.label, forKey: "textColor")
         returntimeLabel.setValue(UIColor.label, forKey: "textColor")
+        returnDatePicker.setValue(UIColor.label, forKey: "textColor")
 
         updateRentalButtons()
         boookingcontainer?.isHidden = true
@@ -443,11 +507,14 @@ class RequestViewController: UIViewController {
         rentalUnit = unit
         hasSelectedReturnTime = false
         updateRentalButtons()
+
         switch unit {
         case .hour:
             dateLabel.datePickerMode = .date
             pickuptimeLabel.datePickerMode = .time
-            returntimeLabel.datePickerMode = .time
+            // Show the original time picker, hide the date-only picker
+            returntimeLabel.isHidden = false
+            returnDatePicker.isHidden = true
             dateTitleLabel.text = "Date"
             returnTimeTitleLabel.text = "Return Time"
             pickuptimeLabel.accessibilityLabel = "Pickup Time"
@@ -456,16 +523,18 @@ class RequestViewController: UIViewController {
         case .day:
             dateLabel.datePickerMode = .date
             pickuptimeLabel.datePickerMode = .time
-            returntimeLabel.datePickerMode = .date
+            // Hide the time picker, show the dedicated date-only picker
+            returntimeLabel.isHidden = true
+            returnDatePicker.isHidden = false
             dateTitleLabel.text = "Pickup Date"
             returnTimeTitleLabel.text = "Return Date"
             pickuptimeLabel.accessibilityLabel = "Pickup Time"
             dateLabel.accessibilityLabel = "Pickup Date"
-            returntimeLabel.accessibilityLabel = "Return Date"
-            let startOfPickup = Calendar.current.startOfDay(for: dateLabel.date)
-            returntimeLabel.minimumDate = startOfPickup
-            if returntimeLabel.date < startOfPickup {
-                returntimeLabel.date = startOfPickup
+            returnDatePicker.accessibilityLabel = "Return Date"
+            let nextDay = Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: dateLabel.date))!
+            returnDatePicker.minimumDate = nextDay
+            if returnDatePicker.date < nextDay {
+                returnDatePicker.date = nextDay
             }
         case .none:
             break
@@ -524,20 +593,27 @@ class RequestViewController: UIViewController {
         Task { await sendRequest() }
     }
     
+    /// Pickup date changed – sync the programmatic picker's date to the hidden XIB dateLabel,
+    /// then delegate to the existing handler so all downstream code works.
+    @objc private func pickupDateChanged(_ sender: UIDatePicker) {
+        dateLabel.date = sender.date
+        datePickerChanged(dateLabel)
+    }
+
     @objc private func datePickerChanged(_ sender: UIDatePicker) {
         if sender === dateLabel {
             hasSelectedDate = true
             // If rental unit is day, make sure return date can't be before pickup date
             if rentalUnit == .day {
-                let startOfPickup = Calendar.current.startOfDay(for: dateLabel.date)
-                returntimeLabel.minimumDate = startOfPickup
-                if returntimeLabel.date < startOfPickup {
-                    returntimeLabel.date = startOfPickup
+                let nextDay = Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: dateLabel.date))!
+                returnDatePicker.minimumDate = nextDay
+                if returnDatePicker.date < nextDay {
+                    returnDatePicker.date = nextDay
                 }
             }
         }
         if sender === pickuptimeLabel { hasSelectedPickupTime = true }
-        if sender === returntimeLabel { hasSelectedReturnTime = true }
+        if sender === returntimeLabel || sender === returnDatePicker { hasSelectedReturnTime = true }
         
         let now = Date()
         let calendar = Calendar.current
@@ -584,7 +660,7 @@ class RequestViewController: UIViewController {
         let booking = BookingPresentationFormatter.presentation(
             startDate: dateLabel.date,
             pickupTime: pickuptimeLabel.date,
-            returnSelection: returntimeLabel.date,
+            returnSelection: activeReturnDate,
             rentalUnit: rentalUnit == .hour ? .hour : .day,
             pricePerDay: item.price_per_day
         )
@@ -618,33 +694,37 @@ class RequestViewController: UIViewController {
     // MARK: - Networking: Send Request
     private func sendRequest() async {
         guard !isSubmittingRequest else { return }
+        
+        // Disable button immediately to prevent double-tap race conditions
+        Task { @MainActor in self.requestButton?.isEnabled = false }
+        
         guard let item = item else {
-            requestButton?.setTitle("Missing Item", for: .normal)
+            Task { @MainActor in self.requestButton?.setTitle("Missing Item", for: .normal); self.requestButton?.isEnabled = true }
             presentMissingItemAlert()
             return
         }
         if CommunitySafetyService.shared.isBlocked(item.owner_id) {
-            requestButton?.setTitle("Owner Blocked", for: .normal)
+            Task { @MainActor in self.requestButton?.setTitle("Owner Blocked", for: .normal); self.requestButton?.isEnabled = true }
             presentBlockedOwnerAlertIfNeeded()
             return
         }
         guard let currentUserId = await SupabaseManager.shared.currentUserId() else {
-            requestButton?.setTitle("Not Logged In", for: .normal)
+            Task { @MainActor in self.requestButton?.setTitle("Not Logged In", for: .normal); self.requestButton?.isEnabled = true }
             presentAlert(title: "Error", message: "You must be logged in to send a request.")
             return
         }
         guard item.owner_id.caseInsensitiveCompare(currentUserId) != .orderedSame else {
-            requestButton?.setTitle("Own Item", for: .normal)
+            Task { @MainActor in self.requestButton?.setTitle("Own Item", for: .normal); self.requestButton?.isEnabled = true }
             presentAlert(title: "Own Listing", message: "You can't send a rental request for your own listing.")
             return
         }
         guard rentalUnit != .none else {
-            requestButton?.setTitle("Select Unit", for: .normal)
+            Task { @MainActor in self.requestButton?.setTitle("Select Unit", for: .normal); self.requestButton?.isEnabled = true }
             presentAlert(title: "Missing Details", message: "Please choose whether you're renting by the hour or by the day.")
             return
         }
         if let selectionMessage = bookingSelectionValidationMessage() {
-            requestButton?.setTitle("Invalid Details", for: .normal)
+            Task { @MainActor in self.requestButton?.setTitle("Invalid Details", for: .normal); self.requestButton?.isEnabled = true }
             presentAlert(title: "Missing Details", message: selectionMessage)
             return
         }
@@ -654,16 +734,16 @@ class RequestViewController: UIViewController {
         let startOfToday = Calendar.current.startOfDay(for: now)
         let selectedDate = Calendar.current.startOfDay(for: dateLabel.date)
         guard selectedDate >= startOfToday else {
-            requestButton?.setTitle("Invalid Date", for: .normal)
+            Task { @MainActor in self.requestButton?.setTitle("Invalid Date", for: .normal); self.requestButton?.isEnabled = true }
             presentAlert(title: "Invalid Date", message: "The pickup date cannot be in the past.")
             return
         }
 
         // Validate return is after start for day rentals
         if rentalUnit == .day {
-            let returnDate = Calendar.current.startOfDay(for: returntimeLabel.date)
+            let returnDate = Calendar.current.startOfDay(for: activeReturnDate)
             guard returnDate >= selectedDate else {
-                requestButton?.setTitle("Invalid Date", for: .normal)
+                Task { @MainActor in self.requestButton?.setTitle("Invalid Date", for: .normal); self.requestButton?.isEnabled = true }
                 presentAlert(title: "Invalid Date", message: "The return date must be on or after the pickup date.")
                 return
             }
@@ -672,35 +752,38 @@ class RequestViewController: UIViewController {
         do {
             let profile = try await ProfileService().fetchCurrentUserProfile()
             if let blocker = borrowingBlockerMessage(for: profile, item: item) {
-                requestButton?.setTitle("Profile Incomplete", for: .normal)
+                Task { @MainActor in self.requestButton?.setTitle("Profile Incomplete", for: .normal); self.requestButton?.isEnabled = true }
                 presentBorrowingBlockedAlert(message: blocker)
                 return
             }
         } catch {
-            requestButton?.setTitle("Profile Error", for: .normal)
+            Task { @MainActor in self.requestButton?.setTitle("Profile Error", for: .normal); self.requestButton?.isEnabled = true }
             presentBorrowingBlockedAlert(message: "Complete your profile before sending a request.")
             return
         }
 
         do {
             if try await hasExistingActiveRequest(itemId: item.id, borrowerId: currentUserId) {
-                requestButton?.setTitle("Already Exists", for: .normal)
+                Task { @MainActor in self.requestButton?.setTitle("Already Exists", for: .normal); self.requestButton?.isEnabled = true }
                 presentAlert(title: "Request Already Sent", message: "You already have an active request for this item.")
                 return
             }
         } catch {
-            requestButton?.setTitle("Check Error", for: .normal)
+            Task { @MainActor in self.requestButton?.setTitle("Check Error", for: .normal); self.requestButton?.isEnabled = true }
             presentAlert(title: "Request Check Failed", message: "We couldn't confirm whether you already requested this item. Please try again.")
             return
         }
 
         isSubmittingRequest = true
-        defer { isSubmittingRequest = false }
+        defer { 
+            isSubmittingRequest = false 
+            Task { @MainActor in self.requestButton?.isEnabled = true }
+        }
         
         let booking = BookingPresentationFormatter.presentation(
             startDate: dateLabel.date,
             pickupTime: pickuptimeLabel.date,
-            returnSelection: returntimeLabel.date,
+            returnSelection: activeReturnDate,
             rentalUnit: rentalUnit == .hour ? .hour : .day,
             pricePerDay: item.price_per_day
         )
@@ -814,7 +897,7 @@ class RequestViewController: UIViewController {
             let booking = BookingPresentationFormatter.presentation(
                 startDate: dateLabel.date,
                 pickupTime: pickuptimeLabel.date,
-                returnSelection: returntimeLabel.date,
+                returnSelection: activeReturnDate,
                 rentalUnit: rentalUnit == .hour ? .hour : .day,
                 pricePerDay: item.price_per_day
             )

@@ -96,74 +96,189 @@ final class LocationSelectorViewController: UIViewController {
 
     // MARK: - Actions
 
-    private func dismissThen(_ work: @escaping () -> Void) {
-        // Always dismiss the sheet first, then perform the action.
-        dismiss(animated: true) { work() }
-    }
-
     private func useCurrentLocation() {
-        // Dismiss first, then run the async location work
-        dismissThen { [weak self] in
-            guard let self = self else { return }
-            Task {
-                do {
-                    let loc = try await AppLocationManager.shared.currentLocation()
-                    let name = try await AppLocationManager.shared.placename(for: loc)
-                    // Set the coordinate directly for accurate distance calculations
-                    DistanceService.shared.setViewerCoordinate(
-                        latitude: loc.coordinate.latitude,
-                        longitude: loc.coordinate.longitude
-                    )
-                    // Keep Home button title in sync via local store
-                    SavedAddressesStore.shared.setDefaultSelectedAddress(name)
+        // Show loading state on the sheet while GPS resolves
+        let indexPath = IndexPath(row: 0, section: 0)
+        if let cell = tableView.cellForRow(at: indexPath) {
+            var config = cell.defaultContentConfiguration()
+            config.text = "Locating..."
+            config.secondaryText = "Fetching your GPS position"
+            config.secondaryTextProperties.color = .secondaryLabel
+            config.image = UIImage(systemName: "location.fill")
+            config.imageProperties.tintColor = brandTeal
+            cell.contentConfiguration = config
+            cell.isUserInteractionEnabled = false
+        }
+
+        // Add a spinner to the cell
+        let spinner = UIActivityIndicatorView(style: .medium)
+        spinner.startAnimating()
+        if let cell = tableView.cellForRow(at: indexPath) {
+            cell.accessoryView = spinner
+        }
+
+        // Capture callbacks BEFORE the async work
+        let selectedCallback = onSelectedAddress
+        let manualCallback = onEnterManualAddress
+
+        Task { @MainActor in
+            do {
+                let loc = try await AppLocationManager.shared.currentLocation()
+                let name = try await AppLocationManager.shared.placename(for: loc)
+
+                debugLog("[LocationSelector] GPS success: \(loc.coordinate.latitude), \(loc.coordinate.longitude) → \(name)")
+
+                // Set the coordinate directly for accurate distance calculations
+                DistanceService.shared.setViewerCoordinate(
+                    latitude: loc.coordinate.latitude,
+                    longitude: loc.coordinate.longitude
+                )
+                // Keep Home button title in sync via local store
+                SavedAddressesStore.shared.setDefaultSelectedAddress(name)
+                // Clear stale distance caches so UI refreshes immediately
+                CategoryItemCell.clearDistanceCache()
+
+                // NOW dismiss — GPS is already resolved
+                self.dismiss(animated: true) {
                     NotificationCenter.default.post(name: .locationDidChange, object: nil)
-                    await MainActor.run {
-                        self.onSelectedAddress?(name)
-                    }
-                } catch {
-                    // Present an alert from the topmost visible VC after dismissal
-                    await MainActor.run {
-                        let ac = UIAlertController(title: "Location Unavailable",
-                                                   message: error.localizedDescription,
-                                                   preferredStyle: .alert)
-                        ac.addAction(UIAlertAction(title: "OK", style: .default))
-                        self.presentTopMost(ac)
-                    }
+                    selectedCallback?(name)
                 }
+
+            } catch let error as AppLocationManager.LocationError {
+                // Stop spinner
+                if let cell = self.tableView.cellForRow(at: indexPath) {
+                    cell.accessoryView = nil
+                    cell.isUserInteractionEnabled = true
+                }
+                // Reset cell text
+                self.tableView.reloadRows(at: [indexPath], with: .none)
+
+                // Error-specific alerts
+                switch error {
+                case .permissionDenied:
+                    let ac = UIAlertController(
+                        title: "Location Permission Required",
+                        message: "RentiWise needs location access to show rentals near you. Please enable it in Settings.",
+                        preferredStyle: .alert
+                    )
+                    ac.addAction(UIAlertAction(title: "Open Settings", style: .default) { _ in
+                        if let url = URL(string: UIApplication.openSettingsURLString) {
+                            UIApplication.shared.open(url)
+                        }
+                    })
+                    ac.addAction(UIAlertAction(title: "Enter Manually", style: .default) { [weak self] _ in
+                        self?.dismiss(animated: true) {
+                            manualCallback? { address in
+                                let trimmed = address.trimmingCharacters(in: .whitespacesAndNewlines)
+                                guard !trimmed.isEmpty else { return }
+                                SavedAddressesStore.shared.setDefaultSelectedAddress(trimmed)
+                                DistanceService.shared.clearAllDistanceCaches()
+                                selectedCallback?(trimmed)
+                            }
+                        }
+                    })
+                    ac.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+                    self.present(ac, animated: true)
+
+                case .servicesDisabled:
+                    let ac = UIAlertController(
+                        title: "Location Services Off",
+                        message: "Location Services are turned off on this device. Go to Settings > Privacy & Security > Location Services to enable them.",
+                        preferredStyle: .alert
+                    )
+                    ac.addAction(UIAlertAction(title: "Enter Manually", style: .default) { [weak self] _ in
+                        self?.dismiss(animated: true) {
+                            manualCallback? { address in
+                                let trimmed = address.trimmingCharacters(in: .whitespacesAndNewlines)
+                                guard !trimmed.isEmpty else { return }
+                                SavedAddressesStore.shared.setDefaultSelectedAddress(trimmed)
+                                DistanceService.shared.clearAllDistanceCaches()
+                                selectedCallback?(trimmed)
+                            }
+                        }
+                    })
+                    ac.addAction(UIAlertAction(title: "OK", style: .cancel))
+                    self.present(ac, animated: true)
+
+                case .failed, .timedOut, .reverseGeocodeFailed:
+                    let ac = UIAlertController(
+                        title: "Couldn't Detect Location",
+                        message: "We couldn't determine your current location. Please try again or enter your address manually.",
+                        preferredStyle: .alert
+                    )
+                    ac.addAction(UIAlertAction(title: "Try Again", style: .default) { [weak self] _ in
+                        self?.useCurrentLocation()
+                    })
+                    ac.addAction(UIAlertAction(title: "Enter Manually", style: .default) { [weak self] _ in
+                        self?.dismiss(animated: true) {
+                            manualCallback? { address in
+                                let trimmed = address.trimmingCharacters(in: .whitespacesAndNewlines)
+                                guard !trimmed.isEmpty else { return }
+                                SavedAddressesStore.shared.setDefaultSelectedAddress(trimmed)
+                                DistanceService.shared.clearAllDistanceCaches()
+                                selectedCallback?(trimmed)
+                            }
+                        }
+                    })
+                    ac.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+                    self.present(ac, animated: true)
+                }
+
+            } catch is CancellationError {
+                // Ignore — not a real error
+            } catch {
+                // Stop spinner
+                if let cell = self.tableView.cellForRow(at: indexPath) {
+                    cell.accessoryView = nil
+                    cell.isUserInteractionEnabled = true
+                }
+                self.tableView.reloadRows(at: [indexPath], with: .none)
+
+                let ac = UIAlertController(
+                    title: "Location Error",
+                    message: error.localizedDescription,
+                    preferredStyle: .alert
+                )
+                ac.addAction(UIAlertAction(title: "OK", style: .default))
+                self.present(ac, animated: true)
             }
         }
     }
 
+
+
     private func enterAddressManually() {
-        // Dismiss first, then ask the presenter to push ManualAddressViewController
-        dismissThen { [weak self] in
-            guard let self = self else { return }
-            self.onEnterManualAddress? { [weak self] address in
-                guard let self = self else { return }
+        // Capture callbacks BEFORE dismiss
+        let manualCallback = onEnterManualAddress
+        let selectedCallback = onSelectedAddress
+
+        dismiss(animated: true) {
+            manualCallback? { address in
                 let trimmed = address.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !trimmed.isEmpty else { return }
                 // Keep Home button title in sync locally
                 SavedAddressesStore.shared.setDefaultSelectedAddress(trimmed)
                 DistanceService.shared.clearAllDistanceCaches()
-                self.onSelectedAddress?(trimmed)
+                selectedCallback?(trimmed)
             }
         }
     }
 
     private func manageSavedAddresses() {
-        // Dismiss first, then ask the presenter to push the manager
-        dismissThen { [weak self] in
-            self?.onManageSavedAddresses?()
+        // Capture callback BEFORE dismiss
+        let manageCallback = onManageSavedAddresses
+
+        dismiss(animated: true) {
+            manageCallback?()
         }
     }
 
     // Present an alert from the currently top-most view controller (after we dismissed ourselves)
-    private func presentTopMost(_ vc: UIViewController) {
+    private static func presentOnTopMost(_ vc: UIViewController) {
         guard let root = UIApplication.shared.connectedScenes
             .compactMap({ $0 as? UIWindowScene })
             .flatMap({ $0.windows })
             .first(where: { $0.isKeyWindow })?.rootViewController else {
-            present(vc, animated: true)
             return
         }
         var top = root
@@ -202,16 +317,19 @@ final class LocationSelectorViewController: UIViewController {
 // MARK: - UITableViewDataSource
 extension LocationSelectorViewController: UITableViewDataSource {
     func numberOfSections(in tableView: UITableView) -> Int {
-        // Section 0: Actions (2 rows for guest/no addresses, 3 rows when user has saved addresses)
-        // Section 1: Saved addresses (only when signed in AND has ≥1 address)
+        // Section 0: Actions (2 rows for guest, 3 rows for signed-in users)
+        // Section 1: Saved addresses list (only when signed in AND has ≥1 address)
         return (isSignedIn && !saved.isEmpty) ? 2 : 1
     }
 
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         if section == 0 {
-            // If signed in AND has saved addresses: show 3 actions (includes Manage)
-            // Otherwise: show only 2 options (Use GPS + Enter manually)
-            return (isSignedIn && !saved.isEmpty) ? 3 : 2
+            // Signed-in users always see all 3 actions:
+            //   0: Use current location
+            //   1: Enter address manually
+            //   2: Manage saved addresses
+            // Guests see only the first 2 (no saved addresses to manage)
+            return isSignedIn ? 3 : 2
         } else {
             // Section 1 only exists when isSignedIn && !saved.isEmpty
             return saved.count
@@ -233,17 +351,24 @@ extension LocationSelectorViewController: UITableViewDataSource {
             switch indexPath.row {
             case 0:
                 config.text = "Use current location"
+                config.secondaryText = "Using GPS"
+                config.secondaryTextProperties.color = .secondaryLabel
                 config.image = UIImage(systemName: "location.fill")
             case 1:
                 config.text = "Enter address manually"
+                config.secondaryText = "Search or type your area"
+                config.secondaryTextProperties.color = .secondaryLabel
                 config.image = UIImage(systemName: "square.and.pencil")
             case 2:
-                // Only rendered when isSignedIn && !saved.isEmpty
+                // Always rendered for signed-in users
                 config.text = "Manage saved addresses"
+                config.secondaryText = "Home, office, and more"
+                config.secondaryTextProperties.color = .secondaryLabel
                 config.image = UIImage(systemName: "bookmark.circle")
             default:
                 break
             }
+
         } else {
             // Saved addresses section — only reached when signed in
             guard indexPath.row < saved.count else {
@@ -287,7 +412,7 @@ extension LocationSelectorViewController: UITableViewDelegate {
             case 1:
                 enterAddressManually()
             case 2:
-                // Only reachable when isSignedIn && !saved.isEmpty
+                // Always reachable for signed-in users
                 manageSavedAddresses()
             default:
                 break
@@ -296,23 +421,27 @@ extension LocationSelectorViewController: UITableViewDelegate {
             // Section 1: saved addresses — only reachable when signed in
             guard indexPath.row < saved.count else { return }
             let address = saved[indexPath.row]
-            dismissThen { [weak self] in
-                guard let self = self else { return }
-                let display = self.displayString(for: address)
 
+            // Capture all needed data and callbacks BEFORE dismiss
+            let display = displayString(for: address)
+            let persistedSelection = persistedSelectionString(for: address)
+            let lat = address.latitude
+            let lon = address.longitude
+            let selectedCallback = onSelectedAddress
+
+            dismiss(animated: true) {
                 // Set coordinates directly if available (avoids geocoding "Home"/"Office")
-                if let lat = address.latitude, let lon = address.longitude, lat != 0, lon != 0 {
+                if let lat = lat, let lon = lon, lat != 0, lon != 0 {
                     DistanceService.shared.setViewerCoordinate(latitude: lat, longitude: lon)
                 } else {
                     DistanceService.shared.clearAllDistanceCaches()
                 }
 
-                let persistedSelection = self.persistedSelectionString(for: address)
                 SavedAddressesStore.shared.setDefaultSelectedAddress(
                     persistedSelection.isEmpty ? display : persistedSelection
                 )
                 NotificationCenter.default.post(name: .locationDidChange, object: nil)
-                self.onSelectedAddress?(display)
+                selectedCallback?(display)
             }
         }
     }

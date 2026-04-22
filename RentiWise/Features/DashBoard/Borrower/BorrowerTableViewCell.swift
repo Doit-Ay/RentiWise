@@ -181,7 +181,7 @@ class BorrowerTableViewCell: UITableViewCell {
             }
         }
 
-        borrowerItemOwnerName?.text = "Status: \(request.status.capitalized)"
+        borrowerItemOwnerName?.text = request.rentalStatus.displayName
 
         // Distance from owner's address
         borrowerItemDistance?.text = ""

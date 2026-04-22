@@ -411,6 +411,41 @@ final class HandoffProofViewController: UIViewController {
             return
         }
 
+        let sheet = UIAlertController(title: "Add Photo", message: nil, preferredStyle: .actionSheet)
+
+        // Camera option (only if available on device)
+        if UIImagePickerController.isSourceTypeAvailable(.camera) {
+            sheet.addAction(UIAlertAction(title: "Take Photo", style: .default) { [weak self] _ in
+                self?.openCamera()
+            })
+        }
+
+        // Photo library option
+        sheet.addAction(UIAlertAction(title: "Choose from Library", style: .default) { [weak self] _ in
+            self?.openPhotoLibrary()
+        })
+
+        sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+
+        // iPad popover support
+        if let popover = sheet.popoverPresentationController {
+            popover.sourceView = collectionView
+            popover.sourceRect = CGRect(x: collectionView.bounds.midX, y: collectionView.bounds.midY, width: 0, height: 0)
+        }
+
+        present(sheet, animated: true)
+    }
+
+    private func openCamera() {
+        let picker = UIImagePickerController()
+        picker.sourceType = .camera
+        picker.delegate = self
+        picker.allowsEditing = false
+        present(picker, animated: true)
+    }
+
+    private func openPhotoLibrary() {
+        let remaining = maxPhotos - selectedMediaURLs.count
         var config = PHPickerConfiguration()
         config.filter = .images
         config.selectionLimit = remaining
@@ -610,7 +645,7 @@ final class HandoffProofViewController: UIViewController {
 
     private func showSuccessAndDismiss() {
         let alert = UIAlertController(
-            title: "Proof Submitted ✓",
+            title: "Proof Submitted",
             message: "Your \(proofType == .pickup ? "pickup" : "return") photos have been saved successfully.",
             preferredStyle: .alert
         )
@@ -721,6 +756,29 @@ extension HandoffProofViewController: PHPickerViewControllerDelegate {
                 }
             }
         }
+    }
+}
+
+// MARK: - UIImagePickerControllerDelegate (Camera)
+
+extension HandoffProofViewController: UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+    func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
+        picker.dismiss(animated: true)
+
+        guard let image = info[.originalImage] as? UIImage,
+              let data = image.jpegData(compressionQuality: 0.85) else { return }
+
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("\(UUID().uuidString).jpg")
+        try? data.write(to: tempURL)
+
+        selectedMediaURLs.append(tempURL)
+        collectionView.reloadData()
+        updateSubmitState()
+    }
+
+    func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+        picker.dismiss(animated: true)
     }
 }
 

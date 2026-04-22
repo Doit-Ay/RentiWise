@@ -162,7 +162,8 @@ final class HomeViewController: UIViewController, UICollectionViewDelegate, UICo
         Homepagelastline.isHidden = true
 
         setupTrendingCollection()
-        refreshLocationButtonTitle()
+        // NOTE: Do NOT call refreshLocationButtonTitle() here.
+        // Location access must only happen after login is confirmed in viewWillAppear.
 
         let homeSearch = HomeSearchController(searchBar: searchBar, in: view)
         homeSearch.onSelectItem = { [weak self] item in
@@ -1405,38 +1406,62 @@ private extension HomeViewController {
 
 extension HomeViewController {
     func refreshLocationButtonTitle() {
-        if SavedAddressesStore.shared.getDefaultSelectedAddress() == nil {
-            Task {
-                do {
-                    let location = try await AppLocationManager.shared.currentLocation()
-                    let name = try await AppLocationManager.shared.placename(for: location)
-                    SavedAddressesStore.shared.setDefaultSelectedAddress(name)
-                    DistanceService.shared.setViewerCoordinate(
-                        latitude: location.coordinate.latitude,
-                        longitude: location.coordinate.longitude
-                    )
-                    NotificationCenter.default.post(name: .locationDidChange, object: nil)
-                    await MainActor.run {
-                        self.updateLocationButtonDisplay(name)
-                    }
-                } catch {
-                    await MainActor.run {
-                        self.updateLocationButtonDisplay("Current Location")
-                    }
-                }
-            }
-            updateLocationButtonDisplay("Locating...")
+        // Guard: only show real location when user is logged in.
+        guard isUserLoggedIn else {
+            updateLocationButtonDisplay("Set your location ▸", isPlaceholder: true)
             return
         }
 
-        let storedAddress = SavedAddressesStore.shared.getDefaultSelectedAddress() ?? "Current Location"
-        updateLocationButtonDisplay(storedAddress)
+        // 1) Check SavedAddressesStore first — this is the source of truth after
+        //    useCurrentLocation(), saved address selection, or manual entry.
+        let stored = SavedAddressesStore.shared.getDefaultSelectedAddress()?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let placeholders = ["Current Location", "Locating...", "Location unavailable",
+                            "Set your location ▸", "Tap to set location", ""]
+        let isPlaceholder = stored == nil || placeholders.contains(where: {
+            $0.caseInsensitiveCompare(stored!) == .orderedSame
+        })
+
+        if !isPlaceholder {
+            // We have a real address — just display it. No GPS fetch needed.
+            updateLocationButtonDisplay(stored!)
+            return
+        }
+
+        // 2) No real address stored. Only auto-fetch GPS if ALREADY authorized —
+        //    never trigger the permission dialog from this background call.
+        guard AppLocationManager.shared.isAuthorized else {
+            updateLocationButtonDisplay("Set your location ▸", isPlaceholder: true)
+            return
+        }
+
+        // 3) GPS is authorized — try to get a quick fix
+        updateLocationButtonDisplay("Locating...", isPlaceholder: true)
+        Task { @MainActor in
+            do {
+                let location = try await AppLocationManager.shared.currentLocation()
+                let name = try await AppLocationManager.shared.placename(for: location)
+                SavedAddressesStore.shared.setDefaultSelectedAddress(name)
+                DistanceService.shared.setViewerCoordinate(
+                    latitude: location.coordinate.latitude,
+                    longitude: location.coordinate.longitude
+                )
+                NotificationCenter.default.post(name: .locationDidChange, object: nil)
+                self.updateLocationButtonDisplay(name)
+            } catch {
+                debugLog("[HomeVC] refreshLocationButtonTitle GPS failed: \(error)")
+                self.updateLocationButtonDisplay("Tap to set location", isPlaceholder: true)
+            }
+        }
     }
 
-    private func updateLocationButtonDisplay(_ address: String) {
+
+    private func updateLocationButtonDisplay(_ address: String, isPlaceholder: Bool = false) {
         let displayText: String = {
             let trimmed = address.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty else { return "Current Location" }
+            guard !trimmed.isEmpty else { return "Set your location ▸" }
+            // Placeholder strings display as-is (they're CTAs, not addresses)
+            if isPlaceholder { return trimmed }
             let components = trimmed.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             if let firstComponent = components.first(where: { !$0.isEmpty }) {
                 return firstComponent
@@ -1445,10 +1470,18 @@ extension HomeViewController {
         }()
 
         locationTapped.setTitle(displayText, for: .normal)
-        locationTapped.setTitleColor(UIColor(red: 112 / 255, green: 167 / 255, blue: 180 / 255, alpha: 1.0), for: .normal)
+
+        if isPlaceholder {
+            // Dimmed tint for placeholder/CTA text — signals "tap me"
+            locationTapped.setTitleColor(UIColor.secondaryLabel, for: .normal)
+        } else {
+            // Brand teal for real resolved addresses
+            locationTapped.setTitleColor(UIColor(red: 112 / 255, green: 167 / 255, blue: 180 / 255, alpha: 1.0), for: .normal)
+        }
         locationTapped.titleLabel?.font = .systemFont(ofSize: 14, weight: .semibold)
         configureLocationButtonAppearance()
     }
+
 
     func makeFullAddressString(from address: Address) -> String {
         let parts = [

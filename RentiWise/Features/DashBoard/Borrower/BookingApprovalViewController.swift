@@ -718,13 +718,13 @@ class BookingApprovalViewController: UIViewController {
             label.textColor = .systemOrange
         case "accepted":
             if isExtension {
-                label.text = "Status: Request Accepted ✓"
+                label.text = "Status: Request Accepted"
             } else {
                 label.text = "Status: Return Approved\nEnter lender code"
             }
             label.textColor = .systemGreen
         case "completed":
-            label.text = "Status: Completed ✓"
+            label.text = "Status: Completed"
             label.textColor = .systemGreen
         case "rejected":
             label.text = "Status: Rejected"

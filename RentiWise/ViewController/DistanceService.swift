@@ -398,7 +398,10 @@ final class DistanceService {
 
         // 3) Try SavedAddressesStore (local UserDefaults — geocodes a text string as last resort)
         let savedAddress = SavedAddressesStore.shared.getDefaultSelectedAddress()?.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let savedAddress, !savedAddress.isEmpty, savedAddress != "Current Location" {
+        let placeholderStrings = ["Current Location", "Locating...", "Location unavailable",
+                                  "Set your location ▸", "Tap to set location"]
+        if let savedAddress, !savedAddress.isEmpty,
+           !placeholderStrings.contains(where: { $0.caseInsensitiveCompare(savedAddress) == .orderedSame }) {
             if let location = await geocodeAddressString(savedAddress) {
                 let resolved = ResolvedAddressCoordinate(
                     userId: userId,
@@ -418,31 +421,18 @@ final class DistanceService {
             return resolved
         }
 
-        // 5) Ultimate fallback: try GPS one more time with authorization prompt
-        do {
-            let loc = try await AppLocationManager.shared.currentLocation()
-            let resolved = ResolvedAddressCoordinate(
-                userId: userId,
-                location: loc,
-                hash: viewerAddressHash(for: loc)
-            )
-            print("[DistanceService] Viewer resolved from GPS (with auth): \(loc.coordinate.latitude), \(loc.coordinate.longitude)")
-            saveViewerAddress(resolved)
-            return resolved
-        } catch {
-            // GPS truly unavailable
-        }
-
-        // 6) No location at all — return a zero-coordinate marker
+        // 5) No location at all — return a zero-coordinate sentinel but do NOT cache it,
+        //    so the next call will retry resolution (e.g. after user grants GPS or enters address).
+        //    Previously this tried a silent GPS prompt (which could trigger unexpected permission dialogs)
+        //    and then fell back to (0,0) Null Island. Now the user must explicitly set their location.
         print("[DistanceService] ⚠️ Viewer: ALL lookups failed, no location available")
-        let resolved = ResolvedAddressCoordinate(
+        return ResolvedAddressCoordinate(
             userId: userId,
             location: fallbackCoordinate,
             hash: viewerAddressHash(for: fallbackCoordinate)
         )
-        saveViewerAddress(resolved)
-        return resolved
     }
+
 
     private func fetchViewerAddressCoordinate(userId: String) async -> ResolvedAddressCoordinate? {
         do {

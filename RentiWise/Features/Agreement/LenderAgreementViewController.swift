@@ -215,7 +215,7 @@ final class LenderAgreementViewController: UIViewController {
 
         // Borrower signed badge
         let signedBadge = UILabel()
-        signedBadge.text = "✅ Borrower (\(borrowerName)) has signed"
+        signedBadge.text = "Borrower (\(borrowerName)) has signed"
         signedBadge.font = .systemFont(ofSize: 14, weight: .medium)
         signedBadge.textColor = brandTeal
         signedBadge.textAlignment = .center

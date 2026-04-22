@@ -133,9 +133,50 @@ class ReturnProofViewController: UIViewController {
     // MARK: - Media Picker
     
     private func presentMediaPicker() {
+        let remaining = 5 - proofMediaURLs.count
+        guard remaining > 0 else {
+            showAlert(title: "Maximum Reached", message: "You can add up to 5 photos.")
+            return
+        }
+
+        let sheet = UIAlertController(title: "Add Photo", message: nil, preferredStyle: .actionSheet)
+
+        // Camera option (only if available on device)
+        if UIImagePickerController.isSourceTypeAvailable(.camera) {
+            sheet.addAction(UIAlertAction(title: "Take Photo", style: .default) { [weak self] _ in
+                self?.openCamera()
+            })
+        }
+
+        // Photo library option
+        sheet.addAction(UIAlertAction(title: "Choose from Library", style: .default) { [weak self] _ in
+            self?.openPhotoLibrary()
+        })
+
+        sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+
+        // iPad popover support
+        if let popover = sheet.popoverPresentationController {
+            popover.sourceView = mediaCollectionView
+            popover.sourceRect = CGRect(x: mediaCollectionView.bounds.midX, y: mediaCollectionView.bounds.midY, width: 0, height: 0)
+        }
+
+        present(sheet, animated: true)
+    }
+
+    private func openCamera() {
+        let picker = UIImagePickerController()
+        picker.sourceType = .camera
+        picker.delegate = self
+        picker.allowsEditing = false
+        present(picker, animated: true)
+    }
+
+    private func openPhotoLibrary() {
+        let remaining = 5 - proofMediaURLs.count
         var configuration = PHPickerConfiguration()
         configuration.filter = .any(of: [.images, .videos])
-        configuration.selectionLimit = 5 - proofMediaURLs.count // Max 5 total
+        configuration.selectionLimit = remaining
         
         let picker = PHPickerViewController(configuration: configuration)
         picker.delegate = self
@@ -410,6 +451,29 @@ extension ReturnProofViewController: PHPickerViewControllerDelegate {
                 }
             }
         }
+    }
+}
+
+// MARK: - UIImagePickerControllerDelegate (Camera)
+
+extension ReturnProofViewController: UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+    func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
+        picker.dismiss(animated: true)
+
+        guard let image = info[.originalImage] as? UIImage,
+              let data = image.jpegData(compressionQuality: 0.85) else { return }
+
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("\(UUID().uuidString).jpg")
+        try? data.write(to: tempURL)
+
+        proofMediaURLs.append(tempURL)
+        mediaCollectionView.reloadData()
+        updateMediaCount()
+    }
+
+    func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+        picker.dismiss(animated: true)
     }
 }
 

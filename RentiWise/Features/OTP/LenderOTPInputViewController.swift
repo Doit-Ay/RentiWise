@@ -20,6 +20,7 @@ final class LenderOTPInputViewController: UIViewController, UITextFieldDelegate 
     private let errorLabel = UILabel()
     private let spinner = UIActivityIndicatorView(style: .medium)
     private let brandTeal = UIColor(red: 0x5D/255.0, green: 0xA9/255.0, blue: 0xB6/255.0, alpha: 1.0)
+    private var mainStack: UIStackView?
 
     private var attemptCount = 0
     private let maxAttempts = 3
@@ -88,6 +89,7 @@ final class LenderOTPInputViewController: UIViewController, UITextFieldDelegate 
         stack.spacing = 24
         stack.alignment = .fill
         stack.translatesAutoresizingMaskIntoConstraints = false
+        self.mainStack = stack
 
         view.addSubview(stack)
         NSLayoutConstraint.activate([
@@ -201,26 +203,84 @@ final class LenderOTPInputViewController: UIViewController, UITextFieldDelegate 
     }
 
     private func showSuccess() {
-        // Checkmark animation
-        let checkmark = UIImageView(image: UIImage(systemName: "checkmark.circle.fill"))
-        checkmark.tintColor = .systemGreen
-        checkmark.contentMode = .scaleAspectFit
-        checkmark.translatesAutoresizingMaskIntoConstraints = false
-        checkmark.alpha = 0
-        checkmark.transform = CGAffineTransform(scaleX: 0.3, y: 0.3)
-        view.addSubview(checkmark)
+        // Hide all existing OTP input UI
+        view.endEditing(true)
+        mainStack?.isHidden = true
+
+        // -- Success container --
+        let successView = UIView()
+        successView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(successView)
         NSLayoutConstraint.activate([
-            checkmark.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            checkmark.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-            checkmark.widthAnchor.constraint(equalToConstant: 80),
-            checkmark.heightAnchor.constraint(equalToConstant: 80),
+            successView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            successView.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: -40),
+            successView.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 40),
+            successView.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -40),
         ])
 
-        UIView.animate(withDuration: 0.5, delay: 0, usingSpringWithDamping: 0.6, initialSpringVelocity: 0.8) {
-            checkmark.alpha = 1
-            checkmark.transform = .identity
+        // Circle background
+        let circleBg = UIView()
+        circleBg.backgroundColor = brandTeal.withAlphaComponent(0.12)
+        circleBg.layer.cornerRadius = 52
+        circleBg.translatesAutoresizingMaskIntoConstraints = false
+
+        // Checkmark icon
+        let checkmark = UIImageView(image: UIImage(systemName: "checkmark.circle.fill"))
+        checkmark.tintColor = brandTeal
+        checkmark.contentMode = .scaleAspectFit
+        checkmark.translatesAutoresizingMaskIntoConstraints = false
+
+        // Title
+        let titleLabel = UILabel()
+        titleLabel.text = "Pickup Verified"
+        titleLabel.font = .systemFont(ofSize: 24, weight: .bold)
+        titleLabel.textColor = .label
+        titleLabel.textAlignment = .center
+
+        // Subtitle
+        let subtitleLabel = UILabel()
+        subtitleLabel.text = "The rental is now active"
+        subtitleLabel.font = .systemFont(ofSize: 15, weight: .regular)
+        subtitleLabel.textColor = .secondaryLabel
+        subtitleLabel.textAlignment = .center
+
+        let textStack = UIStackView(arrangedSubviews: [titleLabel, subtitleLabel])
+        textStack.axis = .vertical
+        textStack.spacing = 6
+        textStack.alignment = .center
+        textStack.translatesAutoresizingMaskIntoConstraints = false
+
+        successView.addSubview(circleBg)
+        circleBg.addSubview(checkmark)
+        successView.addSubview(textStack)
+
+        NSLayoutConstraint.activate([
+            circleBg.topAnchor.constraint(equalTo: successView.topAnchor),
+            circleBg.centerXAnchor.constraint(equalTo: successView.centerXAnchor),
+            circleBg.widthAnchor.constraint(equalToConstant: 104),
+            circleBg.heightAnchor.constraint(equalToConstant: 104),
+
+            checkmark.centerXAnchor.constraint(equalTo: circleBg.centerXAnchor),
+            checkmark.centerYAnchor.constraint(equalTo: circleBg.centerYAnchor),
+            checkmark.widthAnchor.constraint(equalToConstant: 56),
+            checkmark.heightAnchor.constraint(equalToConstant: 56),
+
+            textStack.topAnchor.constraint(equalTo: circleBg.bottomAnchor, constant: 24),
+            textStack.centerXAnchor.constraint(equalTo: successView.centerXAnchor),
+            textStack.leadingAnchor.constraint(equalTo: successView.leadingAnchor),
+            textStack.trailingAnchor.constraint(equalTo: successView.trailingAnchor),
+            textStack.bottomAnchor.constraint(equalTo: successView.bottomAnchor),
+        ])
+
+        // Start invisible and scaled down
+        successView.alpha = 0
+        successView.transform = CGAffineTransform(scaleX: 0.5, y: 0.5)
+
+        UIView.animate(withDuration: 0.5, delay: 0, usingSpringWithDamping: 0.65, initialSpringVelocity: 0.8) {
+            successView.alpha = 1
+            successView.transform = .identity
         } completion: { _ in
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                 self.onVerified?()
                 self.navigationController?.popViewController(animated: true)
             }

@@ -1245,7 +1245,7 @@ class DashboardLenderRequestViewController: UIViewController {
     /// condition photos before handing the item over.
     private func promptForHandoffProof(request req: RequestWithItem) {
         let alert = UIAlertController(
-            title: "Pickup Verified ✓",
+            title: "Pickup Verified",
             message: "Take photos of the item before handing it over. This protects you in case of disputes.",
             preferredStyle: .alert
         )

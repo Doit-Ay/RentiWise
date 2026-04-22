@@ -441,8 +441,38 @@ final class MyRentalsViewController: UIViewController {
 
             let rows = try JSONDecoder().decode([RequestWithItem].self, from: response.data)
 
+            // Deduplicate: Keep only the most recent request (descending order) per item.
+            var uniqueRows: [RequestWithItem] = []
+            var seenItemIds = Set<String>()
+            var duplicateIdsToDelete: [String] = []
+
+            for row in rows {
+                if seenItemIds.contains(row.item_id) {
+                    duplicateIdsToDelete.append(row.id)
+                } else {
+                    seenItemIds.insert(row.item_id)
+                    uniqueRows.append(row)
+                }
+            }
+
+            // Silent background deletion of duplicates from the database
+            if !duplicateIdsToDelete.isEmpty {
+                Task {
+                    do {
+                        try await SupabaseManager.shared.client
+                            .from("requests")
+                            .delete()
+                            .in("id", values: duplicateIdsToDelete)
+                            .execute()
+                        debugLog("[MyRentals] Permanently deleted \(duplicateIdsToDelete.count) duplicate requests.")
+                    } catch {
+                        debugLog("[MyRentals] Failed to delete duplicates: \(error)")
+                    }
+                }
+            }
+
             await MainActor.run {
-                self.allRequests = rows
+                self.allRequests = uniqueRows
                 self.applySearchAndFilters()
             }
         } catch {

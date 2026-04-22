@@ -187,7 +187,7 @@ final class AgreementViewerViewController: UIViewController {
         sigStack.translatesAutoresizingMaskIntoConstraints = false
 
         let sigTitle = UILabel()
-        sigTitle.text = "✅ Signatures"
+        sigTitle.text = "Signatures"
         sigTitle.font = .systemFont(ofSize: 15, weight: .bold)
         sigTitle.textColor = brandTeal
         sigStack.addArrangedSubview(sigTitle)
