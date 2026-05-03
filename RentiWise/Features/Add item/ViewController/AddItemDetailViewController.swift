@@ -11,6 +11,11 @@ class AddItemDetailViewController: UIViewController {
     // Carry the draft from the first screen
     var draft: AddItemDraft = AddItemDraft()
 
+    // MARK: - Scroll view for keyboard avoidance
+    /// Wraps the main content so the screen scrolls when the keyboard appears.
+    private var scrollView: UIScrollView!
+    private var contentView: UIView!
+
     // MARK: - Outlets / Actions from IB
 
     @IBOutlet weak var titleTextField: UITextField!
@@ -124,6 +129,9 @@ class AddItemDetailViewController: UIViewController {
             navBar.scrollEdgeAppearance = appearance
         }
 
+        // ── Wrap all XIB content in a scroll view for keyboard avoidance ──
+        wrapContentInScrollView()
+
         // Initialize the dynamic character count for the header label
         updateCharacterCount(for: draft.description)
 
@@ -170,6 +178,139 @@ class AddItemDetailViewController: UIViewController {
         navigationController?.setNavigationBarHidden(false, animated: animated)
         navigationItem.largeTitleDisplayMode = .never
         navigationController?.navigationBar.prefersLargeTitles = false
+
+        // Register keyboard observers
+        NotificationCenter.default.addObserver(self,
+                                               selector: #selector(keyboardWillShow(_:)),
+                                               name: UIResponder.keyboardWillShowNotification,
+                                               object: nil)
+        NotificationCenter.default.addObserver(self,
+                                               selector: #selector(keyboardWillHide(_:)),
+                                               name: UIResponder.keyboardWillHideNotification,
+                                               object: nil)
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        NotificationCenter.default.removeObserver(self, name: UIResponder.keyboardWillShowNotification, object: nil)
+        NotificationCenter.default.removeObserver(self, name: UIResponder.keyboardWillHideNotification, object: nil)
+    }
+
+    // MARK: - Scroll View Wrapping
+
+    /// Programmatically wraps all existing XIB subviews inside a UIScrollView
+    /// so the content can scroll when the keyboard is visible.
+    private func wrapContentInScrollView() {
+        // Create scroll view
+        let sv = UIScrollView()
+        sv.translatesAutoresizingMaskIntoConstraints = false
+        sv.showsVerticalScrollIndicator = true
+        sv.alwaysBounceVertical = true
+        sv.keyboardDismissMode = .interactive
+
+        // Create a content container
+        let container = UIView()
+        container.translatesAutoresizingMaskIntoConstraints = false
+
+        // Collect existing subviews from the XIB root view
+        let existingSubviews = view.subviews
+        for sub in existingSubviews {
+            sub.removeFromSuperview()
+            container.addSubview(sub)
+        }
+
+        sv.addSubview(container)
+        view.addSubview(sv)
+
+        // Pin scroll view to safe area
+        let safeArea = view.safeAreaLayoutGuide
+        NSLayoutConstraint.activate([
+            sv.topAnchor.constraint(equalTo: safeArea.topAnchor),
+            sv.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            sv.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            sv.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
+
+        // Pin container inside scroll view (defines scrollable area)
+        NSLayoutConstraint.activate([
+            container.topAnchor.constraint(equalTo: sv.contentLayoutGuide.topAnchor),
+            container.leadingAnchor.constraint(equalTo: sv.contentLayoutGuide.leadingAnchor),
+            container.trailingAnchor.constraint(equalTo: sv.contentLayoutGuide.trailingAnchor),
+            container.bottomAnchor.constraint(equalTo: sv.contentLayoutGuide.bottomAnchor),
+            // Container width = scroll view width (no horizontal scrolling)
+            container.widthAnchor.constraint(equalTo: sv.frameLayoutGuide.widthAnchor)
+        ])
+
+        // Re-apply constraints for the existing subviews relative to the container
+        // StepHeader (jzr-he-Y9k) – the first stack view
+        // Card view (2aV-KQ-rZa) – the form card
+        // Continue button (d6D-Kw-xkq)
+        // We identify them by order: stepHeader, cardView, continueButton
+        guard existingSubviews.count >= 3 else { return }
+        let stepHeader = existingSubviews[0]
+        let cardView = existingSubviews[1]
+        let continueButton = existingSubviews[2]
+
+        NSLayoutConstraint.activate([
+            // Step header
+            stepHeader.topAnchor.constraint(equalTo: container.topAnchor),
+            stepHeader.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            stepHeader.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+
+            // Card view
+            cardView.topAnchor.constraint(equalTo: stepHeader.bottomAnchor, constant: 20),
+            cardView.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 20),
+            cardView.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -20),
+
+            // Continue button
+            continueButton.topAnchor.constraint(equalTo: cardView.bottomAnchor, constant: 20),
+            continueButton.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+            continueButton.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -30)
+        ])
+
+        self.scrollView = sv
+        self.contentView = container
+    }
+
+    // MARK: - Keyboard Handling
+
+    @objc private func keyboardWillShow(_ notification: Notification) {
+        guard let scrollView = scrollView,
+              let info = notification.userInfo,
+              let kbFrame = info[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect,
+              let duration = info[UIResponder.keyboardAnimationDurationUserInfoKey] as? TimeInterval else { return }
+
+        let kbHeight = kbFrame.height
+        let contentInset = UIEdgeInsets(top: 0, left: 0, bottom: kbHeight, right: 0)
+
+        UIView.animate(withDuration: duration) {
+            scrollView.contentInset = contentInset
+            scrollView.scrollIndicatorInsets = contentInset
+        }
+
+        // Scroll to the description text view if it is the first responder
+        if descriptionTextView.isFirstResponder {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                let rect = self.descriptionTextView.convert(self.descriptionTextView.bounds, to: scrollView)
+                scrollView.scrollRectToVisible(rect, animated: true)
+            }
+        } else if titleTextField.isFirstResponder {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                let rect = self.titleTextField.convert(self.titleTextField.bounds, to: scrollView)
+                scrollView.scrollRectToVisible(rect, animated: true)
+            }
+        }
+    }
+
+    @objc private func keyboardWillHide(_ notification: Notification) {
+        guard let scrollView = scrollView,
+              let info = notification.userInfo,
+              let duration = info[UIResponder.keyboardAnimationDurationUserInfoKey] as? TimeInterval else { return }
+
+        UIView.animate(withDuration: duration) {
+            scrollView.contentInset = .zero
+            scrollView.scrollIndicatorInsets = .zero
+        }
     }
 
     // MARK: - Native Dropdowns
@@ -284,6 +425,13 @@ extension AddItemDetailViewController: UITextViewDelegate {
         if textView.text == descriptionPlaceholder {
             textView.text = ""
             textView.textColor = .label
+        }
+        // Scroll the description text view into view when it becomes active
+        if let scrollView = scrollView {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                let rect = textView.convert(textView.bounds, to: scrollView)
+                scrollView.scrollRectToVisible(rect, animated: true)
+            }
         }
     }
 
